@@ -15,3 +15,8 @@ serde_json = "1.0"
 thiserror = "2.0"
 anyhow = "1.0"
 uuid = { version = "1.11", features = ["v4", "serde"] }
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

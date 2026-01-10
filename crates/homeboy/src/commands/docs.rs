@@ -257,8 +257,19 @@ Homeboy/
 ├── servers/              # Server configurations
 ├── components/           # Component configurations
 ├── modules/              # Installed modules
-├── keys/                 # SSH keys
+├── keys/                 # Homeboy-managed SSH keys (optional)
 └── playwright-browsers/  # Shared Playwright browsers
+```
+
+## SSH
+
+By default, Homeboy uses your system SSH configuration (including `~/.ssh/config`).
+
+To set an explicit identity file for a server:
+
+```bash
+homeboy server key use <server-id> <private-key-path>
+homeboy server key unset <server-id>
 ```
 
 ## More Information

@@ -465,13 +465,14 @@ fn tunnel(project_id: &str, local_port: Option<u16>, json: bool) {
         }
     };
 
-    let key_path = AppPaths::key(server_id);
-    if !key_path.exists() {
-        let msg = "SSH key not found for server. Configure SSH in Homeboy.app first.";
-        if json { print_error("SSH_KEY_NOT_FOUND", msg); }
-        else { eprintln!("Error: {}", msg); }
-        return;
-    }
+    let client = match homeboy_core::ssh::SshClient::from_server(&server, server_id) {
+        Ok(c) => c,
+        Err(e) => {
+            if json { print_error("SSH_ERROR", &e.to_string()); }
+            else { eprintln!("Error: {}", e); }
+            return;
+        }
+    };
 
     let remote_host = if project.database.host.is_empty() {
         "127.0.0.1"
@@ -511,14 +512,25 @@ fn tunnel(project_id: &str, local_port: Option<u16>, json: bool) {
         println!("Press Ctrl+C to close the tunnel.");
     }
 
+    let mut args = Vec::new();
+
+    if let Some(identity_file) = &client.identity_file {
+        args.push("-i".to_string());
+        args.push(identity_file.clone());
+    }
+
+    if server.port != 22 {
+        args.push("-p".to_string());
+        args.push(server.port.to_string());
+    }
+
+    args.push("-N".to_string());
+    args.push("-L".to_string());
+    args.push(format!("{}:{}:{}", bind_port, remote_host, remote_port));
+    args.push(format!("{}@{}", server.user, server.host));
+
     let status = Command::new("/usr/bin/ssh")
-        .args([
-            "-i", &key_path.to_string_lossy(),
-            "-o", "StrictHostKeyChecking=no",
-            "-N",
-            "-L", &format!("{}:{}:{}", bind_port, remote_host, remote_port),
-            &format!("{}@{}", server.user, server.host),
-        ])
+        .args(&args)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())

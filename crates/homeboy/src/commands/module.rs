@@ -260,65 +260,95 @@ fn run_cli_module(
     input_values: HashMap<String, String>,
     extra_args: Vec<String>,
 ) {
-    let project_id = match project.or_else(|| {
-        ConfigManager::load_app_config().ok().and_then(|c| c.active_project_id)
-    }) {
-        Some(id) => id,
-        None => {
-            print_error("NO_PROJECT", "No project specified and no active project set");
+    let command_template = match &module.runtime.args {
+        Some(args) if !args.trim().is_empty() => args.as_str(),
+        _ => {
+            print_error("NO_COMMAND", "CLI module has no runtime.args command template");
             return;
         }
     };
 
-    let project_config = match ConfigManager::load_project(&project_id) {
-        Ok(p) => p,
-        Err(e) => {
-            print_error(e.code(), &e.to_string());
+    let requires_project = module.requires.is_some()
+        || template::is_present(command_template, "projectId")
+        || template::is_present(command_template, "sitePath")
+        || template::is_present(command_template, "cliPath")
+        || template::is_present(command_template, "domain");
+
+    let project_config = if requires_project {
+        let project_id = match project.or_else(|| {
+            ConfigManager::load_app_config().ok().and_then(|c| c.active_project_id)
+        }) {
+            Some(id) => id,
+            None => {
+                print_error("NO_PROJECT", "This module requires a project; pass --project <id>");
+                return;
+            }
+        };
+
+        let project_config = match ConfigManager::load_project(&project_id) {
+            Ok(p) => p,
+            Err(e) => {
+                print_error(e.code(), &e.to_string());
+                return;
+            }
+        };
+
+        if !project_config.local_environment.is_configured() {
+            print_error(
+                "LOCAL_ENVIRONMENT_NOT_CONFIGURED",
+                &format!(
+                    "Local environment not configured for project '{}'. Configure 'Local Site Path' in Homeboy.app Settings.",
+                    project_id
+                ),
+            );
             return;
         }
+
+        Some(project_config)
+    } else {
+        None
     };
 
-    // Validate local CLI is configured
-    if !project_config.local_cli.is_configured() {
-        print_error(
-            "LOCAL_CLI_NOT_CONFIGURED",
-            &format!("Local CLI not configured for project '{}'. Configure 'Local Site Path' in Homeboy.app Settings.", project_id),
-        );
-        return;
-    }
+    let mut argv = Vec::new();
 
-    // Build module args
-    let mut module_args = Vec::new();
-    if let Some(ref template_args) = module.runtime.args {
-        module_args.push(template_args.clone());
-    }
     for input in &module.inputs {
         if let Some(value) = input_values.get(&input.id) {
             if !value.is_empty() {
-                module_args.push(format!("{}={}", input.arg, value));
+                argv.push(input.arg.clone());
+                argv.push(value.clone());
             }
         }
     }
-    module_args.extend(extra_args);
-    let args_str = module_args.join(" ");
 
-    // Build template variables
-    let local_domain = if project_config.local_cli.domain.is_empty() {
-        "localhost".to_string()
+    argv.extend(extra_args);
+    let args_str = argv.join(" ");
+
+    let local_domain: String;
+    let cli_path: String;
+
+    let vars = if let Some(ref project_config) = project_config {
+        local_domain = if project_config.local_environment.domain.is_empty() {
+            "localhost".to_string()
+        } else {
+            project_config.local_environment.domain.clone()
+        };
+
+        cli_path = project_config
+            .local_environment
+            .cli_path
+            .clone()
+            .unwrap_or_else(|| "wp".to_string());
+
+        vec![
+            ("projectId", project_config.id.as_str()),
+            ("domain", local_domain.as_str()),
+            ("sitePath", project_config.local_environment.site_path.as_str()),
+            ("cliPath", cli_path.as_str()),
+            ("args", args_str.as_str()),
+        ]
     } else {
-        project_config.local_cli.domain.clone()
+        vec![("args", args_str.as_str())]
     };
-    let cli_path = project_config.local_cli.cli_path.clone().unwrap_or_else(|| "wp".to_string());
-
-    // Build command template (for WordPress CLI modules)
-    let command_template = "{{cliPath}} --path={{sitePath}} {{args}}";
-    let vars = [
-        ("projectId", project_config.id.as_str()),
-        ("domain", &local_domain),
-        ("sitePath", &project_config.local_cli.site_path),
-        ("cliPath", &cli_path),
-        ("args", &args_str),
-    ];
 
     let command = template::render(command_template, &vars);
 
@@ -483,8 +513,8 @@ fn is_module_compatible(module: &ModuleManifest, project: Option<&ProjectConfigu
         }
     }
 
-    // For CLI modules, check local CLI is configured
-    if module.runtime.runtime_type == RuntimeType::Cli && !project.local_cli.is_configured() {
+    // For CLI modules, check local environment is configured
+    if module.runtime.runtime_type == RuntimeType::Cli && !project.local_environment.is_configured() {
         return false;
     }
 

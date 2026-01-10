@@ -105,13 +105,14 @@ pub fn run(args: DeployArgs) {
         }
     };
 
-    let key_path = AppPaths::key(&server_id);
-    if !key_path.exists() {
-        let msg = "SSH key not found for server";
-        if args.json { print_error("SSH_KEY_NOT_FOUND", msg); }
-        else { eprintln!("Error: {}", msg); }
-        return;
-    }
+    let client = match homeboy_core::ssh::SshClient::from_server(&server, &server_id) {
+        Ok(c) => c,
+        Err(e) => {
+            if args.json { print_error("SSH_ERROR", &e.to_string()); }
+            else { eprintln!("Error: {}", e); }
+            return;
+        }
+    };
 
     // Load components
     let all_components = load_components(&project.component_ids);
@@ -161,7 +162,7 @@ pub fn run(args: DeployArgs) {
 
     // Fetch remote versions for dry-run or outdated filtering
     let remote_versions = if args.dry_run || args.outdated {
-        fetch_remote_versions(&components_to_deploy, &server, &base_path, &key_path)
+        fetch_remote_versions(&components_to_deploy, &server, &base_path, &client)
     } else {
         HashMap::new()
     };
@@ -242,14 +243,22 @@ pub fn run(args: DeployArgs) {
         };
 
         // Use scp to upload
-        let scp_status = Command::new("scp")
-            .args([
-                "-i", &key_path.to_string_lossy(),
-                "-o", "StrictHostKeyChecking=no",
-                artifact_path,
-                &format!("{}@{}:{}", server.user, server.host, remote_path),
-            ])
-            .output();
+        let mut scp_args = Vec::new();
+
+        if let Some(identity_file) = &client.identity_file {
+            scp_args.push("-i".to_string());
+            scp_args.push(identity_file.clone());
+        }
+
+        if server.port != 22 {
+            scp_args.push("-P".to_string());
+            scp_args.push(server.port.to_string());
+        }
+
+        scp_args.push(artifact_path.to_string());
+        scp_args.push(format!("{}@{}:{}", server.user, server.host, remote_path));
+
+        let scp_status = Command::new("scp").args(&scp_args).output();
 
         match scp_status {
             Ok(output) if output.status.success() => {
@@ -267,14 +276,7 @@ pub fn run(args: DeployArgs) {
                         remote_path
                     );
 
-                    let _ = Command::new("ssh")
-                        .args([
-                            "-i", &key_path.to_string_lossy(),
-                            "-o", "StrictHostKeyChecking=no",
-                            &format!("{}@{}", server.user, server.host),
-                            &unzip_cmd,
-                        ])
-                        .output();
+                    let _ = client.execute(&unzip_cmd);
                 }
 
                 if !args.json {
@@ -382,8 +384,15 @@ fn load_components(component_ids: &[String]) -> Vec<Component> {
 // MARK: - Version Parsing
 
 fn parse_version(content: &str, pattern: Option<&str>) -> Option<String> {
-    let pattern_str = pattern.unwrap_or(r"Version:\s*(\d+\.\d+\.\d+)");
-    let re = Regex::new(pattern_str).ok()?;
+    let default_pattern = r"Version:\s*(\d+\.\d+\.\d+)";
+    let pattern_str = match pattern {
+        Some(p) => {
+            // Handle double-escaped patterns from JSON (\\s -> \s, \\d -> \d, etc.)
+            p.replace("\\\\", "\\")
+        }
+        None => default_pattern.to_string(),
+    };
+    let re = Regex::new(&pattern_str).ok()?;
     re.captures(content)
         .and_then(|caps| caps.get(1))
         .map(|m| m.as_str().to_string())
@@ -398,9 +407,9 @@ fn fetch_local_version(component: &Component) -> Option<String> {
 
 fn fetch_remote_versions(
     components: &[Component],
-    server: &ServerConfig,
+    _server: &ServerConfig,
     base_path: &str,
-    key_path: &Path,
+    client: &homeboy_core::ssh::SshClient,
 ) -> HashMap<String, String> {
     let mut versions = HashMap::new();
 
@@ -412,22 +421,11 @@ fn fetch_remote_versions(
                 format!("{}/{}/{}", base_path, component.remote_path, version_file)
             };
 
-            let output = Command::new("ssh")
-                .args([
-                    "-i", &key_path.to_string_lossy(),
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "BatchMode=yes",
-                    &format!("{}@{}", server.user, server.host),
-                    &format!("cat '{}' 2>/dev/null", remote_path),
-                ])
-                .output();
+            let output = client.execute(&format!("cat '{}' 2>/dev/null", remote_path));
 
-            if let Ok(output) = output {
-                if output.status.success() {
-                    let content = String::from_utf8_lossy(&output.stdout);
-                    if let Some(version) = parse_version(&content, component.version_pattern.as_deref()) {
-                        versions.insert(component.id.clone(), version);
-                    }
+            if output.success {
+                if let Some(version) = parse_version(&output.stdout, component.version_pattern.as_deref()) {
+                    versions.insert(component.id.clone(), version);
                 }
             }
         }

@@ -123,14 +123,14 @@ fn execute_local(
     cli_config: &homeboy_core::config::CliConfig,
     args: &[String],
 ) {
-    if !project.local_cli.is_configured() {
-        eprintln!("Error: Local CLI not configured for project '{}'", project.id);
+    if !project.local_environment.is_configured() {
+        eprintln!("Error: Local environment not configured for project '{}'", project.id);
         eprintln!("Configure 'Local Site Path' in Homeboy.app Settings.");
         std::process::exit(1);
     }
 
     let cli_path = project
-        .local_cli
+        .local_environment
         .cli_path
         .clone()
         .or_else(|| cli_config.default_cli_path.clone())
@@ -138,9 +138,12 @@ fn execute_local(
 
     let mut variables = HashMap::new();
     variables.insert(TemplateVars::PROJECT_ID.to_string(), project.id.clone());
-    variables.insert(TemplateVars::DOMAIN.to_string(), project.local_cli.domain.clone());
+    variables.insert(TemplateVars::DOMAIN.to_string(), project.local_environment.domain.clone());
     variables.insert(TemplateVars::ARGS.to_string(), args.join(" "));
-    variables.insert(TemplateVars::SITE_PATH.to_string(), project.local_cli.site_path.clone());
+    variables.insert(
+        TemplateVars::SITE_PATH.to_string(),
+        project.local_environment.site_path.clone(),
+    );
     variables.insert(TemplateVars::CLI_PATH.to_string(), cli_path);
 
     let local_command = render_map(&cli_config.command_template, &variables);

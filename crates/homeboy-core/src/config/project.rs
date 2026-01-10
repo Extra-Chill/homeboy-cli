@@ -23,7 +23,7 @@ pub struct ProjectConfiguration {
     #[serde(default)]
     pub database: DatabaseConfig,
     #[serde(default)]
-    pub local_cli: LocalCliConfig,
+    pub local_environment: LocalEnvironmentConfig,
     #[serde(default)]
     pub tools: ToolsConfig,
     #[serde(default)]
@@ -158,7 +158,7 @@ impl Default for DatabaseConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct LocalCliConfig {
+pub struct LocalEnvironmentConfig {
     #[serde(default)]
     pub site_path: String,
     #[serde(default)]
@@ -167,7 +167,7 @@ pub struct LocalCliConfig {
     pub cli_path: Option<String>,
 }
 
-impl LocalCliConfig {
+impl LocalEnvironmentConfig {
     pub fn is_configured(&self) -> bool {
         !self.site_path.is_empty()
     }

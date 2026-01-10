@@ -4,11 +4,13 @@ CLI tool for development and deployment automation.
 
 ## Installation
 
-### Homebrew (macOS/Linux)
+### Homebrew
 ```bash
 brew tap extra-chill/tap
 brew install homeboy
 ```
+
+This installs the **Homeboy CLI** (`homeboy`). It does not install the macOS desktop app.
 
 ### Cargo (requires Rust)
 ```bash
@@ -61,9 +63,11 @@ homeboy logs show myproject debug.log -f
 
 ## Configuration
 
-Configuration is stored in:
+Configuration is stored in the Homeboy data directory (via `dirs::data_dir()`):
 - **macOS**: `~/Library/Application Support/Homeboy/`
-- **Linux**: `~/.local/share/Homeboy/`
+- **Linux**: `~/.local/share/Homeboy/` (exact path varies by distribution)
+
+The macOS desktop app (if installed) uses the same directory and JSON structure, but it is not required for CLI usage.
 
 ```
 Homeboy/
@@ -72,7 +76,37 @@ Homeboy/
 ├── servers/              # Server configurations
 ├── components/           # Component configurations
 ├── modules/              # Installed modules
-└── keys/                 # SSH keys
+└── keys/                 # SSH keys (e.g. server-foo-bar_id_rsa)
+```
+
+## SSH Setup
+
+By default, Homeboy uses your system SSH configuration (including `~/.ssh/config`, SSH agent, Keychain, 1Password, etc.). No Homeboy-managed key file is required.
+
+Optional: configure an explicit identity file for a server:
+
+```bash
+# Use an existing private key path (does not copy the key)
+homeboy server key use server-example-com ~/.ssh/id_ed25519
+
+# Revert to normal SSH resolution
+homeboy server key unset server-example-com
+```
+
+Optional: have Homeboy generate or import a key into the Homeboy data directory and set it for the server:
+
+```bash
+# Generate a new keypair
+homeboy server key generate server-example-com
+
+# Or import an existing private key (Homeboy copies it into Homeboy/keys/)
+homeboy server key import server-example-com ~/.ssh/id_rsa
+```
+
+To print the public key (for `~/.ssh/authorized_keys`):
+
+```bash
+homeboy server key show server-example-com --raw
 ```
 
 ## License

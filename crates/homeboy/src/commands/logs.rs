@@ -133,46 +133,25 @@ fn show(project_id: &str, path: &str, lines: u32, follow: bool, json: bool) {
         }
     };
 
-    let key_path = AppPaths::key(server_id);
-    if !key_path.exists() {
-        let msg = "SSH key not found for server";
-        if json { print_error("SSH_KEY_NOT_FOUND", msg); }
-        else { eprintln!("Error: {}", msg); }
-        return;
-    }
-
     let full_path = resolve_log_path(path, &project.base_path);
+
+    let client = match SshClient::from_server(&server, server_id) {
+        Ok(c) => c,
+        Err(e) => {
+            if json { print_error("SSH_ERROR", &e.to_string()); }
+            else { eprintln!("Error: {}", e); }
+            return;
+        }
+    };
 
     if follow {
         // For follow mode, use interactive SSH
         let tail_cmd = format!("tail -f '{}'", full_path);
-        let status = Command::new("/usr/bin/ssh")
-            .args([
-                "-i", &key_path.to_string_lossy(),
-                "-o", "StrictHostKeyChecking=no",
-                &format!("{}@{}", server.user, server.host),
-                &tail_cmd,
-            ])
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status();
-
-        if let Ok(s) = status {
-            let code = s.code().unwrap_or(0);
-            if code != 0 && code != 130 {
-                std::process::exit(code);
-            }
+        let code = client.execute_interactive(Some(&tail_cmd));
+        if code != 0 && code != 130 {
+            std::process::exit(code);
         }
     } else {
-        let client = match SshClient::from_server(&server, server_id) {
-            Ok(c) => c,
-            Err(e) => {
-                if json { print_error("SSH_ERROR", &e.to_string()); }
-                else { eprintln!("Error: {}", e); }
-                return;
-            }
-        };
 
         let command = format!("tail -n {} '{}'", lines, full_path);
         let output = client.execute(&command);

@@ -130,8 +130,8 @@ fn execute_local(
     cli_config: &homeboy_core::config::CliConfig,
     args: &[String],
 ) {
-    if !project.local_cli.is_configured() {
-        eprintln!("Error: Local CLI not configured for project '{}'", project.id);
+    if !project.local_environment.is_configured() {
+        eprintln!("Error: Local environment not configured for project '{}'", project.id);
         eprintln!("Configure 'Local Site Path' in Homeboy.app Settings.");
         std::process::exit(1);
     }
@@ -144,7 +144,7 @@ fn execute_local(
     }
 
     let cli_path = project
-        .local_cli
+        .local_environment
         .cli_path
         .clone()
         .or_else(|| cli_config.default_cli_path.clone())
@@ -154,7 +154,10 @@ fn execute_local(
     variables.insert(TemplateVars::PROJECT_ID.to_string(), project.id.clone());
     variables.insert(TemplateVars::DOMAIN.to_string(), target_domain);
     variables.insert(TemplateVars::ARGS.to_string(), command_args.join(" "));
-    variables.insert(TemplateVars::SITE_PATH.to_string(), project.local_cli.site_path.clone());
+    variables.insert(
+        TemplateVars::SITE_PATH.to_string(),
+        project.local_environment.site_path.clone(),
+    );
     variables.insert(TemplateVars::CLI_PATH.to_string(), cli_path);
 
     let local_command = render_map(&cli_config.command_template, &variables);
@@ -176,10 +179,10 @@ fn resolve_subtarget(
     use_local_domain: bool,
 ) -> (String, Vec<String>) {
     let default_domain = if use_local_domain {
-        if project.local_cli.domain.is_empty() {
+        if project.local_environment.domain.is_empty() {
             "localhost".to_string()
         } else {
-            project.local_cli.domain.clone()
+            project.local_environment.domain.clone()
         }
     } else {
         project.domain.clone()
@@ -196,10 +199,10 @@ fn resolve_subtarget(
             t.id.to_lowercase() == *sub_id || t.name.to_lowercase() == *sub_id
         }) {
             let domain = if use_local_domain {
-                let base_domain = if project.local_cli.domain.is_empty() {
+                let base_domain = if project.local_environment.domain.is_empty() {
                     "localhost"
                 } else {
-                    &project.local_cli.domain
+                    &project.local_environment.domain
                 };
                 if subtarget.is_default {
                     base_domain.to_string()

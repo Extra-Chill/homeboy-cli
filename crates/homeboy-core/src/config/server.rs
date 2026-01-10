@@ -9,6 +9,8 @@ pub struct ServerConfig {
     pub user: String,
     #[serde(default = "default_port")]
     pub port: u16,
+    #[serde(default)]
+    pub identity_file: Option<String>,
 }
 
 fn default_port() -> u16 {

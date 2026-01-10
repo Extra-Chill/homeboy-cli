@@ -1,12 +1,12 @@
 use std::process::{Command, Stdio};
-use crate::config::{AppPaths, ServerConfig};
+use crate::config::ServerConfig;
 use crate::Result;
 
 pub struct SshClient {
     pub host: String,
     pub user: String,
     pub port: u16,
-    pub key_path: String,
+    pub identity_file: Option<String>,
 }
 
 pub struct CommandOutput {
@@ -18,34 +18,45 @@ pub struct CommandOutput {
 
 impl SshClient {
     pub fn from_server(server: &ServerConfig, server_id: &str) -> Result<Self> {
-        let key_path = AppPaths::key(server_id);
-
-        if !key_path.exists() {
-            return Err(crate::Error::Ssh(format!(
-                "SSH key not found for server '{}'. Configure SSH in Homeboy.app first.",
-                server_id
-            )));
-        }
+        let identity_file = match &server.identity_file {
+            Some(path) if !path.is_empty() => {
+                let expanded = shellexpand::tilde(path).to_string();
+                if !std::path::Path::new(&expanded).exists() {
+                    return Err(crate::Error::Ssh(format!(
+                        "SSH identity file not found for server '{}': {}",
+                        server_id, expanded
+                    )));
+                }
+                Some(expanded)
+            }
+            _ => None,
+        };
 
         Ok(Self {
             host: server.host.clone(),
             user: server.user.clone(),
             port: server.port,
-            key_path: key_path.to_string_lossy().to_string(),
+            identity_file,
         })
     }
 
     pub fn execute(&self, command: &str) -> CommandOutput {
-        let output = Command::new("/usr/bin/ssh")
-            .args([
-                "-i", &self.key_path,
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "BatchMode=yes",
-                "-p", &self.port.to_string(),
-                &format!("{}@{}", self.user, self.host),
-                command,
-            ])
-            .output();
+        let mut args = Vec::new();
+
+        if let Some(identity_file) = &self.identity_file {
+            args.push("-i".to_string());
+            args.push(identity_file.clone());
+        }
+
+        if self.port != 22 {
+            args.push("-p".to_string());
+            args.push(self.port.to_string());
+        }
+
+        args.push(format!("{}@{}", self.user, self.host));
+        args.push(command.to_string());
+
+        let output = Command::new("/usr/bin/ssh").args(&args).output();
 
         match output {
             Ok(out) => CommandOutput {
@@ -64,15 +75,19 @@ impl SshClient {
     }
 
     pub fn execute_interactive(&self, command: Option<&str>) -> i32 {
-        let mut args = vec![
-            "-i".to_string(),
-            self.key_path.clone(),
-            "-o".to_string(),
-            "StrictHostKeyChecking=no".to_string(),
-            "-p".to_string(),
-            self.port.to_string(),
-            format!("{}@{}", self.user, self.host),
-        ];
+        let mut args = Vec::new();
+
+        if let Some(identity_file) = &self.identity_file {
+            args.push("-i".to_string());
+            args.push(identity_file.clone());
+        }
+
+        if self.port != 22 {
+            args.push("-p".to_string());
+            args.push(self.port.to_string());
+        }
+
+        args.push(format!("{}@{}", self.user, self.host));
 
         if let Some(cmd) = command {
             args.push(cmd.to_string());

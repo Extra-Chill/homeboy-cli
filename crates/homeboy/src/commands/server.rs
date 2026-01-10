@@ -71,7 +71,7 @@ pub struct KeyArgs {
 
 #[derive(Subcommand)]
 enum KeyCommand {
-    /// Generate a new SSH key pair
+    /// Generate a new SSH key pair and set it for this server
     Generate {
         /// Server ID
         server_id: String,
@@ -84,12 +84,24 @@ enum KeyCommand {
         #[arg(long)]
         raw: bool,
     },
-    /// Import an existing SSH private key
+    /// Import an existing SSH private key and set it for this server
     Import {
         /// Server ID
         server_id: String,
         /// Path to private key file
         private_key_path: String,
+    },
+    /// Use an existing SSH private key file path for this server
+    Use {
+        /// Server ID
+        server_id: String,
+        /// Path to private key file
+        private_key_path: String,
+    },
+    /// Unset the server SSH identity file (use normal SSH resolution)
+    Unset {
+        /// Server ID
+        server_id: String,
     },
 }
 
@@ -111,6 +123,8 @@ fn run_key(args: KeyArgs) {
         KeyCommand::Generate { server_id } => key_generate(&server_id),
         KeyCommand::Show { server_id, raw } => key_show(&server_id, raw),
         KeyCommand::Import { server_id, private_key_path } => key_import(&server_id, &private_key_path),
+        KeyCommand::Use { server_id, private_key_path } => key_use(&server_id, &private_key_path),
+        KeyCommand::Unset { server_id } => key_unset(&server_id),
     }
 }
 
@@ -128,6 +142,7 @@ fn create(name: &str, host: &str, user: &str, port: u16) {
         host: host.to_string(),
         user: user.to_string(),
         port,
+        identity_file: None,
     };
 
     if let Err(e) = ConfigManager::save_server(&server) {
@@ -295,6 +310,11 @@ fn key_generate(server_id: &str) {
 
     match status {
         Ok(output) if output.status.success() => {
+            if let Ok(mut server) = ConfigManager::load_server(server_id) {
+                server.identity_file = Some(key_path_str.to_string());
+                let _ = ConfigManager::save_server(&server);
+            }
+
             // Read the public key
             let pub_key_path = format!("{}.pub", key_path_str);
             match fs::read_to_string(&pub_key_path) {
@@ -350,6 +370,71 @@ fn key_show(server_id: &str, raw: bool) {
             print_error("KEY_NOT_FOUND", &format!("No SSH key configured for server '{}'", server_id));
         }
     }
+}
+
+fn key_use(server_id: &str, private_key_path: &str) {
+    let mut server = match ConfigManager::load_server(server_id) {
+        Ok(s) => s,
+        Err(_) => {
+            print_error("SERVER_NOT_FOUND", &format!("Server '{}' not found", server_id));
+            return;
+        }
+    };
+
+    let expanded_path = shellexpand::tilde(private_key_path).to_string();
+
+    if !std::path::Path::new(&expanded_path).exists() {
+        print_error("KEY_NOT_FOUND", &format!("SSH identity file not found: {}", expanded_path));
+        return;
+    }
+
+    server.identity_file = Some(expanded_path.clone());
+
+    if let Err(e) = ConfigManager::save_server(&server) {
+        print_error("SAVE_ERROR", &e.to_string());
+        return;
+    }
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct UseResult {
+        server_id: String,
+        identity_file: String,
+    }
+
+    print_success(UseResult {
+        server_id: server_id.to_string(),
+        identity_file: expanded_path,
+    });
+}
+
+fn key_unset(server_id: &str) {
+    let mut server = match ConfigManager::load_server(server_id) {
+        Ok(s) => s,
+        Err(_) => {
+            print_error("SERVER_NOT_FOUND", &format!("Server '{}' not found", server_id));
+            return;
+        }
+    };
+
+    server.identity_file = None;
+
+    if let Err(e) = ConfigManager::save_server(&server) {
+        print_error("SAVE_ERROR", &e.to_string());
+        return;
+    }
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct UnsetResult {
+        server_id: String,
+        identity_file: Option<String>,
+    }
+
+    print_success(UnsetResult {
+        server_id: server_id.to_string(),
+        identity_file: None,
+    });
 }
 
 fn key_import(server_id: &str, private_key_path: &str) {
@@ -422,6 +507,11 @@ fn key_import(server_id: &str, private_key_path: &str) {
         server_id: String,
         imported: String,
         public_key: String,
+    }
+
+    if let Ok(mut server) = ConfigManager::load_server(server_id) {
+        server.identity_file = Some(key_path_str.to_string());
+        let _ = ConfigManager::save_server(&server);
     }
 
     print_success(ImportResult {

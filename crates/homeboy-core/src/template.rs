@@ -40,6 +40,11 @@ pub fn render_map(template: &str, variables: &HashMap<String, String>) -> String
     result
 }
 
+pub fn is_present(template: &str, key: &str) -> bool {
+    let placeholder = format!("{{{{{}}}}}", key);
+    template.contains(&placeholder)
+}
+
 pub fn shell_escape(value: &str) -> String {
     value.replace('\'', "'\\''")
 }

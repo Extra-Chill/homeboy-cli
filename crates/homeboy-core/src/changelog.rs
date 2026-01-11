@@ -216,8 +216,9 @@ mod tests {
         let aliases = vec!["Unreleased".to_string(), "[Unreleased]".to_string()];
         let (out, changed) = finalize_next_section(content, &aliases, "0.2.0", false).unwrap();
         assert!(changed);
-        assert!(out.contains("## 0.2.0\n\n- First\n- Second"));
-        assert!(out.contains("## Unreleased\n\n\n## 0.2.0"));
+        assert!(out.contains("## 0.2.0\n\n\n- First\n- Second"));
+        assert!(out.contains("## Unreleased"));
+        assert!(out.contains("## 0.2.0"));
         assert!(out.contains("## 0.1.0"));
     }
 

@@ -4,7 +4,6 @@ mod config_keys;
 mod identifiable;
 mod paths;
 mod project;
-mod project_id;
 mod project_manager;
 mod project_type;
 mod record;
@@ -13,10 +12,9 @@ mod server;
 pub use app::*;
 pub use component::*;
 pub use config_keys::*;
-pub use identifiable::{SetName, SlugIdentifiable, slugify_id};
+pub use identifiable::{slugify_id, SetName, SlugIdentifiable};
 pub use paths::AppPaths;
 pub use project::*;
-pub use project_id::slugify_project_id;
 pub use project_manager::*;
 pub use project_type::*;
 pub use record::*;
@@ -46,7 +44,7 @@ impl ConfigManager {
     }
 
     pub fn load_project(id: &str) -> Result<ProjectConfiguration> {
-        Ok(Self::load_project_record(id)?.project)
+        Ok(Self::load_project_record(id)?.config)
     }
 
     pub fn load_project_record(id: &str) -> Result<ProjectRecord> {
@@ -55,15 +53,15 @@ impl ConfigManager {
             return Err(Error::ProjectNotFound(id.to_string()));
         }
         let content = fs::read_to_string(&path)?;
-        let project: ProjectConfiguration = serde_json::from_str(&content)?;
+        let config: ProjectConfiguration = serde_json::from_str(&content)?;
 
-        let expected_id = slugify_project_id(&project.name)?;
+        let expected_id = slugify_id(&config.name)?;
         if expected_id != id {
             return Err(Error::Config(format!(
                 "Project configuration mismatch: file '{}' implies id '{}', but name '{}' implies id '{}'. Run `homeboy project repair {}`.",
                 path.display(),
                 id,
-                project.name,
+                config.name,
                 expected_id,
                 id
             )));
@@ -71,12 +69,12 @@ impl ConfigManager {
 
         Ok(ProjectRecord {
             id: id.to_string(),
-            project,
+            config,
         })
     }
 
     pub fn save_project(id: &str, project: &ProjectConfiguration) -> Result<()> {
-        let expected_id = slugify_project_id(&project.name)?;
+        let expected_id = slugify_id(&project.name)?;
         if expected_id != id {
             return Err(Error::Config(format!(
                 "Project id '{}' must match slug(name) '{}'. Use `homeboy project set {id} --name \"{}\"` to rename.",
@@ -111,23 +109,23 @@ impl ConfigManager {
             let id = stem.to_string_lossy().to_string();
 
             let content = fs::read_to_string(&path)?;
-            let project: ProjectConfiguration = serde_json::from_str(&content)?;
+            let config: ProjectConfiguration = serde_json::from_str(&content)?;
 
-            let expected_id = slugify_project_id(&project.name)?;
+            let expected_id = slugify_id(&config.name)?;
             if expected_id != id {
                 return Err(Error::Config(format!(
                     "Project configuration mismatch: file '{}' implies id '{}', but name '{}' implies id '{}'. Run `homeboy project repair {}`.",
                     path.display(),
                     id,
-                    project.name,
+                    config.name,
                     expected_id,
                     id
                 )));
             }
 
-            projects.push(ProjectRecord { id, project });
+            projects.push(ProjectRecord { id, config });
         }
-        projects.sort_by(|a, b| a.project.name.cmp(&b.project.name));
+        projects.sort_by(|a, b| a.config.name.cmp(&b.config.name));
         Ok(projects)
     }
 
@@ -175,8 +173,16 @@ impl ConfigManager {
         Self::save_app_config(&app_config)
     }
 
-    pub fn save_server(server: &ServerConfig) -> Result<()> {
-        let path = AppPaths::server(&server.id);
+    pub fn save_server(id: &str, server: &ServerConfig) -> Result<()> {
+        let expected_id = server.slug_id()?;
+        if expected_id != id {
+            return Err(Error::Config(format!(
+                "Server id '{}' must match slug(name) '{}'. Use rename to change.",
+                id, expected_id
+            )));
+        }
+
+        let path = AppPaths::server(id);
         AppPaths::ensure_directories()?;
         let content = serde_json::to_string_pretty(server)?;
         fs::write(&path, content)?;
@@ -217,8 +223,16 @@ impl ConfigManager {
         Ok(serde_json::from_str(&content)?)
     }
 
-    pub fn save_component(component: &ComponentConfiguration) -> Result<()> {
-        let path = AppPaths::component(&component.id);
+    pub fn save_component(id: &str, component: &ComponentConfiguration) -> Result<()> {
+        let expected_id = component.slug_id()?;
+        if expected_id != id {
+            return Err(Error::Config(format!(
+                "Component id '{}' must match slug(name) '{}'. Use rename to change.",
+                id, expected_id
+            )));
+        }
+
+        let path = AppPaths::component(id);
         AppPaths::ensure_directories()?;
         let content = serde_json::to_string_pretty(component)?;
         fs::write(&path, content)?;

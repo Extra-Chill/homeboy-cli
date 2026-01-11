@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::{SetName, SlugIdentifiable};
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRecord {
     pub id: String,
-    pub project: ProjectConfiguration,
+    pub config: ProjectConfiguration,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +59,18 @@ pub struct ProjectConfiguration {
     pub unlocked_table_patterns: Vec<String>,
 }
 
+impl SlugIdentifiable for ProjectConfiguration {
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl SetName for ProjectConfiguration {
+    fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+}
+
 impl ProjectConfiguration {
     pub fn is_wordpress(&self) -> bool {
         self.project_type == "wordpress"
@@ -74,7 +88,9 @@ impl ProjectConfiguration {
     }
 
     pub fn find_sub_target(&self, id: &str) -> Option<&SubTarget> {
-        self.sub_targets.iter().find(|t| t.id == id)
+        self.sub_targets
+            .iter()
+            .find(|t| t.slug_id().ok().as_deref() == Some(id))
     }
 }
 
@@ -200,13 +216,24 @@ pub struct ApiConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubTarget {
-    pub id: String,
     pub name: String,
     pub domain: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub number: Option<i32>,
     #[serde(default)]
     pub is_default: bool,
+}
+
+impl SlugIdentifiable for SubTarget {
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl SetName for SubTarget {
+    fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
 }
 
 impl SubTarget {
@@ -244,10 +271,21 @@ pub struct NewsletterConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemGrouping {
-    pub id: String,
     pub name: String,
     #[serde(default)]
     pub patterns: Vec<String>,
     #[serde(default)]
     pub is_collapsed: bool,
+}
+
+impl SlugIdentifiable for ItemGrouping {
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl SetName for ItemGrouping {
+    fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
 }

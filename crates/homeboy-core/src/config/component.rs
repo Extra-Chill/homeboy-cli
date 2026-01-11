@@ -19,6 +19,7 @@ pub struct ChangelogTarget {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComponentConfiguration {
+    pub id: String,
     pub name: String,
     pub local_path: String,
     pub remote_path: String,
@@ -51,12 +52,14 @@ impl SetName for ComponentConfiguration {
 
 impl ComponentConfiguration {
     pub fn new(
+        id: String,
         name: String,
         local_path: String,
         remote_path: String,
         build_artifact: String,
     ) -> Self {
         Self {
+            id,
             name,
             local_path,
             remote_path,

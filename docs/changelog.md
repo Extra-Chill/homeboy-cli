@@ -13,8 +13,6 @@ All notable changes to Homeboy CLI are documented in this file.
 
 - Refactor doctor to use read_json_file() internally
 
-## Unreleased
-
 ## 0.2.1
 
 - Default app config values are serialized (no more Option-based defaults for DB settings)

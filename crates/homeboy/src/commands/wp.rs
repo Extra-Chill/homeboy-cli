@@ -2,7 +2,8 @@ use clap::Args;
 use homeboy_core::config::{
     ConfigManager, ProjectConfiguration, ProjectRecord, ProjectTypeManager,
 };
-use homeboy_core::ssh::{execute_local_command, CommandOutput, SshClient};
+use homeboy_core::context::resolve_project_ssh;
+use homeboy_core::ssh::{execute_local_command, CommandOutput};
 use homeboy_core::template::{render_map, TemplateVars};
 use homeboy_core::token;
 use serde::Serialize;
@@ -80,9 +81,8 @@ fn run_with_loader_and_executor(
     } else {
         let (target_domain, command) = build_command(&project, &cli_config, &args.args, false)?;
 
-        let ctx = homeboy_core::context::resolve_project_server(&args.project_id)?;
-        let client = SshClient::from_server(&ctx.server, &ctx.server_id)?;
-        let output = client.execute(&command);
+        let ctx = resolve_project_ssh(&args.project_id)?;
+        let output = ctx.client.execute(&command);
         (output, Some(target_domain), command)
     };
 

@@ -1,6 +1,7 @@
 use clap::Args;
 use homeboy_core::config::{ConfigManager, ProjectRecord, ProjectTypeManager};
-use homeboy_core::ssh::{execute_local_command, SshClient};
+use homeboy_core::context::resolve_project_ssh;
+use homeboy_core::ssh::execute_local_command;
 
 use homeboy_core::template::{render_map, TemplateVars};
 use serde::Serialize;
@@ -61,9 +62,8 @@ pub fn run(args: Pm2Args) -> CmdResult<Pm2Output> {
         let output = execute_local_command(&command);
         output.exit_code
     } else {
-        let ctx = homeboy_core::context::resolve_project_server(&args.project_id)?;
-        let client = SshClient::from_server(&ctx.server, &ctx.server_id)?;
-        let output = client.execute(&command);
+        let ctx = resolve_project_ssh(&args.project_id)?;
+        let output = ctx.client.execute(&command);
         output.exit_code
     };
 

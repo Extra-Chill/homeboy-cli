@@ -6,6 +6,7 @@ pub mod component;
 pub mod db;
 pub mod deploy;
 pub mod docs;
+pub mod doctor;
 pub mod file;
 pub mod git;
 pub mod logs;

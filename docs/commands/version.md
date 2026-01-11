@@ -17,7 +17,11 @@ homeboy version show <component_id>
 ### `bump`
 
 ```sh
-homeboy version bump <component_id> <patch|minor|major>
+homeboy version bump <component_id> <patch|minor|major> \
+  [--changelog-add "<message>"]... \
+  [--changelog-finalize] \
+  [--changelog-empty-ok] \
+  [--project-id <id>]
 ```
 
 ## JSON output
@@ -33,6 +37,10 @@ homeboy version bump <component_id> <patch|minor|major>
 - `fullPath`
 - `version` (for `show`)
 - `oldVersion`, `newVersion` (for `bump`)
+- `changelogPath` (when changelog flags are used)
+- `changelogItemsAdded` (when `--changelog-add` is used)
+- `changelogFinalized` (when `--changelog-finalize` is used)
+- `changelogChanged` (when any changelog update occurs)
 
 ## Exit code
 

@@ -1,4 +1,6 @@
 use clap::{Args, Subcommand, ValueEnum};
+use homeboy_core::changelog;
+use homeboy_core::config::ProjectConfiguration;
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::fs;
@@ -30,6 +32,18 @@ enum VersionCommand {
         component_id: String,
         /// Version bump type
         bump_type: BumpType,
+        /// Add a changelog item to the configured "next" section (repeatable)
+        #[arg(long = "changelog-add", action = clap::ArgAction::Append)]
+        changelog_add: Vec<String>,
+        /// Finalize the configured "next" section into the new version section
+        #[arg(long = "changelog-finalize")]
+        changelog_finalize: bool,
+        /// Allow finalizing an empty "next" section (no-op)
+        #[arg(long = "changelog-empty-ok")]
+        changelog_empty_ok: bool,
+        /// Optional project ID override (defaults to active project)
+        #[arg(long)]
+        project_id: Option<String>,
     },
 }
 
@@ -68,6 +82,14 @@ pub struct VersionOutput {
     old_version: Option<String>,
     new_version: Option<String>,
     targets: Vec<VersionTargetOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    changelog_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    changelog_items_added: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    changelog_finalized: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    changelog_changed: Option<bool>,
 }
 
 pub fn run(args: VersionArgs) -> homeboy_core::Result<(VersionOutput, i32)> {
@@ -76,7 +98,18 @@ pub fn run(args: VersionArgs) -> homeboy_core::Result<(VersionOutput, i32)> {
         VersionCommand::Bump {
             component_id,
             bump_type,
-        } => bump(&component_id, bump_type),
+            changelog_add,
+            changelog_finalize,
+            changelog_empty_ok,
+            project_id,
+        } => bump(
+            &component_id,
+            bump_type,
+            &changelog_add,
+            changelog_finalize,
+            changelog_empty_ok,
+            project_id.as_deref(),
+        ),
     }
 }
 
@@ -247,12 +280,23 @@ fn show(component_id: &str) -> homeboy_core::Result<(VersionOutput, i32)> {
                 full_path: primary_full_path,
                 match_count: versions.len(),
             }],
+            changelog_path: None,
+            changelog_items_added: None,
+            changelog_finalized: None,
+            changelog_changed: None,
         },
         0,
     ))
 }
 
-fn bump(component_id: &str, bump_type: BumpType) -> homeboy_core::Result<(VersionOutput, i32)> {
+fn bump(
+    component_id: &str,
+    bump_type: BumpType,
+    changelog_add: &[String],
+    changelog_finalize: bool,
+    changelog_empty_ok: bool,
+    project_id_override: Option<&str>,
+) -> homeboy_core::Result<(VersionOutput, i32)> {
     let component = ConfigManager::load_component(component_id)?;
     let targets = component.version_targets.clone().ok_or_else(|| {
         Error::Config(format!(
@@ -323,6 +367,71 @@ fn bump(component_id: &str, bump_type: BumpType) -> homeboy_core::Result<(Versio
         });
     }
 
+    let mut changelog_path: Option<String> = None;
+    let mut changelog_items_added: Option<usize> = None;
+    let mut changelog_finalized: Option<bool> = None;
+    let mut changelog_changed: Option<bool> = None;
+
+    if !changelog_add.is_empty() || changelog_finalize {
+        let project_id = match project_id_override {
+            Some(id) => Some(id.to_string()),
+            None => ConfigManager::load_app_config()?.active_project_id,
+        };
+
+        let project: Option<ProjectConfiguration> = match project_id.as_deref() {
+            Some(id) => Some(ConfigManager::load_project(id)?),
+            None => None,
+        };
+
+        let settings = changelog::resolve_effective_settings(project.as_ref(), Some(&component))?;
+        let path = changelog::resolve_changelog_path(&component)?;
+        changelog_path = Some(path.to_string_lossy().to_string());
+
+        if !changelog_add.is_empty() {
+            let content = fs::read_to_string(&path)?;
+            let mut new_content = content;
+            let mut changed = false;
+            let mut added_count = 0usize;
+
+            for message in changelog_add {
+                let (next_content, item_changed) = changelog::add_next_section_item(
+                    &new_content,
+                    &settings.next_section_aliases,
+                    message,
+                )?;
+                new_content = next_content;
+                if item_changed {
+                    changed = true;
+                    added_count += 1;
+                }
+            }
+
+            if changed {
+                fs::write(&path, &new_content)?;
+            }
+
+            changelog_items_added = Some(added_count);
+            changelog_changed = Some(changed);
+        }
+
+        if changelog_finalize {
+            let content = fs::read_to_string(&path)?;
+            let (new_content, changed) = changelog::finalize_next_section(
+                &content,
+                &settings.next_section_aliases,
+                &new_version,
+                changelog_empty_ok,
+            )?;
+
+            if changed {
+                fs::write(&path, &new_content)?;
+            }
+
+            changelog_finalized = Some(true);
+            changelog_changed = Some(changelog_changed.unwrap_or(false) || changed);
+        }
+    }
+
     Ok((
         VersionOutput {
             command: "version.bump".to_string(),
@@ -331,6 +440,10 @@ fn bump(component_id: &str, bump_type: BumpType) -> homeboy_core::Result<(Versio
             old_version: Some(old_version),
             new_version: Some(new_version),
             targets: outputs,
+            changelog_path,
+            changelog_items_added,
+            changelog_finalized,
+            changelog_changed,
         },
         0,
     ))

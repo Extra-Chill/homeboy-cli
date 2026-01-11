@@ -70,7 +70,7 @@ Configuration / defaults:
 ## Errors
 
 - `show`: errors if embedded docs do not contain `changelog`
-- `add`: errors if `changelogTargets` or the next-section label is not configured
+- `add`: errors if changelog path cannot be resolved
 
 ## Related
 

@@ -128,6 +128,117 @@ pub fn read_and_add_next_section_item(
     Ok((path, changed))
 }
 
+pub fn finalize_next_section(
+    changelog_content: &str,
+    next_section_aliases: &[String],
+    new_version: &str,
+    allow_empty: bool,
+) -> Result<(String, bool)> {
+    if new_version.trim().is_empty() {
+        return Err(Error::Other(
+            "New version label cannot be empty".to_string(),
+        ));
+    }
+
+    let lines: Vec<&str> = changelog_content.lines().collect();
+    let start = find_next_section_start(&lines, next_section_aliases).ok_or_else(|| {
+        Error::Other("Next changelog section not found (cannot finalize)".to_string())
+    })?;
+
+    let end = find_section_end(&lines, start);
+    let body_lines = &lines[start + 1..end];
+    let has_content = body_lines.iter().any(|line| !line.trim().is_empty());
+
+    if !has_content {
+        if allow_empty {
+            return Ok((changelog_content.to_string(), false));
+        }
+
+        return Err(Error::Other(
+            "Next changelog section is empty (use --changelog-empty-ok to finalize anyway)"
+                .to_string(),
+        ));
+    }
+
+    // Preserve the exact next-section heading label we found.
+    let next_label = lines[start]
+        .trim()
+        .trim_start_matches('#')
+        .trim()
+        .to_string();
+
+    let mut out_lines: Vec<String> = Vec::new();
+
+    // Copy everything before the next-section heading.
+    for line in &lines[..start] {
+        out_lines.push((*line).to_string());
+    }
+
+    // Insert new version section before the existing next section.
+    if out_lines.last().is_some_and(|l| !l.trim().is_empty()) {
+        out_lines.push(String::new());
+    }
+    out_lines.push(format!("## {}", new_version.trim()));
+    out_lines.push(String::new());
+
+    for line in body_lines {
+        out_lines.push((*line).to_string());
+    }
+
+    // Ensure a blank line before re-creating the empty next section.
+    if out_lines.last().is_some_and(|l| !l.trim().is_empty()) {
+        out_lines.push(String::new());
+    }
+
+    out_lines.push(format!("## {}", next_label));
+    out_lines.push(String::new());
+
+    // Copy rest of changelog after original next section.
+    for line in &lines[end..] {
+        out_lines.push((*line).to_string());
+    }
+
+    let mut out = out_lines.join("\n");
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+
+    Ok((out, true))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finalize_moves_body_to_new_version_and_resets_next_section() {
+        let content = "# Changelog\n\n## Unreleased\n\n- First\n- Second\n\n## 0.1.0\n\n- Old\n";
+        let aliases = vec!["Unreleased".to_string(), "[Unreleased]".to_string()];
+        let (out, changed) = finalize_next_section(content, &aliases, "0.2.0", false).unwrap();
+        assert!(changed);
+        assert!(out.contains("## 0.2.0\n\n- First\n- Second"));
+        assert!(out.contains("## Unreleased\n\n\n## 0.2.0"));
+        assert!(out.contains("## 0.1.0"));
+    }
+
+    #[test]
+    fn finalize_errors_on_empty_next_section_by_default() {
+        let content = "# Changelog\n\n## Unreleased\n\n\n## 0.1.0\n\n- Old\n";
+        let aliases = vec!["Unreleased".to_string(), "[Unreleased]".to_string()];
+        let err = finalize_next_section(content, &aliases, "0.2.0", false).unwrap_err();
+        assert!(err.to_string().contains("empty"));
+    }
+
+    #[test]
+    fn finalize_noops_on_empty_when_allowed() {
+        let content = "# Changelog\n\n## Unreleased\n\n\n## 0.1.0\n\n- Old\n";
+        let aliases = vec!["Unreleased".to_string(), "[Unreleased]".to_string()];
+        let (out, changed) = finalize_next_section(content, &aliases, "0.2.0", true).unwrap();
+        assert!(!changed);
+        assert_eq!(out, content);
+    }
+}
+
 fn normalize_heading_label(label: &str) -> String {
     label.trim().trim_matches(['[', ']']).trim().to_string()
 }

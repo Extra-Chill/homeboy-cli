@@ -1,9 +1,24 @@
 use crate::{Error, Result};
 
-pub fn slugify_project_id(name: &str) -> Result<String> {
+/// Trait for entities whose ID is derived from their name.
+pub trait SlugIdentifiable {
+    fn name(&self) -> &str;
+
+    fn slug_id(&self) -> Result<String> {
+        slugify_id(self.name())
+    }
+}
+
+/// Trait for entities that can have their name mutated
+pub trait SetName {
+    fn set_name(&mut self, name: String);
+}
+
+/// Slugify a name into an ID
+pub fn slugify_id(name: &str) -> Result<String> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
-        return Err(Error::Config("Project name cannot be empty".to_string()));
+        return Err(Error::Config("Name cannot be empty".to_string()));
     }
 
     let mut out = String::new();
@@ -37,7 +52,7 @@ pub fn slugify_project_id(name: &str) -> Result<String> {
 
     if out.is_empty() {
         return Err(Error::Config(
-            "Project name must contain at least one letter or number".to_string(),
+            "Name must contain at least one letter or number".to_string(),
         ));
     }
 

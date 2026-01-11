@@ -1,6 +1,5 @@
 use clap::{Args, Subcommand};
-use homeboy_core::config::ConfigManager;
-use homeboy_core::ssh::SshClient;
+use homeboy_core::context::resolve_project_ssh;
 use serde::Serialize;
 use std::io::{self, Read};
 
@@ -91,33 +90,8 @@ pub fn run(args: FileArgs) -> homeboy_core::Result<(FileOutput, i32)> {
     }
 }
 
-struct FileContext {
-    client: SshClient,
-    base_path: Option<String>,
-}
-
-fn build_context(project_id: &str) -> homeboy_core::Result<FileContext> {
-    let project = ConfigManager::load_project_record(project_id)?;
-
-    let server_id = project.project.server_id.ok_or_else(|| {
-        homeboy_core::Error::Config(format!(
-            "Server not configured for project '{}'",
-            project_id
-        ))
-    })?;
-
-    let server = ConfigManager::load_server(&server_id)?;
-    let client = SshClient::from_server(&server, &server_id)
-        .map_err(|e| homeboy_core::Error::Ssh(e.to_string()))?;
-
-    Ok(FileContext {
-        client,
-        base_path: project.project.base_path,
-    })
-}
-
 fn list(project_id: &str, path: &str) -> homeboy_core::Result<(FileOutput, i32)> {
-    let ctx = build_context(project_id)?;
+    let ctx = resolve_project_ssh(project_id)?;
 
     let full_path = homeboy_core::base_path::join_remote_path(ctx.base_path.as_deref(), path)?;
     let command = format!("ls -la '{}'", full_path);
@@ -154,7 +128,7 @@ fn list(project_id: &str, path: &str) -> homeboy_core::Result<(FileOutput, i32)>
 }
 
 fn read(project_id: &str, path: &str) -> homeboy_core::Result<(FileOutput, i32)> {
-    let ctx = build_context(project_id)?;
+    let ctx = resolve_project_ssh(project_id)?;
 
     let full_path = homeboy_core::base_path::join_remote_path(ctx.base_path.as_deref(), path)?;
     let command = format!("cat '{}'", full_path);
@@ -189,7 +163,7 @@ fn read(project_id: &str, path: &str) -> homeboy_core::Result<(FileOutput, i32)>
 }
 
 fn write(project_id: &str, path: &str) -> homeboy_core::Result<(FileOutput, i32)> {
-    let ctx = build_context(project_id)?;
+    let ctx = resolve_project_ssh(project_id)?;
 
     let mut content = String::new();
     io::stdin()
@@ -240,7 +214,7 @@ fn delete(
     path: &str,
     recursive: bool,
 ) -> homeboy_core::Result<(FileOutput, i32)> {
-    let ctx = build_context(project_id)?;
+    let ctx = resolve_project_ssh(project_id)?;
 
     let full_path = homeboy_core::base_path::join_remote_path(ctx.base_path.as_deref(), path)?;
     let flags = if recursive { "-rf" } else { "-f" };
@@ -280,7 +254,7 @@ fn rename(
     old_path: &str,
     new_path: &str,
 ) -> homeboy_core::Result<(FileOutput, i32)> {
-    let ctx = build_context(project_id)?;
+    let ctx = resolve_project_ssh(project_id)?;
 
     let full_old = homeboy_core::base_path::join_remote_path(ctx.base_path.as_deref(), old_path)?;
     let full_new = homeboy_core::base_path::join_remote_path(ctx.base_path.as_deref(), new_path)?;

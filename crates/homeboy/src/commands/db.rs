@@ -3,6 +3,7 @@ use serde::Serialize;
 use std::process::{Command, Stdio};
 
 use homeboy_core::config::{ConfigManager, ProjectTypeManager};
+use homeboy_core::context::{resolve_project_ssh, resolve_project_ssh_with_base_path};
 use homeboy_core::shell;
 use homeboy_core::ssh::SshClient;
 use homeboy_core::token;
@@ -134,32 +135,7 @@ fn build_context(
     args: &[String],
 ) -> homeboy_core::Result<(DbContext, Vec<String>)> {
     let project = ConfigManager::load_project_record(project_id)?;
-
-    let server_id = project.project.server_id.clone().ok_or_else(|| {
-        homeboy_core::Error::Config(format!(
-            "Server not configured for project '{}'",
-            project_id
-        ))
-    })?;
-
-    let server = ConfigManager::load_server(&server_id)?;
-
-    let base_path = project.project.base_path.clone().ok_or_else(|| {
-        homeboy_core::Error::Config(format!(
-            "Base path not configured for project '{}'",
-            project_id
-        ))
-    })?;
-
-    if base_path.is_empty() {
-        return Err(homeboy_core::Error::Config(format!(
-            "Base path not configured for project '{}'",
-            project_id
-        )));
-    }
-
-    let client = SshClient::from_server(&server, &server_id)
-        .map_err(|e| homeboy_core::Error::Other(e.to_string()))?;
+    let (ctx, base_path) = resolve_project_ssh_with_base_path(project_id)?;
 
     let mut remaining_args = args.to_vec();
     let domain = if !project.project.sub_targets.is_empty() {
@@ -190,7 +166,7 @@ fn build_context(
     Ok((
         DbContext {
             project_id: project_id.to_string(),
-            client,
+            client: ctx.client,
             base_path,
             domain,
             cli_path,
@@ -461,18 +437,9 @@ fn drop_table(
 
 fn tunnel(project_id: &str, local_port: Option<u16>) -> homeboy_core::Result<(DbOutput, i32)> {
     let project = ConfigManager::load_project_record(project_id)?;
-
-    let server_id = project.project.server_id.clone().ok_or_else(|| {
-        homeboy_core::Error::Config(format!(
-            "Server not configured for project '{}'",
-            project_id
-        ))
-    })?;
-
-    let server = ConfigManager::load_server(&server_id)?;
-
-    let client = homeboy_core::ssh::SshClient::from_server(&server, &server_id)
-        .map_err(|e| homeboy_core::Error::Other(e.to_string()))?;
+    let ctx = resolve_project_ssh(project_id)?;
+    let server = ctx.server;
+    let client = ctx.client;
 
     let remote_host = if project.project.database.host.is_empty() {
         "127.0.0.1".to_string()

@@ -4,8 +4,8 @@ mod commands;
 mod docs;
 
 use commands::{
-    build, changelog, component, db, deploy, docs as docs_command, file, git, logs, module, pm2,
-    project, server, ssh, version, wp,
+    build, changelog, component, db, deploy, docs as docs_command, doctor, file, git, logs, module,
+    pm2, project, server, ssh, version, wp,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -53,6 +53,8 @@ enum Commands {
     Version(version::VersionArgs),
     /// Build a component
     Build(build::BuildArgs),
+    /// Diagnose configuration problems
+    Doctor(doctor::DoctorArgs),
 }
 
 fn main() -> std::process::ExitCode {
@@ -81,6 +83,7 @@ fn main() -> std::process::ExitCode {
         Commands::Git(args) => homeboy_core::output::map_cmd_result_to_json(git::run(args)),
         Commands::Version(args) => homeboy_core::output::map_cmd_result_to_json(version::run(args)),
         Commands::Build(args) => homeboy_core::output::map_cmd_result_to_json(build::run(args)),
+        Commands::Doctor(args) => homeboy_core::output::map_cmd_result_to_json(doctor::run(args)),
     };
 
     homeboy_core::output::print_json_result(json_result);

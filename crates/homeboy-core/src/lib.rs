@@ -2,6 +2,7 @@ pub mod base_path;
 pub mod changelog;
 pub mod config;
 pub mod context;
+pub mod doctor;
 pub mod error;
 pub mod json;
 pub mod module;

@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use homeboy_core::base_path;
 use homeboy_core::config::ConfigManager;
-use homeboy_core::ssh::SshClient;
+use homeboy_core::context::resolve_project_ssh;
 
 use crate::commands::CmdResult;
 
@@ -112,16 +112,13 @@ fn list(project_id: &str) -> CmdResult<LogsOutput> {
 }
 
 fn show(project_id: &str, path: &str, lines: u32, follow: bool) -> CmdResult<LogsOutput> {
-    let ctx = homeboy_core::context::resolve_project_server(project_id)?;
+    let ctx = resolve_project_ssh(project_id)?;
 
-    let full_path = base_path::join_remote_path(ctx.project.base_path.as_deref(), path)?;
-
-    let client = SshClient::from_server(&ctx.server, &ctx.server_id)
-        .map_err(|e| homeboy_core::Error::Ssh(e.to_string()))?;
+    let full_path = base_path::join_remote_path(ctx.base_path.as_deref(), path)?;
 
     if follow {
         let tail_cmd = format!("tail -f '{}'", full_path);
-        let code = client.execute_interactive(Some(&tail_cmd));
+        let code = ctx.client.execute_interactive(Some(&tail_cmd));
 
         Ok((
             LogsOutput {
@@ -135,7 +132,7 @@ fn show(project_id: &str, path: &str, lines: u32, follow: bool) -> CmdResult<Log
         ))
     } else {
         let command = format!("tail -n {} '{}'", lines, full_path);
-        let output = client.execute(&command);
+        let output = ctx.client.execute(&command);
 
         if !output.success {
             return Err(homeboy_core::Error::Other(output.stderr));
@@ -159,15 +156,12 @@ fn show(project_id: &str, path: &str, lines: u32, follow: bool) -> CmdResult<Log
 }
 
 fn clear(project_id: &str, path: &str) -> CmdResult<LogsOutput> {
-    let ctx = homeboy_core::context::resolve_project_server(project_id)?;
+    let ctx = resolve_project_ssh(project_id)?;
 
-    let client = SshClient::from_server(&ctx.server, &ctx.server_id)
-        .map_err(|e| homeboy_core::Error::Ssh(e.to_string()))?;
-
-    let full_path = base_path::join_remote_path(ctx.project.base_path.as_deref(), path)?;
+    let full_path = base_path::join_remote_path(ctx.base_path.as_deref(), path)?;
 
     let command = format!(": > '{}'", full_path);
-    let output = client.execute(&command);
+    let output = ctx.client.execute(&command);
 
     if !output.success {
         return Err(homeboy_core::Error::Other(output.stderr));

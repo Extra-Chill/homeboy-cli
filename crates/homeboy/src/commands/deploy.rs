@@ -17,6 +17,7 @@ fn reset_test_scp_call_count() {
 }
 
 use homeboy_core::config::{ConfigManager, ServerConfig};
+use homeboy_core::context::resolve_project_ssh_with_base_path;
 use homeboy_core::ssh::{CommandOutput, SshClient};
 use homeboy_core::version::parse_version;
 
@@ -89,23 +90,9 @@ pub struct DeployOutput {
 
 pub fn run(args: DeployArgs) -> CmdResult<DeployOutput> {
     let project = ConfigManager::load_project_record(&args.project_id)?;
-
-    let server_id = project.project.server_id.clone().ok_or_else(|| {
-        homeboy_core::Error::Other("Server not configured for project".to_string())
-    })?;
-
-    let server = ConfigManager::load_server(&server_id)?;
-
-    let base_path = project
-        .project
-        .base_path
-        .clone()
-        .filter(|p| !p.is_empty())
-        .ok_or_else(|| {
-            homeboy_core::Error::Other("Base path not configured for project".to_string())
-        })?;
-
-    let client = SshClient::from_server(&server, &server_id)?;
+    let (ctx, base_path) = resolve_project_ssh_with_base_path(&args.project_id)?;
+    let server = ctx.server;
+    let client = ctx.client;
 
     let all_components = load_components(&project.project.component_ids);
     if all_components.is_empty() {

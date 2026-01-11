@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::{Record, SetName, SlugIdentifiable};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionTarget {
@@ -17,7 +19,6 @@ pub struct ChangelogTarget {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComponentConfiguration {
-    pub id: String,
     pub name: String,
     pub local_path: String,
     pub remote_path: String,
@@ -36,16 +37,26 @@ pub struct ComponentConfiguration {
     pub is_network: Option<bool>,
 }
 
+impl SlugIdentifiable for ComponentConfiguration {
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl SetName for ComponentConfiguration {
+    fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+}
+
 impl ComponentConfiguration {
     pub fn new(
-        id: String,
         name: String,
         local_path: String,
         remote_path: String,
         build_artifact: String,
     ) -> Self {
         Self {
-            id,
             name,
             local_path,
             remote_path,
@@ -59,3 +70,5 @@ impl ComponentConfiguration {
         }
     }
 }
+
+pub type ComponentRecord = Record<ComponentConfiguration>;

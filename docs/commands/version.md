@@ -32,11 +32,9 @@ homeboy version bump <componentId> <patch|minor|major> \
 
 - `command`: `version.show` | `version.bump`
 - `componentId`
-- `versionFile`
-- `versionPattern`
-- `fullPath`
 - `version` (for `show`)
 - `oldVersion`, `newVersion` (for `bump`)
+- `targets`: array of `{ versionFile, versionPattern, fullPath, matchCount }`
 - `changelogPath` (when changelog flags are used)
 - `changelogItemsAdded` (when `--changelog-add` is used)
 - `changelogFinalized` (when `--changelog-finalize` is used)

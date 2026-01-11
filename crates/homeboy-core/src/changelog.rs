@@ -235,7 +235,10 @@ mod tests {
         // ## Unreleased should be at the top (before ## 0.2.0)
         let unreleased_pos = out.find("## Unreleased").unwrap();
         let version_pos = out.find("## 0.2.0").unwrap();
-        assert!(unreleased_pos < version_pos, "## Unreleased should come before ## 0.2.0");
+        assert!(
+            unreleased_pos < version_pos,
+            "## Unreleased should come before ## 0.2.0"
+        );
         assert!(out.contains("## 0.2.0\n\n- First\n- Second"));
         assert!(out.contains("## 0.1.0"));
     }

@@ -2,9 +2,9 @@
 
 Homeboy prints JSON to stdout for both success and error results.
 
-## Top-level shape
+## Top-level envelope
 
-Homeboy always prints a `homeboy_core::output::response::CliResponse<T>` object.
+Homeboy prints a `homeboy_core::output::response::CliResponse<T>` object.
 
 Success:
 
@@ -21,8 +21,11 @@ Failure:
 {
   "success": false,
   "error": {
-    "code": "SOME_CODE",
-    "message": "Human-readable message"
+    "code": "internal.unexpected",
+    "message": "Human-readable message",
+    "details": {},
+    "hints": [{ "message": "..." }],
+    "retryable": false
   }
 }
 ```
@@ -31,29 +34,44 @@ Notes:
 
 - `data` is omitted on failure.
 - `error` is omitted on success.
+- `error.hints` and `error.retryable` are omitted when not set.
 
-## Where exit codes come from
+## Error fields
+
+`error` is a `homeboy_core::output::response::CliError`.
+
+- `code` (string): stable error code (see `homeboy_error::ErrorCode::as_str()`).
+- `message` (string): human-readable message.
+- `details` (JSON value): structured error details (may be `{}`).
+- `hints` (optional array): additional guidance.
+- `retryable` (optional bool): when present, indicates whether retry may succeed.
+
+## Exit codes
 
 - Each subcommand returns `Result<(T, i32)>` where `T` is the success payload and `i32` is the intended process exit code.
 - On success, the process exit code is the returned `i32`, clamped to `0..=255`.
-- On error, the process exit code is `1`.
+- On error, Homeboy maps error codes to exit codes:
+
+| Exit code | Meaning (by error code group) |
+|---:|---|
+| 1 | internal errors (`internal.*`) |
+| 2 | config/validation errors (`config.*`, `validation.*`) |
+| 4 | not found / missing state (`project.not_found`, `server.not_found`, `component.not_found`, `module.not_found`, `project.no_active`) |
+| 10 | SSH errors (`ssh.*`) |
+| 20 | remote/deploy/git errors (`remote.*`, `deploy.*`, `git.*`) |
 
 ## Success payload
 
-On success, `data` is the command’s output struct (varies by command).
-
-## Error payload
-
-On error, `error.code` comes from `homeboy_core::Error::code()` and `error.message` is `Error::to_string()`.
+On success, `data` is the command-specific output struct (varies by command).
 
 ## Command payload conventions
 
-Many command output structs include a string field that identifies the action taken:
+Many command outputs include a `command` string field:
 
-- Common fields: `command`
-- Values often follow a dotted namespace (e.g. `project.show`, `server.key.generate`).
+- Values follow a dotted namespace (for example: `project.show`, `server.key.generate`).
 
 ## Related
 
-- Embedded docs outputs: [Docs command JSON](../commands/docs.md)
-- Changelog output: [Changelog command JSON](../commands/changelog.md)
+- [Docs command JSON](../commands/docs.md)
+- [Changelog command JSON](../commands/changelog.md)
+

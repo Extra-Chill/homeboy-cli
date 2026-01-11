@@ -10,7 +10,6 @@
 - [doctor](doctor.md)
 - [file](file.md)
 - [git](git.md)
-- [init](init.md)
 - [logs](logs.md)
 - [module](module.md)
 - [pm2](pm2.md)

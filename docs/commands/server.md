@@ -65,7 +65,7 @@ Top-level fields:
 - `serverId`: present for single-server actions
 - `server`: server configuration (where applicable)
 - `servers`: list for `list`
-- `updated`: list of updated field names
+- `updated`: list of updated field names (values are command-specific)
 - `deleted`: list of deleted IDs
 - `key`: object for key actions
 

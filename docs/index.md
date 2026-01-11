@@ -17,7 +17,6 @@ Common directories:
 - `servers/`
 - `components/`
 - `modules/`
-- `module-sources/`
 - `keys/`
 - `backups/`
 - `project-types/`

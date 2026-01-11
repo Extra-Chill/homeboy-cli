@@ -17,7 +17,7 @@ homeboy module list [-p|--project <projectId>]
 ### `run`
 
 ```sh
-homeboy module run <moduleId> [-p|--project <projectId>] [-i|--input <key=value>]... [<args...>]
+homeboy module run <moduleId> [-p|--project <projectId>] [-c|--component <componentId>] [-i|--input <key=value>]... [<args...>]
 ```
 
 - `--input` repeats; each value must be in `KEY=value` form.
@@ -73,7 +73,8 @@ Module entry (`modules[]`):
 - `id`, `name`, `version`, `description`
 - `runtime` (runtime type as lowercase string)
 - `compatible` (with optional `--project`)
-- `ready` (module readiness)
+- `ready` (runtime readiness)
+- `configured` (whether the module is present in `config.json` under `installedModules`)
 
 ## Exit code
 

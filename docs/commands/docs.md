@@ -31,7 +31,7 @@ Topic resolution is documented in: [Embedded docs topic resolution](../embedded-
 {
   "mode": "content",
   "topic": "<original topic as a single space-joined string>",
-  "topic_label": "<same as topic, or 'index' when omitted>",
+  "topic_label": "<resolver topic label ('index' when no topic args)>",
   "resolved_key": "<resolved embedded key (e.g. commands/deploy)>",
   "segments": ["<normalized>", "<segments>"] ,
   "slug": "<last segment>",

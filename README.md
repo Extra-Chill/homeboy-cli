@@ -78,7 +78,6 @@ Common paths:
 - `servers/`
 - `components/`
 - `modules/`
-- `module-sources/`
 - `keys/`
 
 See [CLI documentation](docs/index.md) for details.

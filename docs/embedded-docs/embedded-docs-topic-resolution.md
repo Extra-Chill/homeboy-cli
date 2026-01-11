@@ -28,14 +28,20 @@ Examples:
 
 If normalization yields no segments, the key falls back to `index` and `topic_label` becomes `unknown`.
 
+If the resolved key does not exist in embedded docs, `homeboy docs` returns an error.
+
 Segment normalization is performed by `homeboy_core::token::normalize_doc_segment`.
 
 ## Available topics list format
 
-`available_topics` is returned as a single comma+space separated string:
+`available_topics` is returned as a single newline-separated string:
 
 ```text
-index, changelog, commands/docs, ...
+changelog
+commands/build
+commands/docs
+index
+...
 ```
 
 Topics are sorted lexicographically.

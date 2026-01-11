@@ -14,6 +14,8 @@ homeboy pin <COMMAND>
 
 ## JSON output
 
+> Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). `homeboy pin` returns a `PinOutput` object as the `data` payload.
+
 `PinOutput`:
 
 - `command`: `pin.list` | `pin.add` | `pin.remove`

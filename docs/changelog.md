@@ -2,6 +2,14 @@
 
 All notable changes to Homeboy CLI are documented in this file.
 
+## 0.1.7
+
+### Improvements
+- **Component configuration**: Support `versionTargets` (multiple version targets) and optional `buildCommand` in component config.
+- **Version bumping**: `homeboy version bump` validates that all matches in each target are the same version before replacing.
+- **Deploy JSON output**: Deploy results now include `artifactPath`, `remotePath`, `buildCommand`, `buildExitCode`, and `scpExitCode` for clearer automation.
+- **Docs refresh**: Updated command docs + JSON output contract; removed outdated `docs/homeboy-cli-commands-and-json-contract.md`.
+
 ## 0.1.6
 
 ### New Features
@@ -24,8 +32,7 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ### Improvements
 - **Unified JSON Output**: CLI commands now return typed structs and are serialized in `crates/homeboy/src/main.rs`, standardizing success/error output and exit codes.
-- **Docs & Skill Updates**: Updated `crates/homeboy/docs/*` and `skills/homeboy/SKILL.md`, and added `crates/homeboy/docs/build.md`.
-- **Docs**: Expanded local development pipeline documentation in `README.md`.
+- **Docs & Skill Updates**: Updated documentation and the Homeboy skill.
 
 ## 0.1.4
 

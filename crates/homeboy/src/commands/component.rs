@@ -1,9 +1,31 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
-use homeboy_core::config::{ComponentConfiguration, ConfigManager};
+use homeboy_core::config::{ComponentConfiguration, ConfigManager, VersionTarget};
 
 use super::CmdResult;
+
+fn parse_version_targets(targets: &[String]) -> homeboy_core::Result<Vec<VersionTarget>> {
+    let mut parsed = Vec::new();
+
+    for target in targets {
+        let mut parts = target.splitn(2, "::");
+        let file = parts
+            .next()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| homeboy_core::Error::Other("Invalid version target".to_string()))?;
+
+        let pattern = parts.next().map(str::trim).filter(|s| !s.is_empty());
+
+        parsed.push(VersionTarget {
+            file: file.to_string(),
+            pattern: pattern.map(|p| p.to_string()),
+        });
+    }
+
+    Ok(parsed)
+}
 
 #[derive(Args)]
 pub struct ComponentArgs {
@@ -29,12 +51,9 @@ enum ComponentCommand {
         /// Build artifact path relative to localPath
         #[arg(long)]
         build_artifact: String,
-        /// Version file path relative to localPath
-        #[arg(long)]
-        version_file: Option<String>,
-        /// Regex pattern for version extraction
-        #[arg(long)]
-        version_pattern: Option<String>,
+        /// Version targets in the form "file" or "file::pattern" (repeatable)
+        #[arg(long = "version-target", value_name = "TARGET")]
+        version_targets: Vec<String>,
         /// Build command to run in localPath
         #[arg(long)]
         build_command: Option<String>,
@@ -71,12 +90,9 @@ enum ComponentCommand {
         /// Update build artifact path
         #[arg(long)]
         build_artifact: Option<String>,
-        /// Update version file path
-        #[arg(long)]
-        version_file: Option<String>,
-        /// Update version pattern regex
-        #[arg(long)]
-        version_pattern: Option<String>,
+        /// Replace version targets with the provided list (repeatable "file" or "file::pattern")
+        #[arg(long = "version-target", value_name = "TARGET")]
+        version_targets: Vec<String>,
         /// Update build command
         #[arg(long)]
         build_command: Option<String>,
@@ -121,8 +137,7 @@ pub fn run(args: ComponentArgs) -> CmdResult<ComponentOutput> {
             local_path,
             remote_path,
             build_artifact,
-            version_file,
-            version_pattern,
+            version_targets,
             build_command,
             is_network,
         } => create(
@@ -131,8 +146,7 @@ pub fn run(args: ComponentArgs) -> CmdResult<ComponentOutput> {
             &local_path,
             &remote_path,
             &build_artifact,
-            version_file,
-            version_pattern,
+            version_targets,
             build_command,
             is_network,
         ),
@@ -147,8 +161,7 @@ pub fn run(args: ComponentArgs) -> CmdResult<ComponentOutput> {
             local_path,
             remote_path,
             build_artifact,
-            version_file,
-            version_pattern,
+            version_targets,
             build_command,
             is_network,
             not_network,
@@ -158,8 +171,7 @@ pub fn run(args: ComponentArgs) -> CmdResult<ComponentOutput> {
             local_path,
             remote_path,
             build_artifact,
-            version_file,
-            version_pattern,
+            version_targets,
             build_command,
             is_network,
             not_network,
@@ -175,8 +187,7 @@ fn create(
     local_path: &str,
     remote_path: &str,
     build_artifact: &str,
-    version_file: Option<String>,
-    version_pattern: Option<String>,
+    version_targets: Vec<String>,
     build_command: Option<String>,
     is_network: bool,
 ) -> CmdResult<ComponentOutput> {
@@ -196,8 +207,9 @@ fn create(
         remote_path.to_string(),
         build_artifact.to_string(),
     );
-    component.version_file = version_file;
-    component.version_pattern = version_pattern;
+    if !version_targets.is_empty() {
+        component.version_targets = Some(parse_version_targets(&version_targets)?);
+    }
     component.build_command = build_command;
     component.is_network = if is_network { Some(true) } else { None };
 
@@ -296,8 +308,7 @@ fn set(
     local_path: Option<String>,
     remote_path: Option<String>,
     build_artifact: Option<String>,
-    version_file: Option<String>,
-    version_pattern: Option<String>,
+    version_targets: Vec<String>,
     build_command: Option<String>,
     is_network: bool,
     not_network: bool,
@@ -326,14 +337,9 @@ fn set(
         updated_fields.push("buildArtifact".to_string());
     }
 
-    if let Some(value) = version_file {
-        component.version_file = Some(value);
-        updated_fields.push("versionFile".to_string());
-    }
-
-    if let Some(value) = version_pattern {
-        component.version_pattern = Some(value);
-        updated_fields.push("versionPattern".to_string());
+    if !version_targets.is_empty() {
+        component.version_targets = Some(parse_version_targets(&version_targets)?);
+        updated_fields.push("versionTargets".to_string());
     }
 
     if let Some(value) = build_command {

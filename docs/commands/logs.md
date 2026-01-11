@@ -14,7 +14,7 @@ homeboy logs <COMMAND>
 
 ## JSON output
 
-`homeboy logs` returns a `LogsOutput` object.
+> Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). `homeboy logs` returns a `LogsOutput` object as the `data` payload.
 
 - `command`: `logs.list` | `logs.show` | `logs.follow` | `logs.clear`
 - `projectId`

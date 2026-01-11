@@ -9,6 +9,39 @@ pub fn parse_version(content: &str, pattern: &str) -> Option<String> {
         .map(|m| m.as_str().to_string())
 }
 
+pub fn parse_versions(content: &str, pattern: &str) -> Option<Vec<String>> {
+    let re = Regex::new(pattern).ok()?;
+    let mut versions = Vec::new();
+
+    for caps in re.captures_iter(content) {
+        if let Some(m) = caps.get(1) {
+            versions.push(m.as_str().to_string());
+        }
+    }
+
+    Some(versions)
+}
+
+pub fn replace_versions(
+    content: &str,
+    pattern: &str,
+    new_version: &str,
+) -> Option<(String, usize)> {
+    let re = Regex::new(pattern).ok()?;
+    let mut count = 0usize;
+
+    let replaced = re
+        .replace_all(content, |caps: &regex::Captures| {
+            count += 1;
+            let full_match = caps.get(0).map(|m| m.as_str()).unwrap_or("");
+            let captured = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+            full_match.replacen(captured, new_version, 1)
+        })
+        .to_string();
+
+    Some((replaced, count))
+}
+
 /// Get default version pattern based on file extension.
 pub fn default_pattern_for_file(filename: &str) -> &'static str {
     if filename.ends_with(".toml") {

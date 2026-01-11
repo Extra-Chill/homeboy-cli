@@ -21,12 +21,14 @@ Topic resolution is documented in: [Embedded docs topic resolution](../embedded-
 
 ## JSON output (success)
 
+> Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). The object below is the `data` payload.
+
 ```json
 {
   "topic": "<original topic as a single space-joined string>",
   "topic_label": "<same as topic, or 'index' when omitted>",
   "content": "<markdown content>",
-  "available_topics": "<comma+space separated list>"
+  "available_topics": "<newline-separated list of embedded keys>"
 }
 ```
 
@@ -35,13 +37,15 @@ Topic resolution is documented in: [Embedded docs topic resolution](../embedded-
 - `topic`: raw user input joined by spaces.
 - `topic_label`: label returned by the resolver (`index` when no topic args are provided).
 - `content`: embedded markdown content.
-- `available_topics`: comma+space separated list of available embedded keys.
+- `available_topics`: newline-separated list of available embedded keys.
 
 ## Errors
 
 If resolved content is empty, the command returns an error message:
 
 - `No documentation found for '<topic>' (available: <available_topics>)`
+
+`<available_topics>` is a newline-separated list.
 
 ## Related
 

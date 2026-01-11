@@ -1,34 +1,49 @@
 # JSON output contract
 
-Homeboy prints a JSON value for both success and error results.
+Homeboy prints JSON to stdout for both success and error results.
 
-## Where JSON comes from
+## Top-level shape
+
+Homeboy always prints a `homeboy_core::output::response::CliResponse<T>` object:
+
+```json
+{
+  "success": true,
+  "data": { "...": "..." }
+}
+```
+
+or
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "SOME_CODE",
+    "message": "Human-readable message"
+  }
+}
+```
+
+## Where exit codes come from
 
 - Each subcommand returns `(T, i32)` where `T` is a serializable payload type and `i32` is the intended process exit code.
-- `homeboy` serializes `T` into a `serde_json::Value`.
-- A unified printer prints either the serialized value or an error.
-
-## Exit code
-
-- Success and failure both return a process exit code.
-- For commands returning `(T, i32)`, the process exit code is the returned `i32`, clamped to `0..=255`.
-- For errors, the process exit code is `1`.
+- For successful commands, the process exit code is the returned `i32`, clamped to `0..=255`.
+- For errors, the exit code is `1`.
 
 ## Success payload
 
-On success, the JSON payload is the command’s output struct (varies by command).
+On success, `data` is the command’s output struct (varies by command).
 
 ## Error payload
 
-On error, the output is an error JSON object printed by the shared output formatter.
-
-The precise error JSON shape is defined by `homeboy_core::output::print_result`.
+On error, `error.code` comes from `homeboy_core::Error::code()` and `error.message` is `Error::to_string()`.
 
 ## Command payload conventions
 
-Many commands include a string field that identifies the action taken:
+Many command output structs include a string field that identifies the action taken:
 
-- Common fields: `command`, `action`
+- Common fields: `command`
 - Values often follow a dotted namespace (e.g. `project.show`, `server.key.generate`).
 
 ## Related

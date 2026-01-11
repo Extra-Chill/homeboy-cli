@@ -1,9 +1,12 @@
 use clap::{Args, Subcommand, ValueEnum};
 use serde::Serialize;
+use std::collections::BTreeSet;
 use std::fs;
 
-use homeboy_core::config::ConfigManager;
-use homeboy_core::version::{default_pattern_for_file, increment_version, parse_version};
+use homeboy_core::config::{ConfigManager, VersionTarget};
+use homeboy_core::version::{
+    default_pattern_for_file, increment_version, parse_versions, replace_versions,
+};
 use homeboy_core::Error;
 
 #[derive(Args)]
@@ -47,15 +50,22 @@ impl BumpType {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct VersionTargetOutput {
+    version_file: String,
+    version_pattern: String,
+    full_path: String,
+    match_count: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VersionOutput {
     command: String,
     component_id: String,
-    version_file: String,
     version: Option<String>,
     old_version: Option<String>,
     new_version: Option<String>,
-    version_pattern: String,
-    full_path: String,
+    targets: Vec<VersionTargetOutput>,
 }
 
 pub fn run(args: VersionArgs) -> homeboy_core::Result<(VersionOutput, i32)> {
@@ -68,91 +78,217 @@ pub fn run(args: VersionArgs) -> homeboy_core::Result<(VersionOutput, i32)> {
     }
 }
 
-fn get_version_config(
-    component_id: &str,
-) -> homeboy_core::Result<(String, String, String, String)> {
-    let component = ConfigManager::load_component(component_id)?;
+fn resolve_target_full_path(component_local_path: &str, version_file: &str) -> String {
+    if version_file.starts_with('/') {
+        version_file.to_string()
+    } else {
+        format!("{}/{}", component_local_path, version_file)
+    }
+}
 
-    let version_file = component.version_file.ok_or_else(|| {
+fn resolve_target_pattern(target: &VersionTarget) -> String {
+    target
+        .pattern
+        .clone()
+        .unwrap_or_else(|| default_pattern_for_file(&target.file).to_string())
+}
+
+fn extract_versions_from_content(
+    content: &str,
+    pattern: &str,
+) -> homeboy_core::Result<Vec<String>> {
+    parse_versions(content, pattern)
+        .ok_or_else(|| Error::Other(format!("Invalid version regex pattern '{}'", pattern)))
+}
+
+fn validate_single_version(
+    versions: Vec<String>,
+    version_file: &str,
+    expected: &str,
+) -> homeboy_core::Result<(String, usize)> {
+    if versions.is_empty() {
+        return Err(Error::Other(format!(
+            "Could not find version in {}",
+            version_file
+        )));
+    }
+
+    let unique: BTreeSet<String> = versions.iter().cloned().collect();
+
+    if unique.len() != 1 {
+        return Err(Error::Other(format!(
+            "Multiple different versions found in {}: {}",
+            version_file,
+            unique.into_iter().collect::<Vec<_>>().join(", ")
+        )));
+    }
+
+    let found = versions[0].clone();
+    if found != expected {
+        return Err(Error::Other(format!(
+            "Version mismatch in {}: found {}, expected {}",
+            version_file, found, expected
+        )));
+    }
+
+    Ok((found, versions.len()))
+}
+
+fn replace_versions_in_content(
+    content: &str,
+    pattern: &str,
+    expected_old: &str,
+    new_version: &str,
+) -> homeboy_core::Result<(String, usize)> {
+    let all_versions = extract_versions_from_content(content, pattern)?;
+    let _ = validate_single_version(all_versions, "<content>", expected_old)?;
+
+    let (replaced, replaced_count) = replace_versions(content, pattern, new_version)
+        .ok_or_else(|| Error::Other(format!("Invalid version regex pattern '{}'", pattern)))?;
+
+    Ok((replaced, replaced_count))
+}
+
+fn show(component_id: &str) -> homeboy_core::Result<(VersionOutput, i32)> {
+    let component = ConfigManager::load_component(component_id)?;
+    let targets = component.version_targets.ok_or_else(|| {
         Error::Config(format!(
-            "Component '{}' has no version_file configured",
+            "Component '{}' has no versionTargets configured",
             component_id
         ))
     })?;
 
-    let full_path = if version_file.starts_with('/') {
-        version_file.clone()
-    } else {
-        format!("{}/{}", component.local_path, version_file)
-    };
+    if targets.is_empty() {
+        return Err(Error::Config(format!(
+            "Component '{}' has no versionTargets configured",
+            component_id
+        )));
+    }
 
-    let version_pattern = component
-        .version_pattern
-        .unwrap_or_else(|| default_pattern_for_file(&version_file).to_string());
+    let primary = &targets[0];
+    let primary_pattern = resolve_target_pattern(primary);
+    let primary_full_path = resolve_target_full_path(&component.local_path, &primary.file);
 
-    Ok((
-        full_path,
-        version_file,
-        version_pattern,
-        component.local_path,
-    ))
-}
+    let content = fs::read_to_string(&primary_full_path)?;
+    let versions = extract_versions_from_content(&content, &primary_pattern)?;
 
-fn show(component_id: &str) -> homeboy_core::Result<(VersionOutput, i32)> {
-    let (full_path, version_file, version_pattern, _local_path) = get_version_config(component_id)?;
-
-    let content = fs::read_to_string(&full_path)?;
-
-    let version = parse_version(&content, &version_pattern).ok_or_else(|| {
-        Error::Other(format!(
+    if versions.is_empty() {
+        return Err(Error::Other(format!(
             "Could not parse version from {} using pattern: {}",
-            version_file, version_pattern
-        ))
-    })?;
+            primary.file, primary_pattern
+        )));
+    }
+
+    let unique: BTreeSet<String> = versions.iter().cloned().collect();
+    if unique.len() != 1 {
+        return Err(Error::Other(format!(
+            "Multiple different versions found in {}: {}",
+            primary.file,
+            unique.into_iter().collect::<Vec<_>>().join(", ")
+        )));
+    }
+
+    let version = versions[0].clone();
 
     Ok((
         VersionOutput {
             command: "version.show".to_string(),
             component_id: component_id.to_string(),
-            version_file,
             version: Some(version),
             old_version: None,
             new_version: None,
-            version_pattern,
-            full_path,
+            targets: vec![VersionTargetOutput {
+                version_file: primary.file.clone(),
+                version_pattern: primary_pattern,
+                full_path: primary_full_path,
+                match_count: versions.len(),
+            }],
         },
         0,
     ))
 }
 
 fn bump(component_id: &str, bump_type: BumpType) -> homeboy_core::Result<(VersionOutput, i32)> {
-    let (full_path, version_file, version_pattern, _local_path) = get_version_config(component_id)?;
-
-    let content = fs::read_to_string(&full_path)?;
-
-    let old_version = parse_version(&content, &version_pattern).ok_or_else(|| {
-        Error::Other(format!(
-            "Could not parse version from {} using pattern: {}",
-            version_file, version_pattern
+    let component = ConfigManager::load_component(component_id)?;
+    let targets = component.version_targets.clone().ok_or_else(|| {
+        Error::Config(format!(
+            "Component '{}' has no versionTargets configured",
+            component_id
         ))
     })?;
 
+    if targets.is_empty() {
+        return Err(Error::Config(format!(
+            "Component '{}' has no versionTargets configured",
+            component_id
+        )));
+    }
+
+    let primary = &targets[0];
+    let primary_pattern = resolve_target_pattern(primary);
+    let primary_full_path = resolve_target_full_path(&component.local_path, &primary.file);
+
+    let primary_content = fs::read_to_string(&primary_full_path)?;
+    let primary_versions = extract_versions_from_content(&primary_content, &primary_pattern)?;
+
+    if primary_versions.is_empty() {
+        return Err(Error::Other(format!(
+            "Could not parse version from {} using pattern: {}",
+            primary.file, primary_pattern
+        )));
+    }
+
+    let unique_primary: BTreeSet<String> = primary_versions.iter().cloned().collect();
+    if unique_primary.len() != 1 {
+        return Err(Error::Other(format!(
+            "Multiple different versions found in {}: {}",
+            primary.file,
+            unique_primary.into_iter().collect::<Vec<_>>().join(", ")
+        )));
+    }
+
+    let old_version = primary_versions[0].clone();
     let new_version = increment_version(&old_version, bump_type.as_str())
         .ok_or_else(|| Error::Other(format!("Invalid version format: {}", old_version)))?;
 
-    let new_content = content.replace(&old_version, &new_version);
-    fs::write(&full_path, &new_content)?;
+    let mut outputs = Vec::new();
+
+    for target in targets {
+        let version_pattern = resolve_target_pattern(&target);
+        let full_path = resolve_target_full_path(&component.local_path, &target.file);
+        let content = fs::read_to_string(&full_path)?;
+
+        let versions = extract_versions_from_content(&content, &version_pattern)?;
+        let (_, match_count) = validate_single_version(versions, &target.file, &old_version)?;
+
+        let (new_content, replaced_count) =
+            replace_versions_in_content(&content, &version_pattern, &old_version, &new_version)?;
+
+        if replaced_count != match_count {
+            return Err(Error::Other(format!(
+                "Unexpected replacement count in {}",
+                target.file
+            )));
+        }
+
+        fs::write(&full_path, &new_content)?;
+
+        outputs.push(VersionTargetOutput {
+            version_file: target.file,
+            version_pattern,
+            full_path,
+            match_count,
+        });
+    }
 
     Ok((
         VersionOutput {
             command: "version.bump".to_string(),
             component_id: component_id.to_string(),
-            version_file,
             version: None,
             old_version: Some(old_version),
             new_version: Some(new_version),
-            version_pattern,
-            full_path,
+            targets: outputs,
         },
         0,
     ))

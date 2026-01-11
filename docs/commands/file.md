@@ -16,7 +16,7 @@ homeboy file <COMMAND>
 
 ## JSON output
 
-`homeboy file` returns a `FileOutput` object.
+> Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). `homeboy file` returns a `FileOutput` object as the `data` payload.
 
 Fields:
 

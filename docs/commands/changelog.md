@@ -14,6 +14,8 @@ This command expects the embedded docs key `changelog` to exist (from `docs/chan
 
 ## JSON output (success)
 
+> Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). The object below is the `data` payload.
+
 ```json
 {
   "topic_label": "changelog",

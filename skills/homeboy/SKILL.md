@@ -28,12 +28,14 @@ CLI for project development and deployment. Provides terminal access to project 
 | `ssh` | Execute SSH commands or open interactive shell |
 | `module` | Manage and run Homeboy modules |
 
-## Quick Start
+## Commands and help
 
 ```bash
-homeboy projects                    # List all projects
-homeboy projects --current          # Get active project ID
-homeboy help <command>              # Get detailed help for any command
+homeboy projects           # List all projects
+homeboy projects --current # Get active project ID
+homeboy docs               # Embedded docs index
+homeboy docs <topic...>    # Embedded docs for a topic
+homeboy help <command>     # CLI help for any command/subcommand
 ```
 
 ## Safety Guidelines
@@ -43,7 +45,7 @@ homeboy help <command>              # Get detailed help for any command
 3. **SSH**: Exercise caution with destructive commands on production servers
 4. **PM2**: `restart` affects live services - confirm intent before executing
 
-## Common Patterns
+## Common patterns
 
 ### Local Development Pipeline
 ```bash
@@ -106,11 +108,10 @@ homeboy git tag <component> v1.0.0
 homeboy git push <component> --tags         # Triggers CI/CD
 ```
 
-### Subtargets (Multisite/Multi-environment)
-Commands accepting `[subtarget]` can target specific blogs or environments:
-```bash
-homeboy wp <project> <subtarget> plugin list
-homeboy db query <project> <subtarget> "SELECT ..."
-```
+### Subtargets
+Some commands accept an optional first trailing argument that is treated as a *subtarget* when the project is configured with `sub_targets`.
+
+- `wp`: the first arg may be a subtarget identifier.
+- `db`: most subcommands accept a trailing list where the first value may be a subtarget identifier.
 
 Refer to the full CLI documentation for complete command reference and configuration details.

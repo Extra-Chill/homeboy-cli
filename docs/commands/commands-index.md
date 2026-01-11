@@ -22,5 +22,5 @@
 Related:
 
 - [Root command](../cli/homeboy-root-command.md)
-- [JSON output contract](../json-output/json-output-contract.md)
+- [JSON output contract](../json-output/json-output-contract.md) (global output envelope)
 - [Embedded docs](../embedded-docs/embedded-docs-topic-resolution.md)

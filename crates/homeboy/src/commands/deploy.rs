@@ -5,8 +5,19 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(test)]
+static TEST_SCP_CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(test)]
+fn reset_test_scp_call_count() {
+    TEST_SCP_CALL_COUNT.store(0, Ordering::Relaxed);
+}
+
 use homeboy_core::config::{AppPaths, ConfigManager, ServerConfig};
-use homeboy_core::ssh::SshClient;
+use homeboy_core::ssh::{CommandOutput, SshClient};
 use homeboy_core::version::parse_version;
 
 use super::CmdResult;
@@ -17,7 +28,6 @@ pub struct DeployArgs {
     pub project_id: String,
 
     /// Component IDs to deploy
-    #[arg(trailing_var_arg = true)]
     pub component_ids: Vec<String>,
 
     /// Deploy all configured components
@@ -127,27 +137,27 @@ pub fn run(args: DeployArgs) -> CmdResult<DeployOutput> {
         .collect();
 
     let remote_versions = if args.dry_run || args.outdated {
-        fetch_remote_versions(&components_to_deploy, &server, &base_path, &client)
+        fetch_remote_versions(
+            &components_to_deploy,
+            &server,
+            &base_path,
+            &client as &dyn RemoteExec,
+        )
     } else {
         HashMap::new()
     };
 
-    let mut results: Vec<DeployComponentResult> = vec![];
-    let mut succeeded: u32 = 0;
-    let mut failed: u32 = 0;
     let skipped: u32 = 0;
 
-    for component in &components_to_deploy {
-        let local_version = local_versions.get(&component.id).cloned();
-        let remote_version = remote_versions.get(&component.id).cloned();
-
-        if args.dry_run {
-            results.push(DeployComponentResult {
+    if args.dry_run {
+        let results = components_to_deploy
+            .iter()
+            .map(|component| DeployComponentResult {
                 id: component.id.clone(),
                 name: component.name.clone(),
                 status: "would_deploy".to_string(),
-                local_version,
-                remote_version,
+                local_version: local_versions.get(&component.id).cloned(),
+                remote_version: remote_versions.get(&component.id).cloned(),
                 error: None,
                 artifact_path: Some(component.build_artifact.clone()),
                 remote_path: Some(
@@ -160,10 +170,37 @@ pub fn run(args: DeployArgs) -> CmdResult<DeployOutput> {
                 build_command: component.build_command.clone(),
                 build_exit_code: None,
                 scp_exit_code: None,
-            });
-            succeeded += 1;
-            continue;
-        }
+            })
+            .collect::<Vec<_>>();
+
+        let succeeded = results.len() as u32;
+
+        return Ok((
+            DeployOutput {
+                project_id: args.project_id,
+                all: args.all,
+                outdated: args.outdated,
+                build: args.build,
+                dry_run: true,
+                components: results,
+                summary: DeploySummary {
+                    succeeded,
+                    failed: 0,
+                    skipped,
+                },
+            },
+            0,
+        ));
+    }
+
+    let mut results: Vec<DeployComponentResult> = vec![];
+    let mut succeeded: u32 = 0;
+    let mut failed: u32 = 0;
+    let skipped: u32 = 0;
+
+    for component in &components_to_deploy {
+        let local_version = local_versions.get(&component.id).cloned();
+        let remote_version = remote_versions.get(&component.id).cloned();
 
         let (build_exit_code, build_error) = if args.build {
             run_build_if_configured(component)
@@ -286,6 +323,12 @@ pub fn run(args: DeployArgs) -> CmdResult<DeployOutput> {
 }
 
 #[derive(Clone)]
+struct VersionTarget {
+    file: String,
+    pattern: Option<String>,
+}
+
+#[derive(Clone)]
 struct Component {
     id: String,
     name: String,
@@ -293,8 +336,7 @@ struct Component {
     remote_path: String,
     build_artifact: String,
     build_command: Option<String>,
-    version_file: Option<String>,
-    version_pattern: Option<String>,
+    version_targets: Option<Vec<VersionTarget>>,
 }
 
 fn plan_components_to_deploy(
@@ -302,7 +344,7 @@ fn plan_components_to_deploy(
     all_components: &[Component],
     server: &ServerConfig,
     base_path: &str,
-    client: &SshClient,
+    client: &dyn RemoteExec,
 ) -> homeboy_core::Result<Vec<Component>> {
     if args.all {
         return Ok(all_components.to_vec());
@@ -371,54 +413,192 @@ fn run_build_if_configured(component: &Component) -> (Option<i32>, Option<String
 
 fn deploy_component_artifact(
     server: &ServerConfig,
-    client: &SshClient,
+    client: &dyn RemoteExec,
     base_path: &str,
     component: &Component,
 ) -> (Option<i32>, Option<String>) {
-    let remote_path =
+    let install_dir =
         match homeboy_core::base_path::join_remote_path(Some(base_path), &component.remote_path) {
             Ok(value) => value,
             Err(err) => return (Some(1), Some(err.to_string())),
         };
 
+    if component.build_artifact.ends_with(".zip") {
+        let zip_filename = Path::new(&component.build_artifact)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| format!(".homeboy-{}", name))
+            .unwrap_or_else(|| format!(".homeboy-{}.zip", component.id));
+
+        let upload_path = match homeboy_core::base_path::join_remote_child(
+            Some(base_path),
+            &component.remote_path,
+            &zip_filename,
+        ) {
+            Ok(value) => value,
+            Err(err) => return (Some(1), Some(err.to_string())),
+        };
+
+        let mkdir_cmd =
+            match homeboy_core::shell::cd_and("/", &format!("mkdir -p '{}'", install_dir)) {
+                Ok(value) => value,
+                Err(err) => return (Some(1), Some(err.to_string())),
+            };
+
+        let mkdir_output = client.execute(&mkdir_cmd);
+        if !mkdir_output.success {
+            return (Some(mkdir_output.exit_code), Some(mkdir_output.stderr));
+        }
+
+        let (scp_exit_code, scp_error) =
+            scp_to_path(server, client, &component.build_artifact, &upload_path);
+        if scp_error.is_some() {
+            return (scp_exit_code, scp_error);
+        }
+
+        let unzip_cmd = match homeboy_core::shell::cd_and(
+            &install_dir,
+            &format!("unzip -o '{}' && rm '{}'", upload_path, upload_path),
+        ) {
+            Ok(value) => value,
+            Err(err) => return (Some(1), Some(err.to_string())),
+        };
+
+        let unzip_output = client.execute(&unzip_cmd);
+        if !unzip_output.success {
+            return (Some(unzip_output.exit_code), Some(unzip_output.stderr));
+        }
+
+        return (Some(0), None);
+    }
+
+    scp_to_path(server, client, &component.build_artifact, &install_dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dry_run_short_circuits_without_scp_calls() {
+        reset_test_scp_call_count();
+
+        let all_components = vec![Component {
+            id: "sell-my-images".to_string(),
+            name: "Sell My Images".to_string(),
+            local_path: "/tmp".to_string(),
+            remote_path: "wp-content/plugins/sell-my-images".to_string(),
+            build_artifact: "/tmp/sell-my-images.zip".to_string(),
+            build_command: None,
+            version_targets: None,
+        }];
+
+        let args = DeployArgs {
+            project_id: "saraichinwag".to_string(),
+            component_ids: vec![],
+            all: true,
+            outdated: false,
+            build: false,
+            dry_run: true,
+        };
+
+        let client = TestRemoteExec::default();
+        let server = ServerConfig {
+            id: "cloudways".to_string(),
+            name: "Cloudways".to_string(),
+            host: "example.com".to_string(),
+            user: "user".to_string(),
+            port: 22,
+            identity_file: None,
+        };
+
+        let selected =
+            plan_components_to_deploy(&args, &all_components, &server, "/var/www", &client)
+                .unwrap();
+        assert_eq!(selected.len(), 1);
+
+        assert_eq!(TEST_SCP_CALL_COUNT.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn zip_deploy_creates_dir_and_unzips_into_install_dir() {
+        reset_test_scp_call_count();
+
+        let component = Component {
+            id: "sell-my-images".to_string(),
+            name: "Sell My Images".to_string(),
+            local_path: "/tmp".to_string(),
+            remote_path: "wp-content/plugins/sell-my-images".to_string(),
+            build_artifact: "/tmp/sell-my-images.zip".to_string(),
+            build_command: None,
+            version_targets: None,
+        };
+
+        let client = TestRemoteExec::default();
+        let server = ServerConfig {
+            id: "cloudways".to_string(),
+            name: "Cloudways".to_string(),
+            host: "example.com".to_string(),
+            user: "user".to_string(),
+            port: 22,
+            identity_file: None,
+        };
+
+        let (exit_code, error) =
+            deploy_component_artifact(&server, &client, "/var/www/site", &component);
+        assert_eq!(exit_code, Some(0));
+        assert!(error.is_none());
+
+        let commands = client.commands().join("\n");
+        assert!(commands.contains("mkdir -p '/var/www/site/wp-content/plugins/sell-my-images'"));
+        assert!(commands.contains("cd '/var/www/site/wp-content/plugins/sell-my-images'"));
+        assert!(commands.contains("unzip -o '/var/www/site/wp-content/plugins/sell-my-images/.homeboy-sell-my-images.zip'"));
+    }
+}
+
+fn scp_to_path(
+    _server: &ServerConfig,
+    client: &dyn RemoteExec,
+    local_path: &str,
+    remote_path: &str,
+) -> (Option<i32>, Option<String>) {
+    #[cfg(test)]
+    {
+        TEST_SCP_CALL_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
     let mut scp_args: Vec<String> = vec![];
 
-    if let Some(identity_file) = &client.identity_file {
+    let Some(ssh_client) = client.as_ssh_client() else {
+        #[cfg(test)]
+        return (Some(0), None);
+
+        #[cfg(not(test))]
+        return (
+            Some(1),
+            Some("SCP requires SSH client configuration".to_string()),
+        );
+    };
+
+    if let Some(identity_file) = &ssh_client.identity_file {
         scp_args.push("-i".to_string());
         scp_args.push(identity_file.clone());
     }
 
-    if server.port != 22 {
+    if ssh_client.port != 22 {
         scp_args.push("-P".to_string());
-        scp_args.push(server.port.to_string());
+        scp_args.push(ssh_client.port.to_string());
     }
 
-    scp_args.push(component.build_artifact.clone());
-    scp_args.push(format!("{}@{}:{}", server.user, server.host, remote_path));
+    scp_args.push(local_path.to_string());
+    scp_args.push(format!(
+        "{}@{}:{}",
+        ssh_client.user, ssh_client.host, remote_path
+    ));
 
     let output = Command::new("scp").args(&scp_args).output();
 
     match output {
-        Ok(output) if output.status.success() => {
-            if component.build_artifact.ends_with(".zip") {
-                let remote_dir = match homeboy_core::base_path::remote_dirname(&remote_path) {
-                    Ok(value) => value,
-                    Err(err) => return (Some(1), Some(err.to_string())),
-                };
-
-                let unzip_cmd = match homeboy_core::shell::cd_and(
-                    &remote_dir,
-                    &format!("unzip -o '{}' && rm '{}'", remote_path, remote_path),
-                ) {
-                    Ok(value) => value,
-                    Err(err) => return (Some(1), Some(err.to_string())),
-                };
-
-                let _ = client.execute(&unzip_cmd);
-            }
-
-            (Some(output.status.code().unwrap_or(0)), None)
-        }
+        Ok(output) if output.status.success() => (Some(output.status.code().unwrap_or(0)), None),
         Ok(output) => (
             Some(output.status.code().unwrap_or(1)),
             Some(String::from_utf8_lossy(&output.stderr).to_string()),
@@ -447,6 +627,17 @@ fn load_components(component_ids: &[String]) -> Vec<Component> {
                     })
                     .unwrap_or_default();
 
+                let version_targets = config["versionTargets"].as_array().map(|targets| {
+                    targets
+                        .iter()
+                        .filter_map(|target| {
+                            let file = target["file"].as_str()?.to_string();
+                            let pattern = target["pattern"].as_str().map(|value| value.to_string());
+                            Some(VersionTarget { file, pattern })
+                        })
+                        .collect::<Vec<_>>()
+                });
+
                 components.push(Component {
                     id: config["id"].as_str().unwrap_or(id).to_string(),
                     name: config["name"].as_str().unwrap_or(id).to_string(),
@@ -454,8 +645,7 @@ fn load_components(component_ids: &[String]) -> Vec<Component> {
                     remote_path: config["remotePath"].as_str().unwrap_or("").to_string(),
                     build_artifact,
                     build_command: config["buildCommand"].as_str().map(|s| s.to_string()),
-                    version_file: config["versionFile"].as_str().map(|s| s.to_string()),
-                    version_pattern: config["versionPattern"].as_str().map(|s| s.to_string()),
+                    version_targets,
                 });
             }
         }
@@ -476,39 +666,95 @@ fn parse_component_version(content: &str, pattern: Option<&str>) -> Option<Strin
 }
 
 fn fetch_local_version(component: &Component) -> Option<String> {
-    let version_file = component.version_file.as_ref()?;
-    let path = format!("{}/{}", component.local_path, version_file);
+    let target = component.version_targets.as_ref()?.first()?;
+    let path = format!("{}/{}", component.local_path, target.file);
     let content = fs::read_to_string(&path).ok()?;
-    parse_component_version(&content, component.version_pattern.as_deref())
+    parse_component_version(&content, target.pattern.as_deref())
+}
+
+trait RemoteExec {
+    fn execute(&self, command: &str) -> CommandOutput;
+    fn as_ssh_client(&self) -> Option<&SshClient>;
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct TestRemoteExec {
+    commands: std::sync::Mutex<Vec<String>>,
+}
+
+#[cfg(test)]
+impl TestRemoteExec {
+    fn commands(&self) -> Vec<String> {
+        self.commands.lock().unwrap().clone()
+    }
+}
+
+#[cfg(test)]
+impl RemoteExec for TestRemoteExec {
+    fn execute(&self, command: &str) -> CommandOutput {
+        self.commands.lock().unwrap().push(command.to_string());
+        CommandOutput {
+            stdout: String::new(),
+            stderr: String::new(),
+            success: true,
+            exit_code: 0,
+        }
+    }
+
+    fn as_ssh_client(&self) -> Option<&SshClient> {
+        None
+    }
+}
+
+impl RemoteExec for SshClient {
+    fn execute(&self, command: &str) -> CommandOutput {
+        SshClient::execute(self, command)
+    }
+
+    fn as_ssh_client(&self) -> Option<&SshClient> {
+        Some(self)
+    }
 }
 
 fn fetch_remote_versions(
     components: &[Component],
     _server: &ServerConfig,
     base_path: &str,
-    client: &SshClient,
+    client: &dyn RemoteExec,
 ) -> HashMap<String, String> {
     let mut versions = HashMap::new();
 
     for component in components {
-        if let Some(version_file) = &component.version_file {
-            let remote_path = match homeboy_core::base_path::join_remote_child(
-                Some(base_path),
-                &component.remote_path,
-                version_file,
-            ) {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
+        let Some(version_file) = component
+            .version_targets
+            .as_ref()
+            .and_then(|targets| targets.first())
+            .map(|t| t.file.as_str())
+        else {
+            continue;
+        };
 
-            let output = client.execute(&format!("cat '{}' 2>/dev/null", remote_path));
+        let remote_path = match homeboy_core::base_path::join_remote_child(
+            Some(base_path),
+            &component.remote_path,
+            version_file,
+        ) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
 
-            if output.success {
-                if let Some(version) =
-                    parse_component_version(&output.stdout, component.version_pattern.as_deref())
-                {
-                    versions.insert(component.id.clone(), version);
-                }
+        let output = client.execute(&format!("cat '{}' 2>/dev/null", remote_path));
+
+        if output.success {
+            let pattern = component
+                .version_targets
+                .as_ref()
+                .and_then(|targets| targets.first())
+                .and_then(|t| t.pattern.as_deref());
+
+            if let Some(version) = parse_component_version(&output.stdout, pattern) {
+                versions.insert(component.id.clone(), version);
             }
         }
     }

@@ -31,6 +31,8 @@ homeboy module setup <module_id>
 
 ## JSON output
 
+> Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). `homeboy module` returns a `ModuleOutput` object as the `data` payload.
+
 `ModuleOutput`:
 
 - `command`: `module.list` | `module.run` | `module.setup`

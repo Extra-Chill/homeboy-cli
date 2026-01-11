@@ -2,6 +2,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct VersionTarget {
+    pub file: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pattern: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComponentConfiguration {
     pub id: String,
     pub name: String,
@@ -9,9 +17,7 @@ pub struct ComponentConfiguration {
     pub remote_path: String,
     pub build_artifact: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub version_file: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version_pattern: Option<String>,
+    pub version_targets: Option<Vec<VersionTarget>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build_command: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -32,8 +38,7 @@ impl ComponentConfiguration {
             local_path,
             remote_path,
             build_artifact,
-            version_file: None,
-            version_pattern: None,
+            version_targets: None,
             build_command: None,
             is_network: None,
         }

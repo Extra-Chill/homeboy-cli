@@ -22,6 +22,8 @@ homeboy version bump <component_id> <patch|minor|major>
 
 ## JSON output
 
+> Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). `homeboy version` returns a `VersionOutput` object as the `data` payload.
+
 `VersionOutput`:
 
 - `command`: `version.show` | `version.bump`
@@ -37,27 +39,10 @@ homeboy version bump <component_id> <patch|minor|major>
 - `show`: `0` on success; errors if the version cannot be parsed.
 - `bump`: `0` on success.
 
-## Version bump workflow
+## Notes
 
-Use `homeboy version` for mechanical version bumping. Focus AI tokens on changelog generation.
-
-### Process
-
-1. Get current version: `homeboy version show <component>`
-2. Analyze changes since last version using git diff and commits
-3. Decide interval based on changes (generally patch for small changes)
-4. Bump version: `homeboy version bump <component> patch|minor|major`
-5. Update `changelog.md` with specific code-level changes
-6. Commit: `homeboy git commit <component> "Bump version to X.Y.Z"`
-7. Push: `homeboy git push <component>`
-8. Build: `homeboy build <component>`
-
-### Notes
-
-- Components must have `version_file` and `build_command` configured
-- Supported version formats: `.toml`, `.json`, `.php` (WordPress headers), or custom pattern
-- Use `homeboy component show <component>` to check configuration
-- Tagging is a separate release concern - only tag when explicitly instructed
+- Components must have `version_file` configured.
+- `version_pattern` is optional; when omitted, a default pattern is selected based on the configured `version_file` name.
 
 ## Related
 

@@ -12,6 +12,8 @@ Runs the component’s configured `build_command` in the component’s `local_pa
 
 ## JSON output
 
+> Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). The object below is the `data` payload.
+
 ```json
 {
   "command": "build",

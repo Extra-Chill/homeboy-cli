@@ -740,6 +740,9 @@ mod tests {
             default_changelog_next_section_label: None,
             default_changelog_next_section_aliases: None,
             installed_modules: None,
+            default_cli_path: None,
+            default_database_host: None,
+            default_local_db_port: None,
         };
         let path = Path::new("/tmp/config.json");
         scanner.emit_unknown_keys(path, "AppConfig", &raw, &typed);
@@ -758,6 +761,9 @@ mod tests {
             default_changelog_next_section_label: None,
             default_changelog_next_section_aliases: None,
             installed_modules: None,
+            default_cli_path: None,
+            default_database_host: None,
+            default_local_db_port: None,
         });
         scanner.validate_cross_refs();
 

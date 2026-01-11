@@ -86,6 +86,9 @@ enum ModuleCommand {
         /// Project ID (defaults to active project)
         #[arg(short, long)]
         project: Option<String>,
+        /// Component ID (required when ambiguous)
+        #[arg(short, long)]
+        component: Option<String>,
         /// Input values as key=value pairs
         #[arg(short, long, value_parser = parse_key_val)]
         input: Vec<(String, String)>,
@@ -137,9 +140,10 @@ pub fn run(args: ModuleArgs) -> CmdResult<ModuleOutput> {
         ModuleCommand::Run {
             module_id,
             project,
+            component,
             input,
             args,
-        } => run_module(&module_id, project, input, args),
+        } => run_module(&module_id, project, component, input, args),
         ModuleCommand::Setup { module_id } => setup_module(&module_id),
         ModuleCommand::Install { url, id } => install_module(&url, id),
         ModuleCommand::Update { module_id, force } => update_module(&module_id, force),
@@ -250,6 +254,7 @@ fn list(project: Option<String>) -> CmdResult<ModuleOutput> {
 fn run_module(
     module_id: &str,
     project: Option<String>,
+    component: Option<String>,
     inputs: Vec<(String, String)>,
     args: Vec<String>,
 ) -> CmdResult<ModuleOutput> {
@@ -270,6 +275,8 @@ fn run_module(
     }
 
     let input_values: HashMap<String, String> = inputs.into_iter().collect();
+
+    let mut resolved_project_id: Option<String> = None;
 
     let (runtime_type, code) = match module.runtime.runtime_type {
         RuntimeType::Python => ("python", run_python_module(&module, input_values)?),
@@ -294,11 +301,16 @@ fn run_module(
                 (None, None)
             };
 
+            resolved_project_id = project_id.clone();
+
             let _component_id = if let (Some(ref project_config), Some(_project_id)) =
                 (project_config.as_ref(), project_id.as_ref())
             {
-                let resolved_component =
-                    ModuleScope::resolve_component_scope(&module, project_config, None)?;
+                let resolved_component = ModuleScope::resolve_component_scope(
+                    &module,
+                    project_config,
+                    component.as_deref(),
+                )?;
 
                 if let Some(ref component_id) = resolved_component {
                     let component = ConfigManager::load_component(component_id).map_err(|_| {
@@ -343,7 +355,7 @@ fn run_module(
     Ok((
         ModuleOutput {
             command: "module.run".to_string(),
-            project_id: None,
+            project_id: resolved_project_id,
             module_id: Some(module_id.to_string()),
             modules: None,
             runtime_type: Some(runtime_type.to_string()),
@@ -723,7 +735,7 @@ fn install_module(url: &str, id: Option<String>) -> CmdResult<ModuleOutput> {
             }
         })
         .or_insert_with(|| InstalledModuleConfig {
-            settings: Default::default,
+            settings: Default::default(),
             source_url: Some(url.to_string()),
         });
     ConfigManager::save_app_config(&app_config)?;

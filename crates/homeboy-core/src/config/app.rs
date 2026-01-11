@@ -15,6 +15,15 @@ pub struct AppConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub installed_modules: Option<HashMap<String, InstalledModuleConfig>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_cli_path: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_database_host: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_local_db_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

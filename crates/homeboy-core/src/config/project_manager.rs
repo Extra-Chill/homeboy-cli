@@ -31,6 +31,7 @@ impl ProjectManager {
             name: name.to_string(),
             domain: domain.to_string(),
             project_type: project_type.to_string(),
+            modules: None,
             server_id,
             base_path,
             table_prefix,

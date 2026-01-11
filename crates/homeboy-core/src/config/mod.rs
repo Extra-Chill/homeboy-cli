@@ -9,6 +9,8 @@ mod project_id;
 mod project_manager;
 mod project_type;
 mod record;
+pub mod resolve;
+mod scoped_module;
 mod server;
 
 pub use app::*;
@@ -16,13 +18,13 @@ pub use component::*;
 pub use config_keys::*;
 pub use identifiable::{slugify_id, SetName, SlugIdentifiable};
 pub use module_config::*;
-pub use module_config::*;
 pub use paths::AppPaths;
 pub use project::*;
 pub use project_id::slugify_project_id;
 pub use project_manager::*;
 pub use project_type::*;
 pub use record::*;
+pub use scoped_module::*;
 pub use server::*;
 
 use crate::{Error, Result};

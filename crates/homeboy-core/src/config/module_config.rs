@@ -86,24 +86,37 @@ impl ModuleScope {
             return Ok(component_id.map(str::to_string));
         };
 
+        let matching_component_ids: Vec<String> = required_components
+            .iter()
+            .filter(|required_id| project.component_ids.iter().any(|id| id == *required_id))
+            .cloned()
+            .collect();
+
+        if matching_component_ids.is_empty() {
+            return Err(Error::Config(format!(
+                "Module '{}' requires components {:?}; none are configured for this project",
+                module.id, required_components
+            )));
+        }
+
         if let Some(component_id) = component_id {
-            if !required_components.iter().any(|c| c == component_id) {
+            if !matching_component_ids.iter().any(|c| c == component_id) {
                 return Err(Error::Config(format!(
-                    "Module '{}' requires components {:?}; --component '{}' is not compatible",
-                    module.id, required_components, component_id
+                    "Module '{}' only supports project components {:?}; --component '{}' is not compatible",
+                    module.id, matching_component_ids, component_id
                 )));
             }
 
             return Ok(Some(component_id.to_string()));
         }
 
-        if required_components.len() == 1 {
-            return Ok(Some(required_components[0].clone()));
+        if matching_component_ids.len() == 1 {
+            return Ok(Some(matching_component_ids[0].clone()));
         }
 
         Err(Error::Config(format!(
-            "Module '{}' requires multiple components {:?}; pass --component <id>",
-            module.id, required_components
+            "Module '{}' matches multiple project components {:?}; pass --component <id>",
+            module.id, matching_component_ids
         )))
     }
 }

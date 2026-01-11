@@ -12,6 +12,10 @@ pub fn resolve_required_base_path<'a>(
         .ok_or_else(|| Error::Config(format!("{context_label} requires a configured 'basePath'")))
 }
 
+pub fn join_remote_path_or_fallback(base_path: Option<&str>, path: &str) -> String {
+    join_remote_path(base_path, path).unwrap_or_else(|_| path.to_string())
+}
+
 pub fn join_remote_path(base_path: Option<&str>, path: &str) -> Result<String> {
     let path = path.trim();
 

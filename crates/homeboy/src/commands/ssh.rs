@@ -131,6 +131,7 @@ mod tests {
 
     fn server(_id: &str) -> ServerConfig {
         ServerConfig {
+            id: "test".to_string(),
             name: "Test".to_string(),
             host: "example.com".to_string(),
             user: "user".to_string(),
@@ -146,6 +147,7 @@ mod tests {
                 name: String::new(),
                 domain: String::new(),
                 project_type: "wordpress".to_string(),
+                modules: None,
                 server_id: server_id.map(|s| s.to_string()),
                 base_path: None,
                 table_prefix: None,

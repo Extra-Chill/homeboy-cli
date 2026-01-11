@@ -219,6 +219,7 @@ mod tests {
                 name: "Sarai Chinwag".to_string(),
                 domain: "example.com".to_string(),
                 project_type: "wordpress".to_string(),
+                modules: None,
                 server_id: Some("cloudways".to_string()),
                 base_path: Some("/tmp".to_string()),
                 table_prefix: Some("wp_".to_string()),

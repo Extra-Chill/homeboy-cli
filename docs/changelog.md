@@ -2,6 +2,15 @@
 
 All notable changes to Homeboy CLI are documented in this file.
 
+## 0.2.0
+
+### Improvements
+- **Doctor**: Add `homeboy doctor` to scan Homeboy config JSON (schema validation, unknown keys, and broken cross-references).
+- **Config**: Add app-level `installedModules` records (settings + source URL) to persist module install/config state.
+- **Modules**: Add `ModuleScope` helpers for effective settings merge + module/project/component compatibility checks.
+- **Config IDs**: Standardize slug/id behavior via `SlugIdentifiable`/`slugify_id` and enforce id/name consistency when saving servers/components/projects.
+- **Commands**: Refactor `db`/`deploy` to use centralized project SSH/base-path resolution helpers for consistent error handling.
+
 ## 0.1.13
 
 ### Improvements

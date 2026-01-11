@@ -16,7 +16,7 @@ fn reset_test_scp_call_count() {
     TEST_SCP_CALL_COUNT.store(0, Ordering::Relaxed);
 }
 
-use homeboy_core::config::{ConfigManager, ServerConfig, SlugIdentifiable};
+use homeboy_core::config::{ConfigManager, ServerConfig};
 use homeboy_core::context::resolve_project_ssh_with_base_path;
 use homeboy_core::ssh::{CommandOutput, SshClient};
 use homeboy_core::version::parse_version;
@@ -153,11 +153,10 @@ pub fn run(args: DeployArgs) -> CmdResult<DeployOutput> {
                 error: None,
                 artifact_path: Some(component.build_artifact.clone()),
                 remote_path: Some(
-                    homeboy_core::base_path::join_remote_path(
+                    homeboy_core::base_path::join_remote_path_or_fallback(
                         Some(&base_path),
                         &component.remote_path,
-                    )
-                    .unwrap_or_else(|_| component.remote_path.clone()),
+                    ),
                 ),
                 build_command: component.build_command.clone(),
                 build_exit_code: None,
@@ -210,11 +209,10 @@ pub fn run(args: DeployArgs) -> CmdResult<DeployOutput> {
                 error: Some(error.clone()),
                 artifact_path: Some(component.build_artifact.clone()),
                 remote_path: Some(
-                    homeboy_core::base_path::join_remote_path(
+                    homeboy_core::base_path::join_remote_path_or_fallback(
                         Some(&base_path),
                         &component.remote_path,
-                    )
-                    .unwrap_or_else(|_| component.remote_path.clone()),
+                    ),
                 ),
                 build_command: component.build_command.clone(),
                 build_exit_code,
@@ -234,11 +232,10 @@ pub fn run(args: DeployArgs) -> CmdResult<DeployOutput> {
                 error: Some(format!("Artifact not found: {}", component.build_artifact)),
                 artifact_path: Some(component.build_artifact.clone()),
                 remote_path: Some(
-                    homeboy_core::base_path::join_remote_path(
+                    homeboy_core::base_path::join_remote_path_or_fallback(
                         Some(&base_path),
                         &component.remote_path,
-                    )
-                    .unwrap_or_else(|_| component.remote_path.clone()),
+                    ),
                 ),
                 build_command: component.build_command.clone(),
                 build_exit_code,
@@ -261,11 +258,10 @@ pub fn run(args: DeployArgs) -> CmdResult<DeployOutput> {
                 error: Some(error),
                 artifact_path: Some(component.build_artifact.clone()),
                 remote_path: Some(
-                    homeboy_core::base_path::join_remote_path(
+                    homeboy_core::base_path::join_remote_path_or_fallback(
                         Some(&base_path),
                         &component.remote_path,
-                    )
-                    .unwrap_or_else(|_| component.remote_path.clone()),
+                    ),
                 ),
                 build_command: component.build_command.clone(),
                 build_exit_code,
@@ -284,8 +280,10 @@ pub fn run(args: DeployArgs) -> CmdResult<DeployOutput> {
             error: None,
             artifact_path: Some(component.build_artifact.clone()),
             remote_path: Some(
-                homeboy_core::base_path::join_remote_path(Some(&base_path), &component.remote_path)
-                    .unwrap_or_else(|_| component.remote_path.clone()),
+                homeboy_core::base_path::join_remote_path_or_fallback(
+                    Some(&base_path),
+                    &component.remote_path,
+                ),
             ),
             build_command: component.build_command.clone(),
             build_exit_code,
@@ -801,6 +799,7 @@ fn deploy_component_artifact_for_test(
     component: &Component,
 ) -> (Option<i32>, Option<String>) {
     let server = ServerConfig {
+        id: "test".to_string(),
         name: "Test".to_string(),
         host: "example.com".to_string(),
         user: "user".to_string(),

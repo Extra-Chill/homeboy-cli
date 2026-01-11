@@ -1,4 +1,4 @@
-# config
+# `homeboy config`
 
 Manage the global Homeboy config file (`config.json`).
 

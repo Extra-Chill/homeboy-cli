@@ -4,8 +4,8 @@ mod commands;
 mod docs;
 
 use commands::{
-    build, changelog, component, db, deploy, docs as docs_command, doctor, file, git, logs, module,
-    pm2, project, server, ssh, version, wp,
+    build, changelog, component, config, db, deploy, docs as docs_command, doctor, file, git, logs,
+    module, pm2, project, server, ssh, version, wp,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -41,6 +41,8 @@ enum Commands {
     Deploy(deploy::DeployArgs),
     /// Manage standalone component configurations
     Component(component::ComponentArgs),
+    /// Manage global config.json
+    Config(config::ConfigArgs),
     /// Execute CLI-compatible modules
     Module(module::ModuleArgs),
     /// Display CLI documentation
@@ -73,6 +75,7 @@ fn main() -> std::process::ExitCode {
         Commands::Component(args) => {
             homeboy_core::output::map_cmd_result_to_json(component::run(args))
         }
+        Commands::Config(args) => homeboy_core::output::map_cmd_result_to_json(config::run(args)),
         Commands::Module(args) => homeboy_core::output::map_cmd_result_to_json(module::run(args)),
         Commands::Docs(args) => {
             homeboy_core::output::map_cmd_result_to_json(docs_command::run(args))

@@ -3,6 +3,7 @@ pub type CmdResult<T> = homeboy_core::Result<(T, i32)>;
 pub mod build;
 pub mod changelog;
 pub mod component;
+pub mod config;
 pub mod db;
 pub mod deploy;
 pub mod docs;

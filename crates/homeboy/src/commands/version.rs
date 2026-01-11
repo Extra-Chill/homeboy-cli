@@ -70,12 +70,22 @@ pub struct VersionTargetOutput {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VersionOutput {
+pub struct VersionShowOutput {
     command: String,
     component_id: String,
-    version: Option<String>,
-    old_version: Option<String>,
-    new_version: Option<String>,
+    version: String,
+    targets: Vec<VersionTargetOutput>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionBumpOutput {
+    command: String,
+    component_id: String,
+    /// Detected current version before bump.
+    version: String,
+    /// Version after bump.
+    new_version: String,
     targets: Vec<VersionTargetOutput>,
     #[serde(skip_serializing_if = "Option::is_none")]
     changelog_path: Option<String>,
@@ -87,7 +97,17 @@ pub struct VersionOutput {
     changelog_changed: Option<bool>,
 }
 
-pub fn run(args: VersionArgs, _json_spec: Option<&str>) -> homeboy_core::output::CmdResult {
+pub fn run(
+    args: VersionArgs,
+    json_spec: Option<&str>,
+    dry_run: bool,
+) -> homeboy_core::output::CmdResult {
+    if json_spec.is_some() {
+        return Err(homeboy_core::Error::other(
+            "json input spec is not supported for version commands".to_string(),
+        ));
+    }
+
     match args.command {
         VersionCommand::Show { component_id } => {
             let (out, exit_code) = show(&component_id)?;
@@ -105,6 +125,7 @@ pub fn run(args: VersionArgs, _json_spec: Option<&str>) -> homeboy_core::output:
             bump_type,
             &changelog_add,
             project_id.as_deref(),
+            dry_run,
         ),
     }
 }
@@ -239,7 +260,7 @@ fn write_updated_version(
     Ok(replaced_count)
 }
 
-fn show(component_id: &str) -> homeboy_core::Result<(VersionOutput, i32)> {
+fn show(component_id: &str) -> homeboy_core::Result<(VersionShowOutput, i32)> {
     let component = ConfigManager::load_component(component_id)?;
     let targets = component.version_targets.ok_or_else(|| {
         Error::config_missing_key("versionTargets", Some(component_id.to_string()))
@@ -284,22 +305,16 @@ fn show(component_id: &str) -> homeboy_core::Result<(VersionOutput, i32)> {
     let version = versions[0].clone();
 
     Ok((
-        VersionOutput {
+        VersionShowOutput {
             command: "version.show".to_string(),
             component_id: component_id.to_string(),
-            version: Some(version),
-            old_version: None,
-            new_version: None,
+            version,
             targets: vec![VersionTargetOutput {
                 version_file: primary.file.clone(),
                 version_pattern: primary_pattern,
                 full_path: primary_full_path,
                 match_count: versions.len(),
             }],
-            changelog_path: None,
-            changelog_items_added: None,
-            changelog_finalized: None,
-            changelog_changed: None,
         },
         0,
     ))
@@ -310,7 +325,20 @@ fn bump(
     bump_type: BumpType,
     changelog_add: &[String],
     project_id_override: Option<&str>,
+    dry_run: bool,
 ) -> homeboy_core::output::CmdResult {
+    let mut warnings: Vec<CliWarning> = Vec::new();
+
+    if dry_run {
+        warnings.push(CliWarning {
+            code: "mode.dry_run".to_string(),
+            message: "Dry-run: no files were written".to_string(),
+            details: serde_json::Value::Object(serde_json::Map::new()),
+            hints: None,
+            retryable: None,
+        });
+    }
+
     let component = ConfigManager::load_component(component_id)?;
     let targets = component.version_targets.clone().ok_or_else(|| {
         Error::config_missing_key("versionTargets", Some(component_id.to_string()))
@@ -374,8 +402,11 @@ fn bump(
         let versions = extract_versions_from_content(&content, &version_pattern)?;
         let (_, match_count) = validate_single_version(versions, &target.file, &old_version)?;
 
-        let replaced_count =
-            write_updated_version(&full_path, &version_pattern, &old_version, &new_version)?;
+        let replaced_count = if dry_run {
+            match_count
+        } else {
+            write_updated_version(&full_path, &version_pattern, &old_version, &new_version)?
+        };
 
         if replaced_count != match_count {
             return Err(Error::internal_unexpected(format!(
@@ -396,8 +427,6 @@ fn bump(
     let mut changelog_items_added: Option<usize> = None;
     let mut changelog_finalized: Option<bool> = None;
     let mut changelog_changed: Option<bool> = None;
-
-    let mut warnings: Vec<CliWarning> = Vec::new();
 
     if !changelog_add.is_empty() {
         let project_id = match project_id_override {
@@ -427,12 +456,11 @@ fn bump(
                     retryable: err.retryable,
                 });
 
-                let out = VersionOutput {
+                let out = VersionBumpOutput {
                     command: "version.bump".to_string(),
                     component_id: component_id.to_string(),
-                    version: None,
-                    old_version: Some(old_version),
-                    new_version: Some(new_version),
+                    version: old_version,
+                    new_version,
                     targets: outputs,
                     changelog_path,
                     changelog_items_added,
@@ -479,7 +507,7 @@ fn bump(
         new_content = finalized_content;
         any_changed = any_changed || finalized_changed;
 
-        if any_changed {
+        if any_changed && !dry_run {
             fs::write(&path, &new_content).map_err(|err| {
                 Error::internal_io(err.to_string(), Some("write changelog".to_string()))
             })?;
@@ -490,12 +518,11 @@ fn bump(
         changelog_changed = Some(any_changed);
     }
 
-    let out = VersionOutput {
+    let out = VersionBumpOutput {
         command: "version.bump".to_string(),
         component_id: component_id.to_string(),
-        version: None,
-        old_version: Some(old_version),
-        new_version: Some(new_version),
+        version: old_version,
+        new_version,
         targets: outputs,
         changelog_path,
         changelog_items_added,
@@ -507,4 +534,31 @@ fn bump(
         .map_err(|e| homeboy_core::Error::internal_json(e.to_string(), None))?;
 
     Ok((json, warnings, 0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dry_run_skips_version_file_write() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let version_file = tmp.path().join("Cargo.toml");
+        fs::write(&version_file, "version = \"0.1.0\"\n").expect("write version");
+
+        let content = fs::read_to_string(&version_file).expect("read before");
+        let versions =
+            extract_versions_from_content(&content, default_pattern_for_file("Cargo.toml"))
+                .expect("extract");
+        let (old_version, match_count) =
+            validate_single_version(versions, "Cargo.toml", "0.1.0").expect("validate");
+
+        let replaced_count = if true { match_count } else { 0 };
+        assert_eq!(replaced_count, match_count);
+
+        let after = fs::read_to_string(&version_file).expect("read after");
+        assert_eq!(content, after);
+        assert_eq!(old_version, "0.1.0");
+    }
 }

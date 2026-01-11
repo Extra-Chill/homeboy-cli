@@ -33,6 +33,10 @@ struct Cli {
     #[arg(long, global = true)]
     json: Option<String>,
 
+    /// Dry-run: show what would happen without writing.
+    #[arg(long, global = true)]
+    dry_run: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -200,9 +204,11 @@ fn main() -> std::process::ExitCode {
         Commands::Git(args) => homeboy_core::output::map_cmd_result_to_json(
             git::run(args, cli.json.as_deref()).map(|(data, exit_code)| (data, vec![], exit_code)),
         ),
-        Commands::Version(args) => {
-            homeboy_core::output::map_cmd_result_to_json(version::run(args, cli.json.as_deref()))
-        }
+        Commands::Version(args) => homeboy_core::output::map_cmd_result_to_json(version::run(
+            args,
+            cli.json.as_deref(),
+            cli.dry_run,
+        )),
         Commands::Build(args) => homeboy_core::output::map_cmd_result_to_json(
             build::run(args, cli.json.as_deref())
                 .map(|(data, exit_code)| (data, vec![], exit_code)),

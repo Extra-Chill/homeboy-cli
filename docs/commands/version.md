@@ -20,18 +20,32 @@ homeboy version show <componentId>
 homeboy version bump <componentId> <patch|minor|major> \
   [--changelog-add "<message>"]... \
   [--project-id <projectId>]
+
+Dry-run mode:
+
+```sh
+homeboy --dry-run version bump <componentId> <patch|minor|major> \
+  --changelog-add "<message>"
+```
 ```
 
 ## JSON output
 
 > Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). `homeboy version` returns a `VersionOutput` object as the `data` payload.
 
-`VersionOutput`:
+`homeboy version show` data payload:
 
-- `command`: `version.show` | `version.bump`
+- `command`: `version.show`
 - `componentId`
-- `version` (for `show`)
-- `oldVersion`, `newVersion` (for `bump`)
+- `version` (detected current version)
+- `targets`: array of `{ versionFile, versionPattern, fullPath, matchCount }`
+
+`homeboy version bump` data payload:
+
+- `command`: `version.bump`
+- `componentId`
+- `version` (detected current version before bump)
+- `newVersion` (version after bump)
 - `targets`: array of `{ versionFile, versionPattern, fullPath, matchCount }`
 - `changelogPath` (when `--changelog-add` is used and a changelog is available)
 - `changelogItemsAdded` (when `--changelog-add` is used)

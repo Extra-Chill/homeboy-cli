@@ -30,7 +30,7 @@ Examples:
 
 - `homeboy config set activeProjectId extrachill`
 - `homeboy config set defaultChangelogNextSectionLabel Unreleased`
-- `homeboy config set defaultChangelogNextSectionAliases "Unreleased,Next"`
+- `homeboy config set defaultChangelogNextSectionAliases "Unreleased,[Unreleased]"`
 
 ### `homeboy config unset <key>`
 
@@ -40,14 +40,21 @@ Example:
 
 - `homeboy config unset defaultChangelogNextSectionAliases`
 
-### `homeboy config set-json <pointer> <json> [--allow-unknown]`
+### `homeboy config set-json <pointer> <value> [--allow-unknown]`
+
+Synopsis:
+
+```sh
+homeboy config set-json <pointer> <value> [--allow-unknown]
+```
 
 Note: `set-json` is an escape hatch; `homeboy config set` only supports known keys.
 
 Escape hatch for setting a raw JSON value at a JSON pointer.
 
+
 - If `<pointer>` is not in the known-key registry, you must pass `--allow-unknown`.
-- `<json>` must be valid JSON (e.g. `"hello"`, `123`, `true`, `[]`, `{}`).
+- `<value>` must be valid JSON (e.g. `"hello"`, `123`, `true`, `[]`, `{}`).
 
 Examples:
 

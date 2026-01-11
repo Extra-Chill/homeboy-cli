@@ -9,11 +9,21 @@ homeboy doctor cleanup [OPTIONS]
 
 ## Description
 
-Scan Homeboy configuration files and report issues (errors, warnings, info), or safely clean up unknown top-level keys. This command always prints a JSON report to stdout.
+Scan Homeboy configuration files and report issues (errors, warnings, info), or safely clean up unknown top-level keys.
+
+`doctor` also validates module settings against each module's `module.json` manifest:
+
+- **App scope** (`config.json`): validates `installedModules.<moduleId>.settings`
+- **Project scope** (`projects/<projectId>.json`): validates `modules.<moduleId>.settings`
+- **Component scope** (`components/<componentId>.json`): validates `modules.<moduleId>.settings`
+
+Validation errors are reported as issues with `code: "INVALID_VALUE"` (and include a JSON pointer to the offending `settings` object).
 
 ## Commands
 
 ### `scan`
+
+`scan` returns a report; it does not modify files.
 
 ```sh
 homeboy doctor scan [OPTIONS]
@@ -26,6 +36,7 @@ Options:
 - `--file <PATH>`: Scan a specific JSON file path instead of a scope
 - `--fail-on <LEVEL>`: Exit non-zero when issues at this severity exist (default: `error`)
   - Allowed values: `error`, `warning`
+  - `--fail-on warning` fails on **any** warnings or errors; `info` never triggers failure
 
 ### `cleanup`
 
@@ -55,6 +66,8 @@ On success:
 - `doctor cleanup` returns `{ cleanup: DoctorCleanupReport, scan: DoctorReport }`.
 
 Example `doctor scan` output:
+
+> Note: the example codes/messages below are illustrative; actual `code` values are based on the specific validation being performed.
 
 ```json
 {

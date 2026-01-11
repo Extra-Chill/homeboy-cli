@@ -1,6 +1,14 @@
 # Homeboy CLI documentation
 
-Homeboy is LLM-first, human-second (for LLMs and developers using LLMs). Humans can use the CLI and a desktop app exists as a convenient GUI, but the CLI is the source of truth and may evolve faster than the app.
+This directory contains the markdown docs embedded into the `homeboy` binary and displayed via `homeboy docs`.
+
+## CLI
+
+- Root command + global flags: [Root command](cli/homeboy-root-command.md)
+- Full command list: [Commands index](commands/commands-index.md)
+- JSON output envelope: [JSON output contract](json-output/json-output-contract.md)
+- Embedded docs behavior: [Embedded docs topic resolution](embedded-docs/embedded-docs-topic-resolution.md)
+- Changelog content: [Changelog](changelog.md)
 
 ## Configuration
 

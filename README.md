@@ -51,6 +51,10 @@ These files are not used by Homeboy at runtime; they are meant for humans and co
 
 ## Usage
 
+See [CLI documentation](docs/index.md) for the authoritative command list and JSON contracts.
+
+A few common entrypoints:
+
 ```bash
 homeboy project list
 homeboy project create "My Site" example.com wordpress --activate
@@ -60,7 +64,8 @@ homeboy project switch <projectId>
 homeboy wp <projectId> core version
 homeboy deploy <projectId> --dry-run --all
 homeboy ssh <projectId>
-homeboy docs [topic...]
+homeboy docs --list
+homeboy docs deploy
 ```
 
 ## Configuration

@@ -2,6 +2,14 @@
 
 All notable changes to Homeboy CLI are documented in this file.
 
+## 0.1.10
+
+### Improvements
+- **Modules**: Restored module registry workflows: `homeboy module source ...` (saved sources), `homeboy module install`, `homeboy module update`, and `homeboy module uninstall`.
+- **Modules**: Added `.install.json` metadata to enable reliable updates from the original source.
+- **Core paths**: Added `module-sources/` directory support via `AppPaths::module_sources()` and `AppPaths::module_source()`.
+- **Docs/Positioning**: Updated README and docs index to reflect LLM-first focus and Homeboy data directory layout.
+
 ## 0.1.9
 
 ### Improvements

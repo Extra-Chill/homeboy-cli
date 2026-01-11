@@ -9,7 +9,7 @@ pub fn resolve_required_base_path<'a>(
     context_label: &str,
 ) -> Result<&'a str> {
     resolve_optional_base_path(base_path)
-        .ok_or_else(|| Error::Config(format!("{context_label} requires a configured 'basePath'")))
+        .ok_or_else(|| Error::config_missing_key("basePath", Some(context_label.to_string())))
 }
 
 pub fn join_remote_path_or_fallback(base_path: Option<&str>, path: &str) -> String {
@@ -20,7 +20,12 @@ pub fn join_remote_path(base_path: Option<&str>, path: &str) -> Result<String> {
     let path = path.trim();
 
     if path.is_empty() {
-        return Err(Error::Config("Path cannot be empty".to_string()));
+        return Err(Error::validation_invalid_argument(
+            "path",
+            "Path cannot be empty",
+            None,
+            None,
+        ));
     }
 
     if path.starts_with('/') {
@@ -28,9 +33,7 @@ pub fn join_remote_path(base_path: Option<&str>, path: &str) -> Result<String> {
     }
 
     let Some(base) = resolve_optional_base_path(base_path) else {
-        return Err(Error::Config(
-            "Relative paths require a configured 'basePath'".to_string(),
-        ));
+        return Err(Error::config_missing_key("basePath", None));
     };
 
     if base.ends_with('/') {
@@ -45,7 +48,12 @@ pub fn join_remote_child(base_path: Option<&str>, dir: &str, child: &str) -> Res
     let child = child.trim();
 
     if child.is_empty() {
-        return Err(Error::Config("Child path cannot be empty".to_string()));
+        return Err(Error::validation_invalid_argument(
+            "child",
+            "Child path cannot be empty",
+            None,
+            None,
+        ));
     }
 
     if dir_path.ends_with('/') {
@@ -59,7 +67,12 @@ pub fn remote_dirname(path: &str) -> Result<String> {
     let path = path.trim();
 
     if path.is_empty() {
-        return Err(Error::Config("Path cannot be empty".to_string()));
+        return Err(Error::validation_invalid_argument(
+            "path",
+            "Path cannot be empty",
+            None,
+            None,
+        ));
     }
 
     let without_trailing = path.trim_end_matches('/');

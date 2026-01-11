@@ -310,9 +310,73 @@ impl Error {
         )
     }
 
-    pub fn internal_io(err: std::io::Error, context: Option<String>) -> Self {
-        let details = serde_json::to_value(InternalIoErrorDetails {
+    pub fn internal_json(err: serde_json::Error, context: Option<String>) -> Self {
+        let details = serde_json::to_value(InternalJsonErrorDetails {
             error: err.to_string(),
+            context,
+        })
+        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(ErrorCode::InternalJsonError, "JSON error", details)
+    }
+
+    pub fn config_missing_key(key: impl Into<String>, path: Option<String>) -> Self {
+        let details = serde_json::to_value(ConfigMissingKeyDetails {
+            key: key.into(),
+            path,
+        })
+        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(
+            ErrorCode::ConfigMissingKey,
+            "Missing required configuration key",
+            details,
+        )
+    }
+
+    pub fn config_invalid_json(path: impl Into<String>, err: serde_json::Error) -> Self {
+        let details = serde_json::to_value(ConfigInvalidJsonDetails {
+            path: path.into(),
+            error: err.to_string(),
+        })
+        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(
+            ErrorCode::ConfigInvalidJson,
+            "Invalid JSON in configuration",
+            details,
+        )
+    }
+
+    pub fn config_invalid_value(
+        key: impl Into<String>,
+        value: Option<String>,
+        problem: impl Into<String>,
+    ) -> Self {
+        let details = serde_json::to_value(ConfigInvalidValueDetails {
+            key: key.into(),
+            value,
+            problem: problem.into(),
+        })
+        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(
+            ErrorCode::ConfigInvalidValue,
+            "Invalid configuration value",
+            details,
+        )
+    }
+
+    pub fn project_no_active(config_path: Option<String>) -> Self {
+        let details = serde_json::to_value(NoActiveProjectDetails { config_path })
+            .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(ErrorCode::ProjectNoActive, "No active project set", details)
+    }
+
+    pub fn internal_io(error: impl Into<String>, context: Option<String>) -> Self {
+        let details = serde_json::to_value(InternalIoErrorDetails {
+            error: error.into(),
             context,
         })
         .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
@@ -320,9 +384,9 @@ impl Error {
         Self::new(ErrorCode::InternalIoError, "IO error", details)
     }
 
-    pub fn internal_json(err: serde_json::Error, context: Option<String>) -> Self {
+    pub fn internal_json(error: impl Into<String>, context: Option<String>) -> Self {
         let details = serde_json::to_value(InternalJsonErrorDetails {
-            error: err.to_string(),
+            error: error.into(),
             context,
         })
         .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));

@@ -37,15 +37,19 @@ impl ConfigManager {
         if !path.exists() {
             return Ok(AppConfig::default());
         }
-        let content = fs::read_to_string(&path)?;
-        Ok(serde_json::from_str(&content)?)
+        let content = fs::read_to_string(&path)
+            .map_err(|e| Error::internal_io(e, Some("read app config".to_string())))?;
+        serde_json::from_str(&content)
+            .map_err(|e| Error::config_invalid_json(path.to_string_lossy().to_string(), e))
     }
 
     pub fn save_app_config(config: &AppConfig) -> Result<()> {
         let path = AppPaths::config()?;
         AppPaths::ensure_directories()?;
-        let content = serde_json::to_string_pretty(config)?;
-        fs::write(&path, content)?;
+        let content = serde_json::to_string_pretty(config)
+            .map_err(|e| Error::internal_json(e, Some("serialize app config".to_string())))?;
+        fs::write(&path, content)
+            .map_err(|e| Error::internal_io(e, Some("write app config".to_string())))?;
         Ok(())
     }
 
@@ -56,21 +60,27 @@ impl ConfigManager {
     pub fn load_project_record(id: &str) -> Result<ProjectRecord> {
         let path = AppPaths::project(id)?;
         if !path.exists() {
-            return Err(Error::ProjectNotFound(id.to_string()));
+            return Err(Error::project_not_found(id.to_string()));
         }
-        let content = fs::read_to_string(&path)?;
-        let config: ProjectConfiguration = serde_json::from_str(&content)?;
+        let content = fs::read_to_string(&path)
+            .map_err(|e| Error::internal_io(e, Some("read project".to_string())))?;
+        let config: ProjectConfiguration = serde_json::from_str(&content)
+            .map_err(|e| Error::config_invalid_json(path.to_string_lossy().to_string(), e))?;
 
         let expected_id = slugify_id(&config.name)?;
         if expected_id != id {
-            return Err(Error::Config(format!(
-                "Project configuration mismatch: file '{}' implies id '{}', but name '{}' implies id '{}'. Run `homeboy project repair {}`.",
-                path.display(),
-                id,
-                config.name,
-                expected_id,
-                id
-            )));
+            return Err(Error::config_invalid_value(
+                "project.id",
+                Some(id.to_string()),
+                format!(
+                    "Project configuration mismatch: file '{}' implies id '{}', but name '{}' implies id '{}'. Run `homeboy project repair {}`.",
+                    path.display(),
+                    id,
+                    config.name,
+                    expected_id,
+                    id
+                ),
+            ));
         }
 
         Ok(ProjectRecord {

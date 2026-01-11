@@ -1,49 +1,340 @@
-use thiserror::Error;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("Configuration error: {0}")]
-    Config(String),
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ErrorCode {
+    ConfigMissingKey,
+    ConfigInvalidJson,
+    ConfigInvalidValue,
 
-    #[error("Project not found: {0}")]
-    ProjectNotFound(String),
+    ValidationMissingArgument,
+    ValidationInvalidArgument,
+    ValidationInvalidJson,
 
-    #[error("Server not found: {0}")]
-    ServerNotFound(String),
+    ProjectNotFound,
+    ProjectNoActive,
+    ServerNotFound,
+    ComponentNotFound,
+    ModuleNotFound,
 
-    #[error("Component not found: {0}")]
-    ComponentNotFound(String),
+    SshServerInvalid,
+    SshIdentityFileNotFound,
+    SshAuthFailed,
+    SshConnectFailed,
 
-    #[error("No active project set")]
-    NoActiveProject,
+    RemoteCommandFailed,
+    RemoteCommandTimeout,
 
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    DeployNoComponentsConfigured,
+    DeployBuildFailed,
+    DeployUploadFailed,
 
-    #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
+    GitCommandFailed,
 
-    #[error("SSH error: {0}")]
-    Ssh(String),
+    InternalIoError,
+    InternalJsonError,
+    InternalUnexpected,
+}
 
-    #[error("{0}")]
-    Other(String),
+impl ErrorCode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ErrorCode::ConfigMissingKey => "config.missing_key",
+            ErrorCode::ConfigInvalidJson => "config.invalid_json",
+            ErrorCode::ConfigInvalidValue => "config.invalid_value",
+
+            ErrorCode::ValidationMissingArgument => "validation.missing_argument",
+            ErrorCode::ValidationInvalidArgument => "validation.invalid_argument",
+            ErrorCode::ValidationInvalidJson => "validation.invalid_json",
+
+            ErrorCode::ProjectNotFound => "project.not_found",
+            ErrorCode::ProjectNoActive => "project.no_active",
+            ErrorCode::ServerNotFound => "server.not_found",
+            ErrorCode::ComponentNotFound => "component.not_found",
+            ErrorCode::ModuleNotFound => "module.not_found",
+
+            ErrorCode::SshServerInvalid => "ssh.server_invalid",
+            ErrorCode::SshIdentityFileNotFound => "ssh.identity_file_not_found",
+            ErrorCode::SshAuthFailed => "ssh.auth_failed",
+            ErrorCode::SshConnectFailed => "ssh.connect_failed",
+
+            ErrorCode::RemoteCommandFailed => "remote.command_failed",
+            ErrorCode::RemoteCommandTimeout => "remote.command_timeout",
+
+            ErrorCode::DeployNoComponentsConfigured => "deploy.no_components_configured",
+            ErrorCode::DeployBuildFailed => "deploy.build_failed",
+            ErrorCode::DeployUploadFailed => "deploy.upload_failed",
+
+            ErrorCode::GitCommandFailed => "git.command_failed",
+
+            ErrorCode::InternalIoError => "internal.io_error",
+            ErrorCode::InternalJsonError => "internal.json_error",
+            ErrorCode::InternalUnexpected => "internal.unexpected",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Hint {
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigMissingKeyDetails {
+    pub key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigInvalidJsonDetails {
+    pub path: String,
+    pub error: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigInvalidValueDetails {
+    pub key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    pub problem: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoActiveProjectDetails {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_path: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Error {
+    pub code: ErrorCode,
+    pub message: String,
+    pub details: Value,
+    pub hints: Vec<Hint>,
+    pub retryable: Option<bool>,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for Error {}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotFoundDetails {
+    pub id: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MissingArgumentDetails {
+    pub args: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvalidArgumentDetails {
+    pub field: String,
+    pub problem: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tried: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InternalIoErrorDetails {
+    pub error: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InternalJsonErrorDetails {
+    pub error: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TargetDetails {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteCommandFailedDetails {
+    pub command: String,
+    pub exit_code: i32,
+    pub stdout: String,
+    pub stderr: String,
+    pub target: TargetDetails,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshServerInvalidDetails {
+    pub server_id: String,
+    pub missing_fields: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshIdentityFileNotFoundDetails {
+    pub server_id: String,
+    pub identity_file: String,
+}
+
 impl Error {
-    pub fn code(&self) -> &'static str {
-        match self {
-            Error::Config(_) => "CONFIG_ERROR",
-            Error::ProjectNotFound(_) => "PROJECT_NOT_FOUND",
-            Error::ServerNotFound(_) => "SERVER_NOT_FOUND",
-            Error::ComponentNotFound(_) => "COMPONENT_NOT_FOUND",
-            Error::NoActiveProject => "NO_ACTIVE_PROJECT",
-            Error::Io(_) => "IO_ERROR",
-            Error::Json(_) => "JSON_ERROR",
-            Error::Ssh(_) => "SSH_ERROR",
-            Error::Other(_) => "ERROR",
+    pub fn new(code: ErrorCode, message: impl Into<String>, details: Value) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            details,
+            hints: Vec::new(),
+            retryable: None,
         }
+    }
+
+    pub fn validation_missing_argument(args: Vec<String>) -> Self {
+        let details = serde_json::to_value(MissingArgumentDetails { args })
+            .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+        Self::new(
+            ErrorCode::ValidationMissingArgument,
+            "Missing required argument",
+            details,
+        )
+    }
+
+    pub fn validation_invalid_argument(
+        field: impl Into<String>,
+        problem: impl Into<String>,
+        id: Option<String>,
+        tried: Option<Vec<String>>,
+    ) -> Self {
+        let details = serde_json::to_value(InvalidArgumentDetails {
+            field: field.into(),
+            problem: problem.into(),
+            id,
+            tried,
+        })
+        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(
+            ErrorCode::ValidationInvalidArgument,
+            "Invalid argument",
+            details,
+        )
+    }
+
+    pub fn project_not_found(id: impl Into<String>) -> Self {
+        Self::not_found(ErrorCode::ProjectNotFound, "Project not found", id)
+    }
+
+    pub fn server_not_found(id: impl Into<String>) -> Self {
+        Self::not_found(ErrorCode::ServerNotFound, "Server not found", id)
+    }
+
+    pub fn component_not_found(id: impl Into<String>) -> Self {
+        Self::not_found(ErrorCode::ComponentNotFound, "Component not found", id)
+    }
+
+    pub fn module_not_found(id: impl Into<String>) -> Self {
+        Self::not_found(ErrorCode::ModuleNotFound, "Module not found", id)
+    }
+
+    fn not_found(code: ErrorCode, message: &str, id: impl Into<String>) -> Self {
+        let details = serde_json::to_value(NotFoundDetails { id: id.into() })
+            .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+        Self::new(code, message, details)
+    }
+
+    pub fn ssh_server_invalid(server_id: impl Into<String>, missing_fields: Vec<String>) -> Self {
+        let details = serde_json::to_value(SshServerInvalidDetails {
+            server_id: server_id.into(),
+            missing_fields,
+        })
+        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(
+            ErrorCode::SshServerInvalid,
+            "Server is not properly configured",
+            details,
+        )
+    }
+
+    pub fn ssh_identity_file_not_found(
+        server_id: impl Into<String>,
+        identity_file: impl Into<String>,
+    ) -> Self {
+        let details = serde_json::to_value(SshIdentityFileNotFoundDetails {
+            server_id: server_id.into(),
+            identity_file: identity_file.into(),
+        })
+        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(
+            ErrorCode::SshIdentityFileNotFound,
+            "SSH identity file not found",
+            details,
+        )
+    }
+
+    pub fn remote_command_failed(details: RemoteCommandFailedDetails) -> Self {
+        let details =
+            serde_json::to_value(details).unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(
+            ErrorCode::RemoteCommandFailed,
+            "Remote command failed",
+            details,
+        )
+    }
+
+    pub fn internal_io(err: std::io::Error, context: Option<String>) -> Self {
+        let details = serde_json::to_value(InternalIoErrorDetails {
+            error: err.to_string(),
+            context,
+        })
+        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(ErrorCode::InternalIoError, "IO error", details)
+    }
+
+    pub fn internal_json(err: serde_json::Error, context: Option<String>) -> Self {
+        let details = serde_json::to_value(InternalJsonErrorDetails {
+            error: err.to_string(),
+            context,
+        })
+        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()));
+
+        Self::new(ErrorCode::InternalJsonError, "JSON error", details)
+    }
+
+    pub fn internal_unexpected(error: impl Into<String>) -> Self {
+        Self::new(
+            ErrorCode::InternalUnexpected,
+            "Unexpected error",
+            serde_json::json!({ "error": error.into() }),
+        )
     }
 }

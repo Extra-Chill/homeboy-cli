@@ -16,32 +16,37 @@ Choose the correct initialization scope:
 
 Do not invent IDs. If ambiguous, ask for the missing `projectId`, `componentId`, or module details.
 
+## Constraints
+
+- Only run `homeboy *` commands.
+- If Homeboy cannot determine an identifier or required config value, request it explicitly. Do not guess.
+
 ## Step 0 — Inspect current Homeboy state (no writes yet)
 
 Run:
 
-1. `homeboy project list`
-2. `homeboy project list --current`
-3. `homeboy doctor`
-
-If relevant:
-- `homeboy component list`
-- `homeboy module list`
+1. `homeboy doctor`
+2. `homeboy project list`
+3. `homeboy project list --current`
+4. `homeboy component list`
+5. `homeboy module list`
 
 ## Decide scope (project vs component vs module)
 
+Prefer component-scoped initialization unless the user explicitly intends a full project environment.
+
 ### Choose **Project** when
-- The repo represents a deployable environment (e.g. WordPress site/app) and should support `ssh/wp/db/deploy`.
+- The user intends remote ops (`ssh/wp/db/deploy`) and this repo represents that deployable environment.
 
 If you choose Project, also initialize at least one Component (the deployable unit).
 
 ### Choose **Component** when
-- The repo (or a subdirectory) is a build/version/deploy unit, but not a full project environment.
+- The repo (or a subdirectory) is a build/version/deploy unit.
 
 ### Choose **Module** when
 - The repo is intended to be installed/run as a Homeboy module.
 
-If multiple scopes could apply, ask which one the user intends.
+If multiple scopes could apply, ask which scope the user intends.
 
 ## Project init
 

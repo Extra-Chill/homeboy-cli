@@ -50,8 +50,17 @@ fn run_with_loaders_and_executor(
         resolve_context(&args, project_loader, server_loader)?;
 
     if !server.is_valid() {
-        return Err(homeboy_core::Error::Other(
-            "Server is not properly configured".to_string(),
+        let mut missing_fields = Vec::new();
+        if server.host.is_empty() {
+            missing_fields.push("host".to_string());
+        }
+        if server.user.is_empty() {
+            missing_fields.push("user".to_string());
+        }
+
+        return Err(homeboy_core::Error::ssh_server_invalid(
+            server_id.clone(),
+            missing_fields,
         ));
     }
 
@@ -94,7 +103,11 @@ fn resolve_context(
     }
 
     let id = args.id.as_ref().ok_or_else(|| {
-        homeboy_core::Error::Other("Project ID or server ID is required".to_string())
+        homeboy_core::Error::validation_missing_argument(vec![
+            "<id>".to_string(),
+            "--project".to_string(),
+            "--server".to_string(),
+        ])
     })?;
 
     if let Ok(record) = project_loader(id) {
@@ -106,10 +119,12 @@ fn resolve_context(
         return Ok(("server".to_string(), None, id.to_string(), server));
     }
 
-    Err(homeboy_core::Error::Other(format!(
-        "No project or server found with id '{}'",
-        id
-    )))
+    Err(homeboy_core::Error::validation_invalid_argument(
+        "id",
+        "No matching project or server",
+        Some(id.to_string()),
+        Some(vec!["project".to_string(), "server".to_string()]),
+    ))
 }
 
 fn resolve_from_loaded_project(
@@ -117,7 +132,12 @@ fn resolve_from_loaded_project(
     server_loader: fn(&str) -> homeboy_core::Result<ServerConfig>,
 ) -> homeboy_core::Result<(String, ServerConfig)> {
     let server_id = project.server_id.clone().ok_or_else(|| {
-        homeboy_core::Error::Other("Server not configured for project".to_string())
+        homeboy_core::Error::validation_invalid_argument(
+            "project.serverId",
+            "Server not configured for project",
+            None,
+            None,
+        )
     })?;
 
     let server = server_loader(&server_id)?;
@@ -191,7 +211,7 @@ mod tests {
             args,
             |id| match id {
                 "alpha" => Ok(project("alpha", Some("alpha"))),
-                _ => Err(homeboy_core::Error::Other("no project".to_string())),
+                _ => Err(homeboy_core::Error::project_not_found("missing")),
             },
             |id| Ok(server(id)),
             noop_executor,
@@ -214,10 +234,10 @@ mod tests {
 
         let result = run_with_loaders_and_executor(
             args,
-            |_id| Err(homeboy_core::Error::Other("no project".to_string())),
+            |_id| Err(homeboy_core::Error::project_not_found("missing")),
             |id| match id {
                 "cloudways" => Ok(server(id)),
-                _ => Err(homeboy_core::Error::Other("no server".to_string())),
+                _ => Err(homeboy_core::Error::server_not_found("missing")),
             },
             noop_executor,
         )
@@ -261,12 +281,12 @@ mod tests {
 
         let error = run_with_loaders_and_executor(
             args,
-            |_id| Err(homeboy_core::Error::Other("no project".to_string())),
-            |_id| Err(homeboy_core::Error::Other("no server".to_string())),
+            |_id| Err(homeboy_core::Error::project_not_found("missing")),
+            |_id| Err(homeboy_core::Error::server_not_found("missing")),
             noop_executor,
         )
         .unwrap_err();
 
-        assert!(error.to_string().contains("No project or server found"));
+        assert_eq!(error.code.as_str(), "validation.invalid_argument");
     }
 }

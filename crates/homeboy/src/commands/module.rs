@@ -5,7 +5,8 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use homeboy_core::config::{AppPaths, ConfigManager, ProjectConfiguration};
+use homeboy_core::config::ModuleScope;
+use homeboy_core::config::{AppPaths, ConfigManager, InstalledModuleConfig, ProjectConfiguration};
 use homeboy_core::module::{load_all_modules, load_module, ModuleManifest, RuntimeType};
 use homeboy_core::template;
 
@@ -196,11 +197,13 @@ pub struct ModuleEntry {
     pub runtime: String,
     pub compatible: bool,
     pub ready: bool,
+    pub configured: bool,
 }
 
 fn list(project: Option<String>) -> CmdResult<ModuleOutput> {
     let modules = load_all_modules();
 
+    let app_config = ConfigManager::load_app_config().ok();
     let project_config: Option<ProjectConfiguration> = project
         .as_ref()
         .and_then(|id| ConfigManager::load_project(id).ok());
@@ -209,14 +212,22 @@ fn list(project: Option<String>) -> CmdResult<ModuleOutput> {
         .iter()
         .map(|module| {
             let ready = is_module_ready(module);
+            let compatible = is_module_compatible(module, project_config.as_ref());
+
+            let configured = app_config
+                .as_ref()
+                .and_then(|app| app.installed_modules.as_ref())
+                .is_some_and(|installed| installed.contains_key(&module.id));
+
             ModuleEntry {
                 id: module.id.clone(),
                 name: module.name.clone(),
                 version: module.version.clone(),
                 description: module.description.lines().next().unwrap_or("").to_string(),
                 runtime: format!("{:?}", module.runtime.runtime_type).to_lowercase(),
-                compatible: is_module_compatible(module, project_config.as_ref()),
+                compatible,
                 ready,
+                configured,
             }
         })
         .collect();
@@ -245,12 +256,88 @@ fn run_module(
     let module = load_module(module_id)
         .ok_or_else(|| homeboy_core::Error::Other(format!("Module '{}' not found", module_id)))?;
 
+    let app_config = ConfigManager::load_app_config()?;
+    let installed_module = app_config
+        .installed_modules
+        .as_ref()
+        .and_then(|m| m.get(module_id));
+
+    if installed_module.is_none() {
+        return Err(homeboy_core::Error::Config(format!(
+            "Module '{}' is not configured. Install it with `homeboy module install <git-url>`.",
+            module_id
+        )));
+    }
+
     let input_values: HashMap<String, String> = inputs.into_iter().collect();
 
     let (runtime_type, code) = match module.runtime.runtime_type {
         RuntimeType::Python => ("python", run_python_module(&module, input_values)?),
         RuntimeType::Shell => ("shell", run_shell_module(&module, input_values)?),
-        RuntimeType::Cli => ("cli", run_cli_module(&module, project, input_values, args)?),
+        RuntimeType::Cli => {
+            let requires_project = module.requires.is_some();
+
+            let (project_config, project_id) = if requires_project {
+                let project_id = project
+                    .or_else(|| app_config.active_project_id.clone())
+                    .ok_or_else(|| {
+                        homeboy_core::Error::Other(
+                            "This module requires a project; pass --project <id>".to_string(),
+                        )
+                    })?;
+
+                let project_config = ConfigManager::load_project(&project_id)?;
+                ModuleScope::validate_project_compatibility(&module, &project_config)?;
+
+                (Some(project_config), Some(project_id))
+            } else {
+                (None, None)
+            };
+
+            let _component_id = if let (Some(ref project_config), Some(_project_id)) =
+                (project_config.as_ref(), project_id.as_ref())
+            {
+                let resolved_component =
+                    ModuleScope::resolve_component_scope(&module, project_config, None)?;
+
+                if let Some(ref component_id) = resolved_component {
+                    let component = ConfigManager::load_component(component_id).map_err(|_| {
+                        homeboy_core::Error::Config(format!(
+                            "Component '{}' required by module '{}' is not configured",
+                            component_id, module.id
+                        ))
+                    })?;
+
+                    let _effective_settings = ModuleScope::effective_settings(
+                        module_id,
+                        installed_module,
+                        Some(project_config),
+                        Some(&component),
+                    );
+
+                    Some(component_id.clone())
+                } else {
+                    let _effective_settings = ModuleScope::effective_settings(
+                        module_id,
+                        installed_module,
+                        Some(project_config),
+                        None,
+                    );
+
+                    None
+                }
+            } else {
+                let _effective_settings =
+                    ModuleScope::effective_settings(module_id, installed_module, None, None);
+
+                None
+            };
+
+            (
+                "cli",
+                run_cli_module(&module, project_id, input_values, args)?,
+            )
+        }
     };
 
     Ok((
@@ -623,6 +710,23 @@ fn install_module(url: &str, id: Option<String>) -> CmdResult<ModuleOutput> {
     }
 
     write_install_metadata(&module_id, url)?;
+
+    let mut app_config = ConfigManager::load_app_config()?;
+    let installed_modules = app_config
+        .installed_modules
+        .get_or_insert_with(Default::default);
+    installed_modules
+        .entry(module_id.clone())
+        .and_modify(|existing| {
+            if existing.source_url.is_none() {
+                existing.source_url = Some(url.to_string());
+            }
+        })
+        .or_insert_with(|| InstalledModuleConfig {
+            settings: Default::default,
+            source_url: Some(url.to_string()),
+        });
+    ConfigManager::save_app_config(&app_config)?;
 
     if let Some(module) = load_module(&module_id) {
         if module.runtime.runtime_type == RuntimeType::Python {

@@ -2,6 +2,7 @@ mod app;
 mod component;
 mod config_keys;
 mod identifiable;
+mod module_config;
 mod paths;
 mod project;
 mod project_id;
@@ -14,6 +15,8 @@ pub use app::*;
 pub use component::*;
 pub use config_keys::*;
 pub use identifiable::{slugify_id, SetName, SlugIdentifiable};
+pub use module_config::*;
+pub use module_config::*;
 pub use paths::AppPaths;
 pub use project::*;
 pub use project_id::slugify_project_id;
@@ -22,7 +25,6 @@ pub use project_type::*;
 pub use record::*;
 pub use server::*;
 
-use crate::json::{read_json_file_typed, write_json_file_pretty_typed};
 use crate::{Error, Result};
 use std::fs;
 

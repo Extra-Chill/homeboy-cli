@@ -18,6 +18,9 @@ pub struct ProjectConfiguration {
     pub project_type: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub modules: Option<std::collections::HashMap<String, super::ScopedModuleConfig>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub server_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_path: Option<String>,

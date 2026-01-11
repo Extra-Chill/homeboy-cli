@@ -4,7 +4,9 @@ Homeboy prints JSON to stdout for both success and error results.
 
 ## Top-level shape
 
-Homeboy always prints a `homeboy_core::output::response::CliResponse<T>` object:
+Homeboy always prints a `homeboy_core::output::response::CliResponse<T>` object.
+
+Success:
 
 ```json
 {
@@ -13,7 +15,7 @@ Homeboy always prints a `homeboy_core::output::response::CliResponse<T>` object:
 }
 ```
 
-or
+Failure:
 
 ```json
 {
@@ -25,11 +27,16 @@ or
 }
 ```
 
+Notes:
+
+- `data` is omitted on failure.
+- `error` is omitted on success.
+
 ## Where exit codes come from
 
-- Each subcommand returns `(T, i32)` where `T` is a serializable payload type and `i32` is the intended process exit code.
-- For successful commands, the process exit code is the returned `i32`, clamped to `0..=255`.
-- For errors, the exit code is `1`.
+- Each subcommand returns `Result<(T, i32)>` where `T` is the success payload and `i32` is the intended process exit code.
+- On success, the process exit code is the returned `i32`, clamped to `0..=255`.
+- On error, the process exit code is `1`.
 
 ## Success payload
 

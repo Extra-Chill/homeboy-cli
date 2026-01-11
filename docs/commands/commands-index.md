@@ -7,6 +7,7 @@
 - [db](db.md)
 - [deploy](deploy.md)
 - [docs](docs.md)
+- [doctor](doctor.md)
 - [file](file.md)
 - [git](git.md)
 - [logs](logs.md)

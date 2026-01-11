@@ -739,6 +739,7 @@ mod tests {
             active_project_id: Some("abc".to_string()),
             default_changelog_next_section_label: None,
             default_changelog_next_section_aliases: None,
+            installed_modules: None,
         };
         let path = Path::new("/tmp/config.json");
         scanner.emit_unknown_keys(path, "AppConfig", &raw, &typed);
@@ -756,6 +757,7 @@ mod tests {
             active_project_id: Some("missing".to_string()),
             default_changelog_next_section_label: None,
             default_changelog_next_section_aliases: None,
+            installed_modules: None,
         });
         scanner.validate_cross_refs();
 

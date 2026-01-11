@@ -199,6 +199,7 @@ fn create(
     let expanded_path = shellexpand::tilde(local_path).to_string();
 
     let mut component = ComponentConfiguration::new(
+        id.to_string(),
         name.to_string(),
         expanded_path,
         remote_path.to_string(),

@@ -24,6 +24,10 @@ pub struct ComponentConfiguration {
     pub local_path: String,
     pub remote_path: String,
     pub build_artifact: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modules: Option<std::collections::HashMap<String, super::ScopedModuleConfig>>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version_targets: Option<Vec<VersionTarget>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -64,6 +68,7 @@ impl ComponentConfiguration {
             local_path,
             remote_path,
             build_artifact,
+            modules: None,
             version_targets: None,
             changelog_targets: None,
             changelog_next_section_label: None,

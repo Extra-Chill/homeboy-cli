@@ -12,9 +12,11 @@ homeboy <COMMAND>
 
 ## Global flags
 
+These are provided by clap:
+
 - `--version` / `-V`: print version and exit
 - `--help` / `-h`: print help and exit
 
 ## Subcommands
 
-See [Commands index](../commands/commands-index.md).
+See the full list of supported subcommands in the [Commands index](../commands/commands-index.md).

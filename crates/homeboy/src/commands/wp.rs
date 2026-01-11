@@ -116,7 +116,7 @@ fn build_command(
         project.config.local_environment.site_path.clone()
     } else {
         project
-            .project
+            .config
             .base_path
             .clone()
             .filter(|p| !p.is_empty())
@@ -125,7 +125,7 @@ fn build_command(
             })?
     };
 
-    let (target_domain, command_args) = resolve_subtarget(&project.project, args, use_local_domain);
+    let (target_domain, command_args) = resolve_subtarget(&project.config, args, use_local_domain);
 
     if command_args.is_empty() {
         return Err(homeboy_core::Error::Other(
@@ -135,7 +135,7 @@ fn build_command(
 
     let cli_path = if use_local_domain {
         project
-            .project
+            .config
             .local_environment
             .cli_path
             .clone()

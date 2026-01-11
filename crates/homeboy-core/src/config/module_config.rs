@@ -1,0 +1,109 @@
+use serde_json::Value;
+use std::collections::HashMap;
+
+use crate::module::ModuleManifest;
+use crate::{Error, Result};
+
+use super::{ComponentConfiguration, InstalledModuleConfig, ProjectConfiguration};
+
+pub struct ModuleScope;
+
+impl ModuleScope {
+    pub fn effective_settings(
+        module_id: &str,
+        app: Option<&InstalledModuleConfig>,
+        project: Option<&ProjectConfiguration>,
+        component: Option<&ComponentConfiguration>,
+    ) -> HashMap<String, Value> {
+        let mut settings = HashMap::new();
+
+        if let Some(app) = app {
+            settings.extend(app.settings.clone());
+        }
+
+        if let Some(project) = project {
+            if let Some(project_modules) = project.modules.as_ref() {
+                if let Some(project_config) = project_modules.get(module_id) {
+                    settings.extend(project_config.settings.clone());
+                }
+            }
+        }
+
+        if let Some(component) = component {
+            if let Some(component_modules) = component.modules.as_ref() {
+                if let Some(component_config) = component_modules.get(module_id) {
+                    settings.extend(component_config.settings.clone());
+                }
+            }
+        }
+
+        settings
+    }
+
+    pub fn validate_project_compatibility(
+        module: &ModuleManifest,
+        project: &ProjectConfiguration,
+    ) -> Result<()> {
+        let Some(requires) = module.requires.as_ref() else {
+            return Ok(());
+        };
+
+        if let Some(project_type) = requires.project_type.as_deref() {
+            if project.project_type != project_type {
+                return Err(Error::Config(format!(
+                    "Module '{}' requires projectType '{}', but project is '{}'",
+                    module.id, project_type, project.project_type
+                )));
+            }
+        }
+
+        if let Some(required_components) = requires.components.as_ref() {
+            for required in required_components {
+                if !project.component_ids.iter().any(|c| c == required) {
+                    return Err(Error::Config(format!(
+                        "Module '{}' requires component '{}', but project does not include it",
+                        module.id, required
+                    )));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn resolve_component_scope(
+        module: &ModuleManifest,
+        project: &ProjectConfiguration,
+        component_id: Option<&str>,
+    ) -> Result<Option<String>> {
+        let required_components = module
+            .requires
+            .as_ref()
+            .and_then(|r| r.components.as_ref())
+            .filter(|c| !c.is_empty());
+
+        let Some(required_components) = required_components else {
+            return Ok(component_id.map(str::to_string));
+        };
+
+        if let Some(component_id) = component_id {
+            if !required_components.iter().any(|c| c == component_id) {
+                return Err(Error::Config(format!(
+                    "Module '{}' requires components {:?}; --component '{}' is not compatible",
+                    module.id, required_components, component_id
+                )));
+            }
+
+            return Ok(Some(component_id.to_string()));
+        }
+
+        if required_components.len() == 1 {
+            return Ok(Some(required_components[0].clone()));
+        }
+
+        Err(Error::Config(format!(
+            "Module '{}' requires multiple components {:?}; pass --component <id>",
+            module.id, required_components
+        )))
+    }
+}

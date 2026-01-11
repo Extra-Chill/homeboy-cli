@@ -30,7 +30,6 @@ pub struct ModuleManifest {
 #[serde(rename_all = "camelCase")]
 pub struct RequirementsConfig {
     pub components: Option<Vec<String>>,
-    pub features: Option<Vec<String>>,
     pub project_type: Option<String>,
 }
 

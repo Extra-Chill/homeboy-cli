@@ -93,7 +93,7 @@ fn build_command(
         project.config.local_environment.site_path.clone()
     } else {
         project
-            .project
+            .config
             .base_path
             .clone()
             .filter(|p| !p.is_empty())
@@ -104,7 +104,7 @@ fn build_command(
 
     let cli_path = if local {
         project
-            .project
+            .config
             .local_environment
             .cli_path
             .clone()

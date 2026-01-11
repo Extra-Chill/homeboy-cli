@@ -176,6 +176,7 @@ fn create(
     }
 
     let server = ServerConfig {
+        id: id.clone(),
         name: name.to_string(),
         host: host.to_string(),
         user: user.to_string(),

@@ -88,7 +88,7 @@ fn list(project_id: &str) -> CmdResult<LogsOutput> {
     let project = ConfigManager::load_project_record(project_id)?;
 
     let entries = project
-        .project
+        .config
         .remote_logs
         .pinned_logs
         .iter()

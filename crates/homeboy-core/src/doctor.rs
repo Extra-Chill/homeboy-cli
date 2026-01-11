@@ -406,31 +406,17 @@ impl Scanner {
         T: serde::de::DeserializeOwned,
     {
         self.track_file(path);
-        let content = match fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(err) => {
-                self.push_issue(
-                    DoctorSeverity::Error,
-                    "IO_READ_ERROR",
-                    "Failed to read file",
-                    path,
-                    None,
-                    Some(serde_json::json!({"error": err.to_string()})),
-                );
-                return None;
-            }
-        };
 
-        let raw: Value = match serde_json::from_str(&content) {
+        let raw: Value = match read_json_file(path) {
             Ok(v) => v,
             Err(err) => {
                 self.push_issue(
                     DoctorSeverity::Error,
-                    "JSON_PARSE_ERROR",
-                    "Malformed JSON",
+                    "JSON_READ_ERROR",
+                    &err.to_string(),
                     path,
                     None,
-                    Some(serde_json::json!({"error": err.to_string()})),
+                    None,
                 );
                 return None;
             }

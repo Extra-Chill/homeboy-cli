@@ -1,4 +1,5 @@
 use crate::config::AppPaths;
+use crate::json::read_json_file_typed;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -136,9 +137,8 @@ pub fn load_all_modules() -> Vec<ModuleManifest> {
         return Vec::new();
     }
 
-    let entries = match fs::read_dir(&modules_dir) {
-        Ok(e) => e,
-        Err(_) => return Vec::new(),
+    let Ok(entries) = fs::read_dir(&modules_dir) else {
+        return Vec::new();
     };
 
     let mut modules = Vec::new();
@@ -146,13 +146,9 @@ pub fn load_all_modules() -> Vec<ModuleManifest> {
         let path = entry.path();
         if path.is_dir() {
             let manifest_path = path.join("module.json");
-            if manifest_path.exists() {
-                if let Ok(content) = fs::read_to_string(&manifest_path) {
-                    if let Ok(mut manifest) = serde_json::from_str::<ModuleManifest>(&content) {
-                        manifest.module_path = Some(path.to_string_lossy().to_string());
-                        modules.push(manifest);
-                    }
-                }
+            if let Ok(mut manifest) = read_json_file_typed::<ModuleManifest>(&manifest_path) {
+                manifest.module_path = Some(path.to_string_lossy().to_string());
+                modules.push(manifest);
             }
         }
     }

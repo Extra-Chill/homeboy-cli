@@ -26,6 +26,7 @@ pub use record::*;
 pub use scoped_module::*;
 pub use server::*;
 
+use crate::json::scan_json_dir;
 use crate::{Error, Result};
 use std::fs;
 
@@ -115,51 +116,17 @@ impl ConfigManager {
 
     pub fn list_projects() -> Result<Vec<ProjectRecord>> {
         let dir = AppPaths::projects()?;
-        if !dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut projects = Vec::new();
-        for entry in fs::read_dir(&dir)
-            .map_err(|e| Error::internal_io(e.to_string(), Some("read projects dir".to_string())))?
-        {
-            let entry = entry.map_err(|e| {
-                Error::internal_io(e.to_string(), Some("read projects dir entry".to_string()))
-            })?;
-            let path = entry.path();
-            if !path.extension().is_some_and(|ext| ext == "json") {
-                continue;
-            }
-
-            let Some(stem) = path.file_stem() else {
-                continue;
-            };
-            let id = stem.to_string_lossy().to_string();
-
-            let content = fs::read_to_string(&path).map_err(|e| {
-                Error::internal_io(e.to_string(), Some("read project file".to_string()))
-            })?;
-            let config: ProjectConfiguration = serde_json::from_str(&content)
-                .map_err(|e| Error::config_invalid_json(path.to_string_lossy().to_string(), e))?;
-
-            let expected_id = slugify_id(&config.name)?;
-            if expected_id != id {
-                return Err(Error::config_invalid_value(
-                    "project.id",
-                    Some(id.to_string()),
-                    format!(
-                        "Project configuration mismatch: file '{}' implies id '{}', but name '{}' implies id '{}'. Run `homeboy project repair {}`.",
-                        path.display(),
-                        id,
-                        config.name,
-                        expected_id,
-                        id
-                    ),
-                ));
-            }
-
-            projects.push(ProjectRecord { id, config });
-        }
+        let mut projects: Vec<ProjectRecord> = scan_json_dir::<ProjectConfiguration>(&dir)
+            .into_iter()
+            .filter_map(|(path, config)| {
+                let id = path.file_stem()?.to_string_lossy().to_string();
+                let expected_id = slugify_id(&config.name).ok()?;
+                if expected_id != id {
+                    return None;
+                }
+                Some(ProjectRecord { id, config })
+            })
+            .collect();
         projects.sort_by(|a, b| a.config.name.cmp(&b.config.name));
         Ok(projects)
     }
@@ -177,26 +144,10 @@ impl ConfigManager {
 
     pub fn list_servers() -> Result<Vec<ServerConfig>> {
         let dir = AppPaths::servers()?;
-        if !dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut servers = Vec::new();
-        for entry in fs::read_dir(&dir)
-            .map_err(|e| Error::internal_io(e.to_string(), Some("read servers dir".to_string())))?
-        {
-            let entry = entry.map_err(|e| {
-                Error::internal_io(e.to_string(), Some("read servers dir entry".to_string()))
-            })?;
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "json") {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if let Ok(server) = serde_json::from_str::<ServerConfig>(&content) {
-                        servers.push(server);
-                    }
-                }
-            }
-        }
+        let mut servers: Vec<ServerConfig> = scan_json_dir(&dir)
+            .into_iter()
+            .map(|(_, server)| server)
+            .collect();
         servers.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(servers)
     }
@@ -313,26 +264,10 @@ impl ConfigManager {
 
     pub fn list_components() -> Result<Vec<ComponentConfiguration>> {
         let dir = AppPaths::components()?;
-        if !dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut components = Vec::new();
-        for entry in fs::read_dir(&dir).map_err(|e| {
-            Error::internal_io(e.to_string(), Some("read components dir".to_string()))
-        })? {
-            let entry = entry.map_err(|e| {
-                Error::internal_io(e.to_string(), Some("read components dir entry".to_string()))
-            })?;
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "json") {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if let Ok(comp) = serde_json::from_str::<ComponentConfiguration>(&content) {
-                        components.push(comp);
-                    }
-                }
-            }
-        }
+        let mut components: Vec<ComponentConfiguration> = scan_json_dir(&dir)
+            .into_iter()
+            .map(|(_, comp)| comp)
+            .collect();
         components.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(components)
     }

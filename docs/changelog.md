@@ -2,6 +2,17 @@
 
 All notable changes to Homeboy CLI are documented in this file.
 
+## 0.2.2
+
+
+- Add scan_json_dir<T>() helper to json module for directory scanning
+
+- Refactor config list functions to use centralized json helpers
+
+- Refactor module loading to use read_json_file_typed()
+
+- Refactor doctor to use read_json_file() internally
+
 ## Unreleased
 
 ## 0.2.1

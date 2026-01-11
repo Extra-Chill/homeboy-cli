@@ -33,6 +33,30 @@ pub fn write_json_file_pretty_typed<T: Serialize>(path: impl AsRef<Path>, value:
     write_file_atomic(path, content.as_bytes())
 }
 
+pub fn scan_json_dir<T: DeserializeOwned>(dir: impl AsRef<Path>) -> Vec<(PathBuf, T)> {
+    let dir = dir.as_ref();
+    if !dir.exists() {
+        return Vec::new();
+    }
+
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+
+    entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            if !path.extension().is_some_and(|ext| ext == "json") {
+                return None;
+            }
+            let content = fs::read_to_string(&path).ok()?;
+            let parsed: T = serde_json::from_str(&content).ok()?;
+            Some((path, parsed))
+        })
+        .collect()
+}
+
 pub fn set_json_pointer(root: &mut Value, pointer: &str, new_value: Value) -> Result<()> {
     let pointer = normalize_pointer(pointer)?;
     let Some((parent_ptr, token)) = split_parent_pointer(&pointer) else {

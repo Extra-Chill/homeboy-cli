@@ -7,6 +7,8 @@ use serde::Serialize;
 use serde_json::Value;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
+
+use crate::module_settings::ModuleSettingsValidator;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -295,6 +297,7 @@ impl Scanner {
         let path_buf = path.to_path_buf();
         if let Some((raw, typed)) = self.read_typed_json_file::<AppConfig>(&path_buf, "AppConfig") {
             self.emit_unknown_keys(&path_buf, "AppConfig", &raw, &typed);
+            self.emit_app_installed_module_settings_issues(&path_buf, raw.get("installedModules"));
             self.app_config = Some(typed);
         }
     }
@@ -340,7 +343,7 @@ impl Scanner {
 
         for entry in entries.flatten() {
             let path = entry.path();
-            if !path.extension().is_some_and(|ext| ext == "json") {
+            if path.extension().is_none_or(|ext| ext != "json") {
                 continue;
             }
 
@@ -442,6 +445,7 @@ impl Scanner {
 
     fn on_project_file(&mut self, path: &Path, raw: Value, project: ProjectConfiguration) {
         self.emit_unknown_keys(path, "ProjectConfiguration", &raw, &project);
+        self.emit_module_settings_issues(path, "project", raw.get("modules"));
         let id = file_stem_id(path);
 
         if project.name.trim().is_empty() {
@@ -509,6 +513,7 @@ impl Scanner {
 
     fn on_component_file(&mut self, path: &Path, raw: Value, component: ComponentConfiguration) {
         self.emit_unknown_keys(path, "ComponentConfiguration", &raw, &component);
+        self.emit_module_settings_issues(path, "component", raw.get("modules"));
         let id = file_stem_id(path);
         self.components.insert(id, component);
     }
@@ -613,6 +618,168 @@ impl Scanner {
                 None,
                 Some(serde_json::json!({"schema": schema, "keys": unknown})),
             );
+        }
+    }
+
+    fn emit_app_installed_module_settings_issues(
+        &mut self,
+        path: &Path,
+        raw_installed: Option<&Value>,
+    ) {
+        let Some(raw_installed) = raw_installed else {
+            return;
+        };
+
+        let Some(installed_obj) = raw_installed.as_object() else {
+            self.push_issue(
+                DoctorSeverity::Error,
+                "INVALID_VALUE",
+                "installedModules must be an object",
+                path,
+                Some("/installedModules".to_string()),
+                None,
+            );
+            return;
+        };
+
+        for (module_id, config) in installed_obj {
+            let validator = if let Some(manifest) = self.modules.get(module_id) {
+                ModuleSettingsValidator::new(manifest)
+            } else {
+                self.push_issue(
+                    DoctorSeverity::Error,
+                    "BROKEN_REFERENCE",
+                    "installedModules references missing module manifest",
+                    path,
+                    Some(format!("/installedModules/{module_id}")),
+                    Some(serde_json::json!({"id": module_id})),
+                );
+                continue;
+            };
+
+            let Some(config_obj) = config.as_object() else {
+                self.push_issue(
+                    DoctorSeverity::Error,
+                    "INVALID_VALUE",
+                    "installedModules entry must be an object",
+                    path,
+                    Some(format!("/installedModules/{module_id}")),
+                    None,
+                );
+                continue;
+            };
+
+            let Some(settings_val) = config_obj.get("settings") else {
+                continue;
+            };
+
+            let Some(settings_obj) = settings_val.as_object() else {
+                self.push_issue(
+                    DoctorSeverity::Error,
+                    "INVALID_VALUE",
+                    "installedModules.settings must be an object",
+                    path,
+                    Some(format!("/installedModules/{module_id}/settings")),
+                    None,
+                );
+                continue;
+            };
+
+            if let Err(err) = validator.validate_json_object("app", settings_obj) {
+                self.push_issue(
+                    DoctorSeverity::Error,
+                    "INVALID_VALUE",
+                    &err.to_string(),
+                    path,
+                    Some(format!("/installedModules/{module_id}/settings")),
+                    Some(serde_json::json!({
+                        "scope": "app",
+                        "moduleId": module_id,
+                    })),
+                );
+            }
+        }
+    }
+
+    fn emit_module_settings_issues(
+        &mut self,
+        path: &Path,
+        scope: &str,
+        raw_modules: Option<&Value>,
+    ) {
+        let Some(raw_modules) = raw_modules else {
+            return;
+        };
+
+        let Some(modules_obj) = raw_modules.as_object() else {
+            self.push_issue(
+                DoctorSeverity::Error,
+                "INVALID_VALUE",
+                &format!("{scope} modules must be an object"),
+                path,
+                Some("/modules".to_string()),
+                None,
+            );
+            return;
+        };
+
+        for (module_id, module_config) in modules_obj {
+            let validator = if let Some(manifest) = self.modules.get(module_id) {
+                ModuleSettingsValidator::new(manifest)
+            } else {
+                self.push_issue(
+                    DoctorSeverity::Error,
+                    "BROKEN_REFERENCE",
+                    &format!("{scope} references missing module manifest"),
+                    path,
+                    Some(format!("/modules/{module_id}")),
+                    Some(serde_json::json!({"id": module_id})),
+                );
+                continue;
+            };
+
+            let Some(config_obj) = module_config.as_object() else {
+                self.push_issue(
+                    DoctorSeverity::Error,
+                    "INVALID_VALUE",
+                    &format!("{scope} module config must be an object"),
+                    path,
+                    Some(format!("/modules/{module_id}")),
+                    None,
+                );
+                continue;
+            };
+
+            let settings_val = config_obj.get("settings");
+            let Some(settings_val) = settings_val else {
+                continue;
+            };
+
+            let Some(settings_obj) = settings_val.as_object() else {
+                self.push_issue(
+                    DoctorSeverity::Error,
+                    "INVALID_VALUE",
+                    &format!("{scope} module settings must be an object"),
+                    path,
+                    Some(format!("/modules/{module_id}/settings")),
+                    None,
+                );
+                continue;
+            };
+
+            if let Err(err) = validator.validate_json_object(scope, settings_obj) {
+                self.push_issue(
+                    DoctorSeverity::Error,
+                    "INVALID_VALUE",
+                    &err.to_string(),
+                    path,
+                    Some(format!("/modules/{module_id}/settings")),
+                    Some(serde_json::json!({
+                        "scope": scope,
+                        "moduleId": module_id,
+                    })),
+                );
+            }
         }
     }
 
@@ -785,9 +952,7 @@ fn classify_file(path: &Path) -> Option<FileKind> {
         return Some(FileKind::App);
     }
 
-    let Some(parent) = path.parent().and_then(|p| p.file_name()) else {
-        return None;
-    };
+    let parent = path.parent().and_then(|p| p.file_name())?;
 
     match parent.to_string_lossy().as_ref() {
         "projects" => Some(FileKind::Project),
@@ -961,7 +1126,7 @@ impl CleanerState {
 
         for entry in entries.flatten() {
             let path = entry.path();
-            if !path.extension().is_some_and(|ext| ext == "json") {
+            if path.extension().is_none_or(|ext| ext != "json") {
                 continue;
             }
             self.cleanup_typed_file::<T>(&path, schema)?;
@@ -1084,7 +1249,7 @@ mod tests {
 
         let result = Doctor::cleanup_file(&path, true).unwrap();
         assert_eq!(result.cleanup.command, "doctor.cleanup");
-        assert_eq!(result.cleanup.summary.dry_run, true);
+        assert!(result.cleanup.summary.dry_run);
         assert_eq!(result.cleanup.summary.files_changed, 1);
         assert_eq!(result.cleanup.summary.keys_removed, 1);
 

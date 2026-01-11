@@ -5,6 +5,7 @@ pub mod context;
 pub mod doctor;
 pub mod json;
 pub mod module;
+pub mod module_settings;
 pub mod output;
 pub mod shell;
 pub mod ssh;

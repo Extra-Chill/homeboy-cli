@@ -141,7 +141,7 @@ pub fn scan_json_dir<T: DeserializeOwned>(dir: impl AsRef<Path>) -> Vec<(PathBuf
         .flatten()
         .filter_map(|entry| {
             let path = entry.path();
-            if !path.extension().is_some_and(|ext| ext == "json") {
+            if path.extension().is_none_or(|ext| ext != "json") {
                 return None;
             }
             let content = fs::read_to_string(&path).ok()?;

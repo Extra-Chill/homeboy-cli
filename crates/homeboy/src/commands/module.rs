@@ -360,9 +360,7 @@ fn run_module(
 
             resolved_project_id = project_id.clone();
 
-            if let (Some(ref project_config), Some(_project_id)) =
-                (project_config.as_ref(), project_id.as_ref())
-            {
+            if let Some(project_config) = project_config.as_ref() {
                 resolved_component_id = ModuleScope::resolve_component_scope(
                     &module,
                     project_config,
@@ -770,7 +768,7 @@ fn derive_module_id_from_url(url: &str) -> homeboy_core::Result<String> {
     let trimmed = url.trim_end_matches('/');
     let segment = trimmed
         .split('/')
-        .last()
+        .next_back()
         .unwrap_or(trimmed)
         .trim_end_matches(".git");
 

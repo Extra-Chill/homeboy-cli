@@ -2,6 +2,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::module::ModuleManifest;
+use crate::module_settings::ModuleSettingsValidator;
 use crate::{Error, Result};
 
 use super::{ComponentConfiguration, InstalledModuleConfig, ProjectConfiguration};
@@ -38,6 +39,49 @@ impl ModuleScope {
         }
 
         settings
+    }
+
+    pub fn effective_settings_validated(
+        module: &ModuleManifest,
+        app: Option<&InstalledModuleConfig>,
+        project: Option<&ProjectConfiguration>,
+        component: Option<&ComponentConfiguration>,
+    ) -> Result<HashMap<String, Value>> {
+        let module_id = module.id.as_str();
+
+        let mut out: HashMap<String, Value> = HashMap::new();
+        for setting in &module.settings {
+            let Some(default_value) = setting.default.clone() else {
+                continue;
+            };
+
+            out.insert(setting.id.clone(), default_value);
+        }
+
+        let app_settings = app.map(|a| a.settings.clone()).unwrap_or_default();
+        let project_settings = project
+            .and_then(|p| p.modules.as_ref())
+            .and_then(|m| m.get(module_id))
+            .map(|c| c.settings.clone())
+            .unwrap_or_default();
+        let component_settings = component
+            .and_then(|c| c.modules.as_ref())
+            .and_then(|m| m.get(module_id))
+            .map(|c| c.settings.clone())
+            .unwrap_or_default();
+
+        let validator = ModuleSettingsValidator::new(module);
+        validator.validate_settings_map("app", &app_settings)?;
+        validator.validate_settings_map("project", &project_settings)?;
+        validator.validate_settings_map("component", &component_settings)?;
+
+        for settings in [&app_settings, &project_settings, &component_settings] {
+            for (key, value) in settings {
+                out.insert(key.clone(), value.clone());
+            }
+        }
+
+        Ok(out)
     }
 
     pub fn validate_project_compatibility(

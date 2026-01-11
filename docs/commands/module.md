@@ -11,13 +11,13 @@ homeboy module <COMMAND>
 ### `list`
 
 ```sh
-homeboy module list [--project <projectId>]
+homeboy module list [-p|--project <projectId>]
 ```
 
 ### `run`
 
 ```sh
-homeboy module run <moduleId> [--project <projectId>] [--input <key=value>...] [<args...>]
+homeboy module run <moduleId> [-p|--project <projectId>] [-i|--input <key=value>]... [<args...>]
 ```
 
 - `--input` repeats; each value must be in `KEY=value` form.

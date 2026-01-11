@@ -8,11 +8,11 @@ homeboy component <COMMAND>
 
 ## Subcommands
 
-- `create <id> --name <name> --local-path <path> --remote-path <path> --build-artifact <path> [--version-file <path>] [--version-pattern <regex>] [--build-command <cmd>] [--is-network]`
+- `create <name> --local-path <path> --remote-path <path> --build-artifact <path> [--version-target <file|file::pattern>]... [--build-command <cmd>] [--is-network]`
 - `import <json> [--skip-existing]`
 - `show <id>`
-- `set <id> [--name <name>] [--local-path <path>] [--remote-path <path>] [--build-artifact <path>] [--version-file <path>] [--version-pattern <regex>] [--build-command <cmd>] [--is-network] [--not-network]`
-- `delete <id> [--force]`
+- `set <id> [--name <name>] [--local-path <path>] [--remote-path <path>] [--build-artifact <path>] [--version-target <file|file::pattern>]... [--build-command <cmd>] [--is-network] [--not-network]`
+- `delete <id> --force`
 - `list`
 
 ## JSON output

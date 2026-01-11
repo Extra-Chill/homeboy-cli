@@ -42,6 +42,8 @@ Example:
 
 ### `homeboy config set-json <pointer> <json> [--allow-unknown]`
 
+Note: `set-json` is an escape hatch; `homeboy config set` only supports known keys.
+
 Escape hatch for setting a raw JSON value at a JSON pointer.
 
 - If `<pointer>` is not in the known-key registry, you must pass `--allow-unknown`.

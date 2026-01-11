@@ -118,7 +118,7 @@ JSON output (`--current`):
 ### `show`
 
 ```sh
-homeboy project show [projectId]
+homeboy project show [<projectId>]
 ```
 
 - `projectId` (optional): if omitted, uses the active project.

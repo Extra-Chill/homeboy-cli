@@ -22,6 +22,7 @@ pub use project_type::*;
 pub use record::*;
 pub use server::*;
 
+use crate::json::{read_json_file_typed, write_json_file_pretty_typed};
 use crate::{Error, Result};
 use std::fs;
 

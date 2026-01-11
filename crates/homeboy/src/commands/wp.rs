@@ -184,11 +184,9 @@ fn resolve_subtarget(
         return (default_domain, args.to_vec());
     };
 
-    if let Some(subtarget) = project
-        .sub_targets
-        .iter()
-        .find(|t| t.slug_id().ok().as_deref() == Some(sub_id) || token::identifier_eq(&t.name, sub_id))
-    {
+    if let Some(subtarget) = project.sub_targets.iter().find(|t| {
+        t.slug_id().ok().as_deref() == Some(sub_id) || token::identifier_eq(&t.name, sub_id)
+    }) {
         let domain = if use_local_domain {
             let base_domain = if project.local_environment.domain.is_empty() {
                 "localhost"

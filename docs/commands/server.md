@@ -12,6 +12,7 @@ homeboy server <COMMAND>
 
 ```sh
 homeboy server create <name> --host <host> --user <user> [--port <port>]
+# port default: 22
 ```
 
 `serverId` is derived from `slugify_id(<name>)`.

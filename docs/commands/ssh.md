@@ -3,7 +3,7 @@
 ## Synopsis
 
 ```sh
-homeboy ssh <id> [command]
+homeboy ssh [id] [command]
 # or:
 homeboy ssh --project <projectId> [command]
 homeboy ssh --server <serverId> [command]
@@ -14,7 +14,7 @@ homeboy ssh --server <serverId> [command]
 - `id`: a project ID or server ID (the CLI resolves which one you mean)
 - `--project <projectId>`: force project resolution
 - `--server <serverId>`: force server resolution
-- `command` (optional): if provided, executes a single command; otherwise opens an interactive SSH session.
+- `command` (optional): single token; executes that command, otherwise interactive session.
 
 ## JSON output
 

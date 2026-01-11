@@ -1,4 +1,6 @@
 use crate::{Error, Result};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,7 +10,18 @@ pub fn read_json_file(path: impl AsRef<Path>) -> Result<Value> {
     Ok(serde_json::from_str(&content)?)
 }
 
+pub fn read_json_file_typed<T: DeserializeOwned>(path: impl AsRef<Path>) -> Result<T> {
+    let content = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&content)?)
+}
+
 pub fn write_json_file_pretty(path: impl AsRef<Path>, value: &Value) -> Result<()> {
+    let path = path.as_ref();
+    let content = serde_json::to_string_pretty(value)?;
+    write_file_atomic(path, content.as_bytes())
+}
+
+pub fn write_json_file_pretty_typed<T: Serialize>(path: impl AsRef<Path>, value: &T) -> Result<()> {
     let path = path.as_ref();
     let content = serde_json::to_string_pretty(value)?;
     write_file_atomic(path, content.as_bytes())

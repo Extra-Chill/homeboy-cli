@@ -4,6 +4,7 @@
 
 ```sh
 homeboy deploy <projectId> [<componentIds...>] [--all] [--outdated] [--build] [--dry-run]
+# componentIds are positional; omit when using --all
 ```
 
 ## Arguments and flags

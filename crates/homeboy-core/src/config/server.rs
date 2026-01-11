@@ -17,6 +17,12 @@ fn default_port() -> u16 {
     22
 }
 
+impl super::SlugIdentifiable for ServerConfig {
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 impl ServerConfig {
     pub fn keychain_service_name(&self) -> String {
         format!("com.extrachill.homeboy.ssh.{}", self.id)

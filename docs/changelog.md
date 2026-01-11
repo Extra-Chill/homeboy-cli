@@ -4,6 +4,10 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+- added overlooked config command back in
+- docs updated
+- doctor refactor
+- module standardized data contract
 ## 0.2.4
 
 - Restore 'homeboy config' command wiring

@@ -82,11 +82,7 @@ pub fn deploy_artifact(
 
             let rendered_cmd = render_extract_command(cmd_template, &vars);
 
-            let extract_cmd = format!(
-                "cd {} && {}",
-                shell::quote_path(remote_path),
-                rendered_cmd
-            );
+            let extract_cmd = format!("cd {} && {}", shell::quote_path(remote_path), rendered_cmd);
 
             let extract_output = ssh_client.execute(&extract_cmd);
             if !extract_output.success {
@@ -102,7 +98,10 @@ pub fn deploy_artifact(
     if let Some(v) = verification {
         if let Some(ref verify_cmd_template) = v.verify_command {
             let mut vars = HashMap::new();
-            vars.insert(TemplateVars::TARGET_DIR.to_string(), remote_path.to_string());
+            vars.insert(
+                TemplateVars::TARGET_DIR.to_string(),
+                remote_path.to_string(),
+            );
             let verify_cmd = render_map(verify_cmd_template, &vars);
 
             let verify_output = ssh_client.execute(&verify_cmd);
@@ -111,9 +110,7 @@ pub fn deploy_artifact(
                     .verify_error_message
                     .as_ref()
                     .map(|msg| render_map(msg, &vars))
-                    .unwrap_or_else(|| {
-                        format!("Deploy verification failed for {}", remote_path)
-                    });
+                    .unwrap_or_else(|| format!("Deploy verification failed for {}", remote_path));
                 return Ok(DeployResult::failure(1, error_msg));
             }
         }

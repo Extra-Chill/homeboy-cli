@@ -135,10 +135,8 @@ mod tests {
             let options = zip::write::FileOptions::default();
 
             zip.add_directory("test-app/", options).unwrap();
-            zip.start_file("test-app/main.txt", options)
-                .unwrap();
-            zip.write_all(b"Test application content\n")
-                .unwrap();
+            zip.start_file("test-app/main.txt", options).unwrap();
+            zip.write_all(b"Test application content\n").unwrap();
             zip.finish().unwrap();
         }
 

@@ -29,6 +29,8 @@ This command:
 
 Changelog entries must be added *before* running this command (recommended: `homeboy changelog add --json ...`).
 
+In this version of Homeboy, the `--json` flag is on `changelog add` (not on `changelog`).
+
 Arguments:
 
 - `<componentId>`: component ID

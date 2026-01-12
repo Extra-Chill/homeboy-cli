@@ -306,4 +306,3 @@ pub struct NewsletterConfig {
     #[serde(default)]
     pub sendy_list_id: String,
 }
-

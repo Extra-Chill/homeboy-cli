@@ -425,7 +425,7 @@ fn set(
             ProjectOutput {
                 command: "project.set".to_string(),
                 project_id: Some(result.new_id.clone()),
-                    project: Some(ConfigManager::load_project_record(&result.new_id)?),
+                project: Some(ConfigManager::load_project_record(&result.new_id)?),
                 projects: None,
                 components: None,
                 pin: None,

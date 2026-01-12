@@ -98,6 +98,19 @@ enum ModuleCommand {
         #[arg(long)]
         force: bool,
     },
+    /// Symlink a local module for development
+    Link {
+        /// Path to local module directory
+        path: String,
+        /// Override module id (defaults to manifest id)
+        #[arg(long)]
+        id: Option<String>,
+    },
+    /// Remove a symlinked module (preserves source directory)
+    Unlink {
+        /// Module ID
+        module_id: String,
+    },
 }
 
 fn parse_key_val(s: &str) -> Result<(String, String), String> {
@@ -121,6 +134,8 @@ pub fn run(args: ModuleArgs, _global: &crate::commands::GlobalArgs) -> CmdResult
         ModuleCommand::Install { url, id } => install_module(&url, id),
         ModuleCommand::Update { module_id, force } => update_module(&module_id, force),
         ModuleCommand::Uninstall { module_id, force } => uninstall_module(&module_id, force),
+        ModuleCommand::Link { path, id } => link_module(&path, id),
+        ModuleCommand::Unlink { module_id } => unlink_module(&module_id),
     }
 }
 
@@ -142,6 +157,10 @@ pub struct ModuleOutput {
     pub updated: Option<ModuleUpdateOutput>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uninstalled: Option<ModuleUninstallOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub linked: Option<ModuleLinkOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unlinked: Option<ModuleUnlinkOutput>,
 }
 
 #[derive(Serialize)]
@@ -166,6 +185,19 @@ pub struct ModuleUninstallOutput {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ModuleLinkOutput {
+    pub source_path: String,
+    pub symlink_path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleUnlinkOutput {
+    pub path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModuleEntry {
     pub id: String,
     pub name: String,
@@ -175,6 +207,7 @@ pub struct ModuleEntry {
     pub compatible: bool,
     pub ready: bool,
     pub configured: bool,
+    pub linked: bool,
 }
 
 fn list(project: Option<String>) -> CmdResult<ModuleOutput> {
@@ -196,6 +229,8 @@ fn list(project: Option<String>) -> CmdResult<ModuleOutput> {
                 .and_then(|app| app.installed_modules.as_ref())
                 .is_some_and(|installed| installed.contains_key(&module.id));
 
+            let linked = is_module_linked(&module.id);
+
             ModuleEntry {
                 id: module.id.clone(),
                 name: module.name.clone(),
@@ -214,6 +249,7 @@ fn list(project: Option<String>) -> CmdResult<ModuleOutput> {
                 compatible,
                 ready,
                 configured,
+                linked,
             }
         })
         .collect();
@@ -228,6 +264,8 @@ fn list(project: Option<String>) -> CmdResult<ModuleOutput> {
             installed: None,
             updated: None,
             uninstalled: None,
+            linked: None,
+            unlinked: None,
         },
         0,
     ))
@@ -312,11 +350,8 @@ fn run_module(
         let loaded_project = ConfigManager::load_project(&project_id)?;
         ModuleScope::validate_project_compatibility(&module, &loaded_project)?;
 
-        resolved_component_id = ModuleScope::resolve_component_scope(
-            &module,
-            &loaded_project,
-            component.as_deref(),
-        )?;
+        resolved_component_id =
+            ModuleScope::resolve_component_scope(&module, &loaded_project, component.as_deref())?;
 
         if let Some(ref comp_id) = resolved_component_id {
             component_config = Some(ConfigManager::load_component(comp_id).map_err(|_| {
@@ -392,7 +427,8 @@ fn run_module(
     }
     let env_pairs: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
-    let exit_code = execute_local_command_interactive(&command, Some(module_path), Some(&env_pairs));
+    let exit_code =
+        execute_local_command_interactive(&command, Some(module_path), Some(&env_pairs));
 
     Ok((
         ModuleOutput {
@@ -404,6 +440,8 @@ fn run_module(
             installed: None,
             updated: None,
             uninstalled: None,
+            linked: None,
+            unlinked: None,
         },
         exit_code,
     ))
@@ -444,6 +482,8 @@ fn slugify_module_id(value: &str) -> homeboy_core::Result<String> {
 #[serde(rename_all = "camelCase")]
 struct ModuleInstallMetadata {
     source_url: String,
+    #[serde(default)]
+    linked: bool,
 }
 
 fn install_metadata_path(module_id: &str) -> homeboy_core::Result<std::path::PathBuf> {
@@ -597,6 +637,8 @@ fn install_module(url: &str, id: Option<String>) -> CmdResult<ModuleOutput> {
             }),
             updated: None,
             uninstalled: None,
+            linked: None,
+            unlinked: None,
         },
         0,
     ))
@@ -656,6 +698,8 @@ fn update_module(module_id: &str, force: bool) -> CmdResult<ModuleOutput> {
                 path: module_dir.to_string_lossy().to_string(),
             }),
             uninstalled: None,
+            linked: None,
+            unlinked: None,
         },
         0,
     ))
@@ -690,6 +734,8 @@ fn uninstall_module(module_id: &str, force: bool) -> CmdResult<ModuleOutput> {
             uninstalled: Some(ModuleUninstallOutput {
                 path: module_dir.to_string_lossy().to_string(),
             }),
+            linked: None,
+            unlinked: None,
         },
         0,
     ))
@@ -712,6 +758,8 @@ fn setup_module(module_id: &str) -> CmdResult<ModuleOutput> {
                     installed: None,
                     updated: None,
                     uninstalled: None,
+                    linked: None,
+                    unlinked: None,
                 },
                 0,
             ));
@@ -732,6 +780,8 @@ fn setup_module(module_id: &str) -> CmdResult<ModuleOutput> {
                     installed: None,
                     updated: None,
                     uninstalled: None,
+                    linked: None,
+                    unlinked: None,
                 },
                 0,
             ));
@@ -771,6 +821,8 @@ fn setup_module(module_id: &str) -> CmdResult<ModuleOutput> {
             installed: None,
             updated: None,
             uninstalled: None,
+            linked: None,
+            unlinked: None,
         },
         0,
     ))
@@ -825,4 +877,179 @@ fn is_module_compatible(module: &ModuleManifest, project: Option<&ProjectConfigu
     }
 
     true
+}
+
+fn is_module_linked(module_id: &str) -> bool {
+    AppPaths::module(module_id)
+        .map(|p| p.is_symlink())
+        .unwrap_or(false)
+}
+
+fn link_module(path: &str, id: Option<String>) -> CmdResult<ModuleOutput> {
+    let source_path = Path::new(path);
+
+    // Resolve to absolute path
+    let source_path = if source_path.is_absolute() {
+        source_path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| homeboy_core::Error::other(e.to_string()))?
+            .join(source_path)
+    };
+
+    if !source_path.exists() {
+        return Err(homeboy_core::Error::other(format!(
+            "Source path does not exist: {}",
+            source_path.display()
+        )));
+    }
+
+    // Validate homeboy.json exists
+    let manifest_path = source_path.join("homeboy.json");
+    if !manifest_path.exists() {
+        return Err(homeboy_core::Error::other(format!(
+            "No homeboy.json found at {}",
+            source_path.display()
+        )));
+    }
+
+    // Read manifest to get module id if not provided
+    let manifest_content = fs::read_to_string(&manifest_path).map_err(|e| {
+        homeboy_core::Error::internal_io(e.to_string(), Some("read module manifest".to_string()))
+    })?;
+    let manifest: ModuleManifest = serde_json::from_str(&manifest_content).map_err(|e| {
+        homeboy_core::Error::config_invalid_json(manifest_path.to_string_lossy().to_string(), e)
+    })?;
+
+    let module_id = match id {
+        Some(id) => slugify_module_id(&id)?,
+        None => manifest.id.clone(),
+    };
+
+    if module_id.is_empty() {
+        return Err(homeboy_core::Error::other(
+            "Module id is empty. Provide --id or ensure manifest has an id field.".to_string(),
+        ));
+    }
+
+    let module_dir = AppPaths::module(&module_id)?;
+    if module_dir.exists() {
+        return Err(homeboy_core::Error::other(format!(
+            "Module '{}' already exists at {}",
+            module_id,
+            module_dir.display()
+        )));
+    }
+
+    AppPaths::ensure_directories()?;
+
+    // Create symlink
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&source_path, &module_dir).map_err(|e| {
+        homeboy_core::Error::internal_io(e.to_string(), Some("create symlink".to_string()))
+    })?;
+
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_dir(&source_path, &module_dir).map_err(|e| {
+        homeboy_core::Error::internal_io(e.to_string(), Some("create symlink".to_string()))
+    })?;
+
+    // Write install metadata with linked: true
+    let metadata_path = module_dir.join(".install.json");
+    let metadata = ModuleInstallMetadata {
+        source_url: source_path.to_string_lossy().to_string(),
+        linked: true,
+    };
+    let metadata_content = serde_json::to_string_pretty(&metadata).map_err(|e| {
+        homeboy_core::Error::internal_json(
+            e.to_string(),
+            Some("serialize module install metadata".to_string()),
+        )
+    })?;
+    fs::write(&metadata_path, metadata_content).map_err(|e| {
+        homeboy_core::Error::internal_io(
+            e.to_string(),
+            Some("write module install metadata".to_string()),
+        )
+    })?;
+
+    // Register in app config
+    let mut app_config = ConfigManager::load_app_config()?;
+    let installed_modules = app_config
+        .installed_modules
+        .get_or_insert_with(Default::default);
+    installed_modules
+        .entry(module_id.clone())
+        .or_insert_with(|| InstalledModuleConfig {
+            settings: Default::default(),
+            source_url: Some(source_path.to_string_lossy().to_string()),
+        });
+    ConfigManager::save_app_config(&app_config)?;
+
+    Ok((
+        ModuleOutput {
+            command: "module.link".to_string(),
+            project_id: None,
+            module_id: Some(module_id),
+            modules: None,
+            runtime_type: None,
+            installed: None,
+            updated: None,
+            uninstalled: None,
+            linked: Some(ModuleLinkOutput {
+                source_path: source_path.to_string_lossy().to_string(),
+                symlink_path: module_dir.to_string_lossy().to_string(),
+            }),
+            unlinked: None,
+        },
+        0,
+    ))
+}
+
+fn unlink_module(module_id: &str) -> CmdResult<ModuleOutput> {
+    let module_dir = AppPaths::module(module_id)?;
+
+    if !module_dir.exists() {
+        return Err(homeboy_core::Error::other(format!(
+            "Module '{}' not found",
+            module_id
+        )));
+    }
+
+    if !module_dir.is_symlink() {
+        return Err(homeboy_core::Error::other(format!(
+            "Module '{}' is not a symlink. Use `uninstall` to remove git-cloned modules.",
+            module_id
+        )));
+    }
+
+    // Remove the symlink (this does not delete the source directory)
+    fs::remove_file(&module_dir).map_err(|e| {
+        homeboy_core::Error::internal_io(e.to_string(), Some("remove symlink".to_string()))
+    })?;
+
+    // Remove from app config
+    let mut app_config = ConfigManager::load_app_config()?;
+    if let Some(ref mut installed_modules) = app_config.installed_modules {
+        installed_modules.remove(module_id);
+    }
+    ConfigManager::save_app_config(&app_config)?;
+
+    Ok((
+        ModuleOutput {
+            command: "module.unlink".to_string(),
+            project_id: None,
+            module_id: Some(module_id.to_string()),
+            modules: None,
+            runtime_type: None,
+            installed: None,
+            updated: None,
+            uninstalled: None,
+            linked: None,
+            unlinked: Some(ModuleUnlinkOutput {
+                path: module_dir.to_string_lossy().to_string(),
+            }),
+        },
+        0,
+    ))
 }

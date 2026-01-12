@@ -9,12 +9,6 @@ use homeboy_core::config::ConfigManager;
 
 #[derive(Args)]
 pub struct ChangelogArgs {
-    /// JSON input spec for batch operations.
-    ///
-    /// Use "-" to read from stdin, "@file.json" to read from a file, or an inline JSON string.
-    #[arg(long)]
-    pub json: Option<String>,
-
     #[command(subcommand)]
     pub command: Option<ChangelogCommand>,
 }
@@ -23,6 +17,12 @@ pub struct ChangelogArgs {
 pub enum ChangelogCommand {
     /// Add changelog items to the configured "next" section
     Add {
+        /// JSON input spec for batch operations.
+        ///
+        /// Use "-" to read from stdin, "@file.json" to read from a file, or an inline JSON string.
+        #[arg(long)]
+        json: Option<String>,
+
         /// Component ID (non-JSON mode)
         component_id: Option<String>,
 
@@ -87,17 +87,17 @@ pub fn run(
     args: ChangelogArgs,
     _global: &crate::commands::GlobalArgs,
 ) -> CmdResult<ChangelogOutput> {
-    let json_spec = args.json.as_deref();
     match args.command {
         None => {
             let (out, code) = show_json()?;
             Ok((ChangelogOutput::Show(out), code))
         }
         Some(ChangelogCommand::Add {
+            json,
             component_id,
             message,
         }) => {
-            if let Some(spec) = json_spec {
+            if let Some(spec) = json.as_deref() {
                 let data: ChangelogAddData =
                     homeboy_core::json::load_op_data(spec, "changelog.add")?;
 

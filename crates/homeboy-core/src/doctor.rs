@@ -1229,5 +1229,4 @@ mod tests {
         let after = read_json_file(&path).unwrap();
         assert!(after.get("extra").is_some());
     }
-
 }

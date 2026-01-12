@@ -18,6 +18,8 @@ Use Homeboy to update the version and changelog together. Do not manually edit c
 
 ```sh
 homeboy changelog add --json '{"componentId":"<componentId>","messages":["<change 1>","<change 2>"]}'
+# (Alternative non-JSON mode)
+# homeboy changelog add <componentId> "<change 1>"
 ```
 
 5. Bump version and finalize changelog:

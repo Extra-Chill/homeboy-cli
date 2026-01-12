@@ -20,6 +20,11 @@ homeboy db tables <projectId> [<subtarget>] [<args...>]
 homeboy db describe <projectId> [<subtarget>] <table>
 ```
 
+Notes:
+
+- Subtargets are only recognized if the project has `subTargets` configured.
+- The first trailing arg is treated as `<subtarget>` if it matches by slug or name; otherwise it is treated as the `<table>`.
+
 ### `query`
 
 ```sh
@@ -42,7 +47,7 @@ Notes:
 ### `drop-table`
 
 ```sh
-homeboy db drop-table <projectId> <table> --confirm
+homeboy db drop-table <projectId> [<subtarget>] <table> --confirm
 ```
 
 Note: `--confirm` is required.

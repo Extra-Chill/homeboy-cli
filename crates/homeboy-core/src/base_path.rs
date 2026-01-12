@@ -102,19 +102,19 @@ mod tests {
 
     #[test]
     fn join_remote_path_rejects_relative_paths_without_base() {
-        assert!(join_remote_path(None, "wp-config.php").is_err());
+        assert!(join_remote_path(None, "config.json").is_err());
     }
 
     #[test]
     fn join_remote_path_joins_relative_paths() {
         assert_eq!(
-            join_remote_path(Some("/var/www/site"), "wp-config.php").unwrap(),
-            "/var/www/site/wp-config.php"
+            join_remote_path(Some("/var/www/site"), "config.json").unwrap(),
+            "/var/www/site/config.json"
         );
 
         assert_eq!(
-            join_remote_path(Some("/var/www/site/"), "wp-config.php").unwrap(),
-            "/var/www/site/wp-config.php"
+            join_remote_path(Some("/var/www/site/"), "config.json").unwrap(),
+            "/var/www/site/config.json"
         );
     }
 

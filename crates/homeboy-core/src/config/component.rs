@@ -42,6 +42,8 @@ pub struct ComponentConfiguration {
     pub changelog_next_section_aliases: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build_command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extract_command: Option<String>,
 }
 
 impl SlugIdentifiable for ComponentConfiguration {
@@ -103,6 +105,7 @@ impl ComponentConfiguration {
             changelog_next_section_label: None,
             changelog_next_section_aliases: None,
             build_command: None,
+            extract_command: None,
         }
     }
 }

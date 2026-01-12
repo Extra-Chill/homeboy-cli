@@ -4,11 +4,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use homeboy_core::config::{ConfigManager, ServerConfig};
+use homeboy_core::config::ConfigManager;
 use homeboy_core::context::resolve_project_ssh_with_base_path;
 use homeboy_core::deploy::{deploy_artifact, DeployResult};
 use homeboy_core::module::{load_module, DeployVerification};
-use homeboy_core::ssh::{execute_local_command_in_dir, CommandOutput, SshClient};
+use homeboy_core::ssh::{execute_local_command_in_dir, SshClient};
 use homeboy_core::version::{default_pattern_for_file, parse_version};
 
 use super::CmdResult;
@@ -255,7 +255,7 @@ pub fn run(args: DeployArgs, _global: &crate::commands::GlobalArgs) -> CmdResult
             &client,
             Path::new(&component.build_artifact),
             &install_dir,
-            &base_path,
+            component.extract_command.as_deref(),
             verification.as_ref(),
         );
 
@@ -352,6 +352,7 @@ struct Component {
     remote_path: String,
     build_artifact: String,
     build_command: Option<String>,
+    extract_command: Option<String>,
     version_targets: Option<Vec<VersionTarget>>,
     modules: Vec<String>,
 }
@@ -482,6 +483,7 @@ fn load_components(component_ids: &[String]) -> Vec<Component> {
                 remote_path: component.remote_path,
                 build_artifact,
                 build_command: component.build_command,
+                extract_command: component.extract_command,
                 version_targets,
                 modules: component.modules,
             });

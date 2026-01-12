@@ -27,7 +27,6 @@ homeboy ssh list
 - `--server <SERVER>`: force server resolution
 - `[COMMAND]` (optional): command to execute (omit for interactive shell)
 
-Note: clap shows `Usage: homeboy ssh [OPTIONS] [ID] [COMMAND] [COMMAND]`, but the helper text describes a single `[COMMAND]` argument.
 
 ## JSON output
 

@@ -65,6 +65,9 @@ enum ComponentCommand {
         /// Build command to run in localPath
         #[arg(long)]
         build_command: Option<String>,
+        /// Extract command to run after upload (e.g., "unzip -o {artifact} && rm {artifact}")
+        #[arg(long)]
+        extract_command: Option<String>,
     },
     /// Display component configuration
     Show {
@@ -93,6 +96,9 @@ enum ComponentCommand {
         /// Update build command
         #[arg(long)]
         build_command: Option<String>,
+        /// Update extract command (e.g., "unzip -o {artifact} && rm {artifact}")
+        #[arg(long)]
+        extract_command: Option<String>,
     },
     /// Delete a component configuration
     Delete {
@@ -133,6 +139,7 @@ pub fn run(
             build_artifact,
             version_targets,
             build_command,
+            extract_command,
         } => {
             if let Some(spec) = json {
                 return create_json(&spec, skip_existing);
@@ -178,6 +185,7 @@ pub fn run(
                 &build_artifact,
                 version_targets,
                 build_command,
+                extract_command,
             )
         }
         ComponentCommand::Show { id } => show(&id),
@@ -189,6 +197,7 @@ pub fn run(
             build_artifact,
             version_targets,
             build_command,
+            extract_command,
         } => set(SetComponentArgs {
             id,
             name,
@@ -197,6 +206,7 @@ pub fn run(
             build_artifact,
             version_targets,
             build_command,
+            extract_command,
         }),
         ComponentCommand::Delete { id, force } => delete(&id, force),
         ComponentCommand::List => list(),
@@ -228,6 +238,7 @@ fn create(
     build_artifact: &str,
     version_targets: Vec<String>,
     build_command: Option<String>,
+    extract_command: Option<String>,
 ) -> CmdResult<ComponentOutput> {
     let id = slugify_id(name)?;
 
@@ -251,6 +262,7 @@ fn create(
         component.version_targets = Some(parse_version_targets(&version_targets)?);
     }
     component.build_command = build_command;
+    component.extract_command = extract_command;
 
     ConfigManager::save_component(&id, &component)?;
 
@@ -293,6 +305,7 @@ struct SetComponentArgs {
     build_artifact: Option<String>,
     version_targets: Vec<String>,
     build_command: Option<String>,
+    extract_command: Option<String>,
 }
 
 fn set(args: SetComponentArgs) -> CmdResult<ComponentOutput> {
@@ -304,6 +317,7 @@ fn set(args: SetComponentArgs) -> CmdResult<ComponentOutput> {
         build_artifact,
         version_targets,
         build_command,
+        extract_command,
     } = args;
 
     let mut component = ConfigManager::load_component(&id)?;
@@ -338,6 +352,11 @@ fn set(args: SetComponentArgs) -> CmdResult<ComponentOutput> {
     if let Some(value) = build_command {
         component.build_command = Some(value);
         updated_fields.push("buildCommand".to_string());
+    }
+
+    if let Some(value) = extract_command {
+        component.extract_command = Some(value);
+        updated_fields.push("extractCommand".to_string());
     }
 
     if updated_fields.is_empty() {

@@ -75,7 +75,7 @@ fn merges_with_precedence_and_defaults() {
     let mut project = ProjectConfiguration {
         name: "p".to_string(),
         domain: "d".to_string(),
-        modules: vec!["wordpress".to_string()],
+        modules: vec![],
         scoped_modules: None,
         server_id: None,
         base_path: None,

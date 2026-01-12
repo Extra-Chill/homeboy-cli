@@ -11,25 +11,72 @@ homeboy component [OPTIONS] <COMMAND>
 
 ## Subcommands
 
-- `create`: Create a new component configuration
-  - Usage: `homeboy component create [OPTIONS] [NAME]`
-  - Options: `--json <JSON>`, `--skip-existing`, `--local-path <LOCAL_PATH>`, `--remote-path <REMOTE_PATH>`, `--build-artifact <BUILD_ARTIFACT>`, `--version-target <TARGET>` (repeatable), `--build-command <BUILD_COMMAND>`
-- `show`: Display component configuration
-  - Usage: `homeboy component show [OPTIONS] <ID>`
-- `set`: Update component configuration fields
-  - Usage: `homeboy component set [OPTIONS] <ID>`
-  - Options: `--name <NAME>`, `--local-path <LOCAL_PATH>`, `--remote-path <REMOTE_PATH>`, `--build-artifact <BUILD_ARTIFACT>`, `--version-target <TARGET>` (repeatable, replaces list), `--build-command <BUILD_COMMAND>`
-- `delete`: Delete a component configuration
-  - Usage: `homeboy component delete [OPTIONS] <ID>`
-  - Options: `--force` (skip confirmation)
-- `list`: List all available components
-  - Usage: `homeboy component list [OPTIONS]`
+### `create`
+
+```sh
+homeboy component create [OPTIONS] <NAME>
+```
+
+Options:
+
+- `--json <spec>`: JSON input spec for create/update (supports single or bulk)
+- `--skip-existing`: skip items that already exist (JSON mode only)
+- `--local-path <path>`: absolute path to local source directory (required in CLI mode)
+- `--remote-path <path>`: remote path relative to project `basePath` (required in CLI mode)
+- `--build-artifact <path>`: build artifact path relative to `localPath` (required in CLI mode)
+- `--version-target <TARGET>`: version target in format `file` or `file::pattern` (repeatable)
+- `--build-command <command>`: build command to run in `localPath`
+
+### `show`
+
+```sh
+homeboy component show <id>
+```
+
+### `set`
+
+```sh
+homeboy component set <id> [OPTIONS]
+```
+
+Options:
+
+- `--name <name>`: update display name
+- `--local-path <path>`: update local path
+- `--remote-path <path>`: update remote path
+- `--build-artifact <path>`: update build artifact path
+- `--version-target <TARGET>`: replace version targets (repeatable `file` or `file::pattern`)
+- `--build-command <command>`: update build command
+
+### `delete`
+
+```sh
+homeboy component delete <id> [--force]
+```
+
+### `list`
+
+```sh
+homeboy component list
+```
 
 ## JSON output
 
-All `homeboy component` subcommands return JSON wrapped in the global envelope described in the [JSON output contract](../json-output/json-output-contract.md).
+> Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). The object below is the `data` payload.
 
-> Note: `homeboy component` does not include an `import` subcommand.
+`homeboy component` returns a `ComponentOutput` object.
+
+```json
+{
+  "action": "create|show|set|delete|list|component.create",
+  "componentId": "<id>|null",
+  "success": true,
+  "updatedFields": ["name", "localPath"],
+  "component": { },
+  "components": [ ],
+  "import": null
+}
+```
 
 ## Related
 

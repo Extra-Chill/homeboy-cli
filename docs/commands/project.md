@@ -29,7 +29,7 @@ Arguments:
 
 
 ```sh
-homeboy project create [OPTIONS] [NAME] [DOMAIN]
+homeboy project create [OPTIONS] <NAME> <DOMAIN>
 ```
 
 Options:
@@ -42,9 +42,12 @@ Options:
 
 Arguments (CLI mode):
 
-- `name`: project name
-- `domain`: public site domain
-- `--module <moduleId>`: enable a module for the project (repeatable). Example: `--module wordpress`
+- `<NAME>`: project name
+- `<DOMAIN>`: public site domain
+
+Options (CLI mode):
+
+- `--module <MODULE>`: enable a module for the project (repeatable). Example: `--module wordpress`
 
 JSON mode:
 

@@ -120,30 +120,30 @@ mod tests {
 
         // Without modules, no build command is detected (module-driven detection)
         let candidate =
-            detect_build_command(temp_dir.path().to_str().unwrap(), "dist/plugin.zip", &[]);
+            detect_build_command(temp_dir.path().to_str().unwrap(), "dist/app.zip", &[]);
         assert!(candidate.is_none());
     }
 
     #[test]
     fn detects_single_root_dir_in_zip() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let zip_path = temp_dir.path().join("plugin.zip");
+        let zip_path = temp_dir.path().join("app.zip");
 
         {
             let file = std::fs::File::create(&zip_path).unwrap();
             let mut zip = zip::ZipWriter::new(file);
             let options = zip::write::FileOptions::default();
 
-            zip.add_directory("sell-my-images/", options).unwrap();
-            zip.start_file("sell-my-images/sell-my-images.php", options)
+            zip.add_directory("test-app/", options).unwrap();
+            zip.start_file("test-app/main.txt", options)
                 .unwrap();
-            zip.write_all(b"<?php\n/*\nPlugin Name: Sell My Images\n*/\n")
+            zip.write_all(b"Test application content\n")
                 .unwrap();
             zip.finish().unwrap();
         }
 
         let root = detect_zip_single_root_dir(&zip_path).unwrap();
-        assert_eq!(root.as_deref(), Some("sell-my-images"));
+        assert_eq!(root.as_deref(), Some("test-app"));
     }
 
     #[test]

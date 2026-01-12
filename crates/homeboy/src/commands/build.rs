@@ -18,7 +18,7 @@ mod tests {
             name: "Test Component".to_string(),
             local_path: "component".to_string(),
             remote_path: "/var/www/component".to_string(),
-            build_artifact: "dist/plugin.zip".to_string(),
+            build_artifact: "dist/app.tar.gz".to_string(),
             modules: vec![],
             scoped_modules: None,
             version_targets: None,

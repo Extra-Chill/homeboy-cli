@@ -3,21 +3,20 @@
 ## Synopsis
 
 ```sh
-homeboy deploy [OPTIONS] <PROJECT_ID> [COMPONENT_IDS]...
+homeboy deploy <projectId> [<componentIds...>] [--all] [--outdated] [--dry-run]
+# If no component IDs are provided, you must use --all or --outdated.
 ```
 
 ## Arguments and flags
 
-Arguments:
-
-- `<PROJECT_ID>`: project ID
-- `[COMPONENT_IDS]...` (optional): component IDs to deploy
+- `projectId`: project ID
+- `<componentIds...>` (optional): component IDs to deploy (trailing var args)
 
 Options:
 
 - `--all`: deploy all configured components
 - `--outdated`: deploy only outdated components
-- `--build`: build components before deploying
+  - Determined from the first version target for each component.
 - `--dry-run`: show what would be deployed without executing
 
 If no component IDs are provided and neither `--all` nor `--outdated` is set, Homeboy returns an error.
@@ -44,14 +43,14 @@ If no component IDs are provided and neither `--all` nor `--outdated` is set, Ho
       "remotePath": "<path>|null",
       "buildCommand": "<cmd>|null",
       "buildExitCode": "<int>|null",
-      "scpExitCode": "<int>|null"
+      "deployExitCode": "<int>|null"
     }
   ],
   "summary": { "succeeded": 0, "failed": 0, "skipped": 0 }
 }
 ```
 
-Note: `buildExitCode`/`scpExitCode` are numbers when present (not strings).
+Note: `buildExitCode`/`deployExitCode` are numbers when present (not strings).
 
 ## Exit code
 

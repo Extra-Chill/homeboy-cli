@@ -8,9 +8,6 @@ Manage standalone component configurations.
 homeboy component [OPTIONS] <COMMAND>
 ```
 
-Global option:
-
-- `--dry-run`: show what would happen without writing
 
 ## Subcommands
 

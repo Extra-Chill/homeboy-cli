@@ -51,7 +51,7 @@ Note: clap shows `Usage: homeboy ssh [OPTIONS] [ID] [COMMAND] [COMMAND]`, but th
 }
 ```
 
-### Connect (`homeboy ssh <id> [command]`)
+### Connect (`homeboy ssh [OPTIONS] [ID] [COMMAND]`)
 
 The connect action uses an interactive SSH session and does not print the JSON envelope (it is treated as passthrough output).
 

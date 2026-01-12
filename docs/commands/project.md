@@ -6,7 +6,6 @@
 homeboy project [OPTIONS] <COMMAND>
 ```
 
-This command accepts the global flag `--dry-run` (see [Root command](../cli/homeboy-root-command.md)).
 
 ## Subcommands
 
@@ -93,7 +92,7 @@ JSON mode:
 ### `set`
 
 ```sh
-homeboy project set <projectId> [--name <name>] [--domain <domain>] [--module <moduleId>]... [--server-id <serverId>] [--base-path <path>] [--table-prefix <prefix>] [--module-setting <moduleId.key=value>]... [--component-ids <ids>]
+homeboy project set <projectId> [--name <name>] [--domain <domain>] [--module <moduleId>]... [--server-id <serverId>] [--base-path <path>] [--table-prefix <prefix>] [--module-setting <moduleId.key=value>]... [--component-ids <componentId,componentId,...>]
 ```
 
 Arguments:
@@ -109,7 +108,7 @@ Options:
 - `--base-path <path>`: remote base path
 - `--table-prefix <prefix>`: table prefix
 - `--module-setting <moduleId.key=value>`: set a module setting (repeatable)
-- `--component-ids <ids>`: replace component IDs (comma-separated)
+- `--component-ids <componentId,componentId,...>`: replace component IDs (comma-separated)
 
 JSON output:
 

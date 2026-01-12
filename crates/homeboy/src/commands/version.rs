@@ -1,6 +1,6 @@
 use clap::{Args, Subcommand, ValueEnum};
 use homeboy_core::changelog;
-use homeboy_core::config::ProjectConfiguration;
+
 use homeboy_core::output::CliWarning;
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -36,9 +36,6 @@ enum VersionCommand {
         /// Add a changelog item to the configured "next" section (repeatable)
         #[arg(long = "changelog-add", action = clap::ArgAction::Append)]
         changelog_add: Vec<String>,
-        /// Optional project ID override (defaults to active project)
-        #[arg(long)]
-        project_id: Option<String>,
     },
 }
 
@@ -120,14 +117,7 @@ pub fn run(
             component_id,
             bump_type,
             changelog_add,
-            project_id,
-        } => bump(
-            &component_id,
-            bump_type,
-            &changelog_add,
-            project_id.as_deref(),
-            global.dry_run,
-        ),
+        } => bump(&component_id, bump_type, &changelog_add, global.dry_run),
     }
 }
 
@@ -325,7 +315,6 @@ fn bump(
     component_id: &str,
     bump_type: BumpType,
     changelog_add: &[String],
-    project_id_override: Option<&str>,
     dry_run: bool,
 ) -> homeboy_core::output::CmdResult {
     let mut warnings: Vec<CliWarning> = Vec::new();
@@ -391,6 +380,33 @@ fn bump(
         )
     })?;
 
+    // Idempotency check: if the changelog's latest finalized version matches the current
+    // file version, a previous bump already completed. This prevents double-increment
+    // when an interrupted bump is re-run.
+    if !changelog_add.is_empty() {
+        if let Ok(path) = changelog::resolve_changelog_path(&component) {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Some(latest_changelog_version) =
+                    changelog::get_latest_finalized_version(&content)
+                {
+                    if latest_changelog_version == old_version {
+                        return Err(Error::validation_invalid_argument(
+                            "version",
+                            format!(
+                                "Version mismatch: files and changelog are both at {}. This may indicate a previous interrupted bump.",
+                                old_version
+                            ),
+                            None,
+                            Some(vec![
+                                "If this was an interrupted bump, manually revert version files to the previous version before re-running".to_string(),
+                            ]),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     let mut outputs = Vec::new();
 
     for target in targets {
@@ -430,17 +446,7 @@ fn bump(
     let mut changelog_changed: Option<bool> = None;
 
     if !changelog_add.is_empty() {
-        let project_id = match project_id_override {
-            Some(id) => Some(id.to_string()),
-            None => ConfigManager::load_app_config()?.active_project_id,
-        };
-
-        let project: Option<ProjectConfiguration> = match project_id.as_deref() {
-            Some(id) => Some(ConfigManager::load_project(id)?),
-            None => None,
-        };
-
-        let settings = changelog::resolve_effective_settings(project.as_ref(), Some(&component))?;
+        let settings = changelog::resolve_effective_settings(Some(&component))?;
 
         let path = match changelog::resolve_changelog_path(&component) {
             Ok(path) => path,

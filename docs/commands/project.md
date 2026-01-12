@@ -68,10 +68,8 @@ JSON output:
 ### `set`
 
 ```sh
-homeboy project set <projectId> [--name <name>] [--domain <domain>] [--project-type <type>] [--server-id <serverId>] [--base-path <path>] [--table-prefix <prefix>]
+homeboy project set <projectId> [--name <name>] [--domain <domain>] [--project-type <type>] [--server-id <serverId>] [--base-path <path>] [--table-prefix <prefix>] [--component-ids <ids>]
 ```
-
-Note: `project set` does not currently update `componentIds`. Use `homeboy project components set` instead.
 
 Arguments:
 
@@ -85,6 +83,7 @@ Options:
 - `--server-id <serverId>`: server ID
 - `--base-path <path>`: remote base path
 - `--table-prefix <prefix>`: WordPress table prefix
+- `--component-ids <ids>`: replace component IDs (comma-separated)
 
 JSON output:
 
@@ -229,6 +228,30 @@ JSON output:
 }
 ```
 
+#### `components add`
+
+```sh
+homeboy project components add <projectId> <componentId> [<componentId>...]
+```
+
+Adds components to the project if they are not already present.
+
+#### `components remove`
+
+```sh
+homeboy project components remove <projectId> <componentId> [<componentId>...]
+```
+
+Removes components from the project. Errors if any provided component ID is not currently attached.
+
+#### `components clear`
+
+```sh
+homeboy project components clear <projectId>
+```
+
+Removes all components from the project.
+
 #### `components set`
 
 ```sh
@@ -236,6 +259,12 @@ homeboy project components set <projectId> <componentId> [<componentId>...]
 ```
 
 Replaces the full `componentIds` list on the project (deduped, order-preserving). Component IDs must exist in `homeboy component list`.
+
+You can also do this via `project set`:
+
+```sh
+homeboy project set <projectId> --component-ids chubes-theme,chubes-blocks
+```
 
 Example:
 

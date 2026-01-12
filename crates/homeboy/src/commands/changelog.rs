@@ -3,10 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::docs;
 
+use super::CmdResult;
 use homeboy_core::changelog;
 use homeboy_core::config::ConfigManager;
-
-use super::CmdResult;
 
 #[derive(Args)]
 pub struct ChangelogArgs {
@@ -23,10 +22,6 @@ pub enum ChangelogCommand {
 
         /// Changelog item content (non-JSON mode)
         message: Option<String>,
-
-        /// Optional project ID override (non-JSON mode; defaults to active project)
-        #[arg(long)]
-        project_id: Option<String>,
     },
 }
 
@@ -41,8 +36,6 @@ pub struct ChangelogShowOutput {
 #[serde(rename_all = "camelCase")]
 pub struct ChangelogAddOutput {
     pub component_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<String>,
     pub changelog_path: String,
     pub next_section_label: String,
     pub messages: Vec<String>,
@@ -63,8 +56,6 @@ pub enum ChangelogOutput {
 #[serde(rename_all = "camelCase")]
 struct ChangelogAddData {
     pub component_id: String,
-    #[serde(default)]
-    pub project_id: Option<String>,
     pub messages: Vec<String>,
 }
 
@@ -99,17 +90,12 @@ pub fn run(
         Some(ChangelogCommand::Add {
             component_id,
             message,
-            project_id,
         }) => {
             if let Some(spec) = json_spec {
                 let data: ChangelogAddData =
                     homeboy_core::json::load_op_data(spec, "changelog.add")?;
 
-                let (out, code) = add_next_items(
-                    &data.component_id,
-                    &data.messages,
-                    data.project_id.as_deref(),
-                )?;
+                let (out, code) = add_next_items(&data.component_id, &data.messages)?;
 
                 return Ok((ChangelogOutput::Add(out), code));
             }
@@ -132,7 +118,7 @@ pub fn run(
                 )
             })?;
 
-            let (out, code) = add_next_items(&component_id, &[message], project_id.as_deref())?;
+            let (out, code) = add_next_items(&component_id, &[message])?;
             Ok((ChangelogOutput::Add(out), code))
         }
     }
@@ -168,36 +154,16 @@ fn show_json() -> CmdResult<ChangelogShowOutput> {
     ))
 }
 
-fn resolve_project_id(project_id_override: Option<&str>) -> homeboy_core::Result<Option<String>> {
-    if let Some(project_id) = project_id_override {
-        return Ok(Some(project_id.to_string()));
-    }
-
-    let app = ConfigManager::load_app_config()?;
-    Ok(app.active_project_id)
-}
-
-fn add_next_items(
-    component_id: &str,
-    messages: &[String],
-    project_id_override: Option<&str>,
-) -> CmdResult<ChangelogAddOutput> {
+fn add_next_items(component_id: &str, messages: &[String]) -> CmdResult<ChangelogAddOutput> {
     let component = ConfigManager::load_component(component_id)?;
 
-    let project_id = resolve_project_id(project_id_override)?;
-    let project = match project_id.as_deref() {
-        Some(id) => Some(ConfigManager::load_project(id)?),
-        None => None,
-    };
-
-    let settings = changelog::resolve_effective_settings(project.as_ref(), Some(&component))?;
+    let settings = changelog::resolve_effective_settings(Some(&component))?;
     let (path, changed, items_added) =
         changelog::read_and_add_next_section_items(&component, &settings, messages)?;
 
     Ok((
         ChangelogAddOutput {
             component_id: component_id.to_string(),
-            project_id,
             changelog_path: path.to_string_lossy().to_string(),
             next_section_label: settings.next_section_label,
             messages: messages.to_vec(),

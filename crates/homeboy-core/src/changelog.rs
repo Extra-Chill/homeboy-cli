@@ -1,4 +1,4 @@
-use crate::config::{ComponentConfiguration, ConfigManager, ProjectConfiguration};
+use crate::config::{ComponentConfiguration, ConfigManager};
 use crate::{Error, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,20 +10,17 @@ pub struct EffectiveChangelogSettings {
 }
 
 pub fn resolve_effective_settings(
-    project: Option<&ProjectConfiguration>,
     component: Option<&ComponentConfiguration>,
 ) -> Result<EffectiveChangelogSettings> {
     let app = ConfigManager::load_app_config()?;
 
     let next_section_label = component
         .and_then(|c| c.changelog_next_section_label.clone())
-        .or_else(|| project.and_then(|p| p.changelog_next_section_label.clone()))
         .or_else(|| app.default_changelog_next_section_label.clone())
         .unwrap_or_else(|| "Unreleased".to_string());
 
     let mut next_section_aliases = component
         .and_then(|c| c.changelog_next_section_aliases.clone())
-        .or_else(|| project.and_then(|p| p.changelog_next_section_aliases.clone()))
         .or_else(|| app.default_changelog_next_section_aliases.clone())
         .unwrap_or_default();
 
@@ -394,6 +391,23 @@ fn ensure_next_section(content: &str, aliases: &[String]) -> Result<(String, boo
     Ok((out, true))
 }
 
+/// Get the latest finalized version from the changelog (first ## heading that looks like a semver).
+/// Returns None if no version section is found.
+pub fn get_latest_finalized_version(content: &str) -> Option<String> {
+    let semver_pattern = regex::Regex::new(r"^\d+\.\d+\.\d+$").ok()?;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("## ") {
+            let label = trimmed.trim_start_matches("## ").trim();
+            if semver_pattern.is_match(label) {
+                return Some(label.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn append_item_to_next_section(
     content: &str,
     aliases: &[String],
@@ -490,5 +504,30 @@ mod tests {
         let (out, changed) = finalize_next_section(content, &aliases, "0.2.0", true).unwrap();
         assert!(!changed);
         assert_eq!(out, content);
+    }
+
+    #[test]
+    fn get_latest_finalized_version_finds_first_semver() {
+        let content = "# Changelog\n\n## Unreleased\n\n## 0.2.16\n\n- Item\n\n## 0.2.15\n";
+        assert_eq!(
+            get_latest_finalized_version(content),
+            Some("0.2.16".to_string())
+        );
+    }
+
+    #[test]
+    fn get_latest_finalized_version_skips_non_semver() {
+        let content = "# Changelog\n\n## Unreleased\n\n## [1.0.0]\n\n## 0.2.16\n";
+        // [1.0.0] is not matched because of brackets
+        assert_eq!(
+            get_latest_finalized_version(content),
+            Some("0.2.16".to_string())
+        );
+    }
+
+    #[test]
+    fn get_latest_finalized_version_returns_none_when_no_versions() {
+        let content = "# Changelog\n\n## Unreleased\n\n- Item\n";
+        assert_eq!(get_latest_finalized_version(content), None);
     }
 }

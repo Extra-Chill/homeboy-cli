@@ -4,6 +4,12 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## 0.2.17
+
+- Add project set --component-ids to replace component attachments
+- Add project components add/remove/clear subcommands
+- Add tests for project component attachment workflows
+
 ## 0.2.15
 
 - Derive git tag name

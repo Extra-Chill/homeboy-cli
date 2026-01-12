@@ -70,6 +70,9 @@ enum ProjectCommand {
         /// WordPress table prefix
         #[arg(long)]
         table_prefix: Option<String>,
+        /// Replace project component IDs (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        component_ids: Vec<String>,
     },
     /// Switch active project
     Switch {
@@ -106,6 +109,25 @@ enum ProjectComponentsCommand {
         project_id: String,
         /// Component IDs
         component_ids: Vec<String>,
+    },
+    /// Add one or more components
+    Add {
+        /// Project ID
+        project_id: String,
+        /// Component IDs
+        component_ids: Vec<String>,
+    },
+    /// Remove one or more components
+    Remove {
+        /// Project ID
+        project_id: String,
+        /// Component IDs
+        component_ids: Vec<String>,
+    },
+    /// Remove all components
+    Clear {
+        /// Project ID
+        project_id: String,
     },
 }
 
@@ -250,6 +272,7 @@ pub fn run(
             server_id,
             base_path,
             table_prefix,
+            component_ids,
         } => set(
             &project_id,
             name,
@@ -258,6 +281,7 @@ pub fn run(
             server_id,
             base_path,
             table_prefix,
+            component_ids,
         ),
         ProjectCommand::Switch { project_id } => switch(&project_id),
         ProjectCommand::Repair { project_id } => repair(&project_id),
@@ -382,6 +406,7 @@ fn set(
     server_id: Option<String>,
     base_path: Option<String>,
     table_prefix: Option<String>,
+    component_ids: Vec<String>,
 ) -> homeboy_core::Result<(ProjectOutput, i32)> {
     let mut updated_fields: Vec<String> = Vec::new();
 
@@ -433,6 +458,11 @@ fn set(
     if let Some(table_prefix) = table_prefix {
         project.table_prefix = Some(table_prefix);
         updated_fields.push("tablePrefix".to_string());
+    }
+
+    if !component_ids.is_empty() {
+        project.component_ids = resolve_component_ids(component_ids, project_id)?;
+        updated_fields.push("componentIds".to_string());
     }
 
     if updated_fields.is_empty() {
@@ -512,6 +542,15 @@ fn components(command: ProjectComponentsCommand) -> homeboy_core::Result<(Projec
             project_id,
             component_ids,
         } => components_set(&project_id, component_ids),
+        ProjectComponentsCommand::Add {
+            project_id,
+            component_ids,
+        } => components_add(&project_id, component_ids),
+        ProjectComponentsCommand::Remove {
+            project_id,
+            component_ids,
+        } => components_remove(&project_id, component_ids),
+        ProjectComponentsCommand::Clear { project_id } => components_clear(&project_id),
     }
 }
 
@@ -544,10 +583,10 @@ fn components_list(project_id: &str) -> homeboy_core::Result<(ProjectOutput, i32
     ))
 }
 
-fn components_set(
-    project_id: &str,
+fn resolve_component_ids(
     component_ids: Vec<String>,
-) -> homeboy_core::Result<(ProjectOutput, i32)> {
+    project_id: &str,
+) -> homeboy_core::Result<Vec<String>> {
     if component_ids.is_empty() {
         return Err(homeboy_core::Error::validation_invalid_argument(
             "componentIds",
@@ -581,9 +620,88 @@ fn components_set(
         }
     }
 
+    Ok(deduped)
+}
+
+fn components_set(
+    project_id: &str,
+    component_ids: Vec<String>,
+) -> homeboy_core::Result<(ProjectOutput, i32)> {
+    let deduped = resolve_component_ids(component_ids, project_id)?;
+
     let mut project = ConfigManager::load_project(project_id)?;
     project.component_ids = deduped.clone();
-    ConfigManager::save_project(project_id, &project)?;
+
+    write_project_components(project_id, "set", &project)
+}
+
+fn components_add(
+    project_id: &str,
+    component_ids: Vec<String>,
+) -> homeboy_core::Result<(ProjectOutput, i32)> {
+    let deduped = resolve_component_ids(component_ids, project_id)?;
+
+    let mut project = ConfigManager::load_project(project_id)?;
+    for id in deduped {
+        if !project.component_ids.contains(&id) {
+            project.component_ids.push(id);
+        }
+    }
+
+    write_project_components(project_id, "add", &project)
+}
+
+fn components_remove(
+    project_id: &str,
+    component_ids: Vec<String>,
+) -> homeboy_core::Result<(ProjectOutput, i32)> {
+    if component_ids.is_empty() {
+        return Err(homeboy_core::Error::validation_invalid_argument(
+            "componentIds",
+            "At least one component ID is required",
+            Some(project_id.to_string()),
+            None,
+        ));
+    }
+
+    let mut project = ConfigManager::load_project(project_id)?;
+
+    let mut missing_from_project = Vec::new();
+    for id in &component_ids {
+        if !project.component_ids.contains(id) {
+            missing_from_project.push(id.clone());
+        }
+    }
+
+    if !missing_from_project.is_empty() {
+        return Err(homeboy_core::Error::validation_invalid_argument(
+            "componentIds",
+            "Component IDs not attached to project",
+            Some(project_id.to_string()),
+            Some(missing_from_project),
+        ));
+    }
+
+    project
+        .component_ids
+        .retain(|id| !component_ids.contains(id));
+
+    write_project_components(project_id, "remove", &project)
+}
+
+fn components_clear(project_id: &str) -> homeboy_core::Result<(ProjectOutput, i32)> {
+    let mut project = ConfigManager::load_project(project_id)?;
+    project.component_ids.clear();
+
+    write_project_components(project_id, "clear", &project)
+}
+
+fn write_project_components(
+    project_id: &str,
+    action: &str,
+    project: &homeboy_core::config::ProjectConfiguration,
+) -> homeboy_core::Result<(ProjectOutput, i32)> {
+    ConfigManager::save_project(project_id, project)?;
 
     let mut components = Vec::new();
     for component_id in &project.component_ids {
@@ -593,13 +711,13 @@ fn components_set(
 
     Ok((
         ProjectOutput {
-            command: "project.components.set".to_string(),
+            command: format!("project.components.{action}"),
             project_id: Some(project_id.to_string()),
             active_project_id: None,
             project: None,
             projects: None,
             components: Some(ProjectComponentsOutput {
-                action: "set".to_string(),
+                action: action.to_string(),
                 project_id: project_id.to_string(),
                 component_ids: project.component_ids.clone(),
                 components,
@@ -810,6 +928,135 @@ mod tests {
         let payload = out.components.unwrap();
         assert_eq!(payload.component_ids, vec!["beta", "alpha"]);
         assert_eq!(payload.components.len(), 2);
+
+        drop(env_guard);
+        drop(_env_lock);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn project_set_component_ids_replaces() {
+        let test_id = "homeboy-project-set-component-ids-replaces";
+        let base = setup_homeboy_dir(test_id);
+
+        let (_env_lock, env_guard) = lock_homeboy_test_env();
+        env_guard.set_var("XDG_CONFIG_HOME", &base);
+        env_guard.set_var("HOME", &base);
+
+        AppPaths::ensure_directories().unwrap();
+
+        ConfigManager::save_component("alpha", &seed_component("alpha")).unwrap();
+        ConfigManager::save_component("beta", &seed_component("beta")).unwrap();
+
+        let project_id = slugify_id("My Project").unwrap();
+        let mut project = seed_project("My Project");
+        project.component_ids = vec!["alpha".to_string()];
+        ConfigManager::save_project(&project_id, &project).unwrap();
+
+        let (_out, code) = set(
+            &project_id,
+            None,
+            Some("example.com".to_string()),
+            None,
+            None,
+            None,
+            None,
+            vec!["beta".to_string(), "beta".to_string(), "alpha".to_string()],
+        )
+        .unwrap();
+        assert_eq!(code, 0);
+
+        let loaded = ConfigManager::load_project(&project_id).unwrap();
+        assert_eq!(loaded.component_ids, vec!["beta", "alpha"]);
+
+        drop(env_guard);
+        drop(_env_lock);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn project_components_add_appends_without_dupes() {
+        let test_id = "homeboy-project-components-add-dedupes";
+        let base = setup_homeboy_dir(test_id);
+
+        let (_env_lock, env_guard) = lock_homeboy_test_env();
+        env_guard.set_var("XDG_CONFIG_HOME", &base);
+        env_guard.set_var("HOME", &base);
+
+        AppPaths::ensure_directories().unwrap();
+
+        ConfigManager::save_component("alpha", &seed_component("alpha")).unwrap();
+        ConfigManager::save_component("beta", &seed_component("beta")).unwrap();
+
+        let project_id = slugify_id("My Project").unwrap();
+        let mut project = seed_project("My Project");
+        project.component_ids = vec!["alpha".to_string()];
+        ConfigManager::save_project(&project_id, &project).unwrap();
+
+        let (_out, code) = components_add(
+            &project_id,
+            vec!["alpha".to_string(), "beta".to_string(), "beta".to_string()],
+        )
+        .unwrap();
+        assert_eq!(code, 0);
+
+        let loaded = ConfigManager::load_project(&project_id).unwrap();
+        assert_eq!(loaded.component_ids, vec!["alpha", "beta"]);
+
+        drop(env_guard);
+        drop(_env_lock);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn project_components_remove_rejects_missing_from_project() {
+        let test_id = "homeboy-project-components-remove-rejects-missing";
+        let base = setup_homeboy_dir(test_id);
+
+        let (_env_lock, env_guard) = lock_homeboy_test_env();
+        env_guard.set_var("XDG_CONFIG_HOME", &base);
+        env_guard.set_var("HOME", &base);
+
+        AppPaths::ensure_directories().unwrap();
+
+        ConfigManager::save_component("alpha", &seed_component("alpha")).unwrap();
+
+        let project_id = slugify_id("My Project").unwrap();
+        let mut project = seed_project("My Project");
+        project.component_ids = vec!["alpha".to_string()];
+        ConfigManager::save_project(&project_id, &project).unwrap();
+
+        let err = components_remove(&project_id, vec!["missing".to_string()]).unwrap_err();
+        assert_eq!(err.code, homeboy_core::ErrorCode::ValidationInvalidArgument);
+
+        drop(env_guard);
+        drop(_env_lock);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn project_components_clear_removes_all() {
+        let test_id = "homeboy-project-components-clear";
+        let base = setup_homeboy_dir(test_id);
+
+        let (_env_lock, env_guard) = lock_homeboy_test_env();
+        env_guard.set_var("XDG_CONFIG_HOME", &base);
+        env_guard.set_var("HOME", &base);
+
+        AppPaths::ensure_directories().unwrap();
+
+        ConfigManager::save_component("alpha", &seed_component("alpha")).unwrap();
+
+        let project_id = slugify_id("My Project").unwrap();
+        let mut project = seed_project("My Project");
+        project.component_ids = vec!["alpha".to_string()];
+        ConfigManager::save_project(&project_id, &project).unwrap();
+
+        let (_out, code) = components_clear(&project_id).unwrap();
+        assert_eq!(code, 0);
+
+        let loaded = ConfigManager::load_project(&project_id).unwrap();
+        assert!(loaded.component_ids.is_empty());
 
         drop(env_guard);
         drop(_env_lock);

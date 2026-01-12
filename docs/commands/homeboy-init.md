@@ -1,112 +1,85 @@
-# `homeboy init` / `/homeboy-init`
+# `homeboy init`
 
 Initialize a repo for use with Homeboy.
-
-This document is a single source of truth:
-
-- `homeboy init` prints this page.
-- `/homeboy-init` is a symlink to this page.
 
 ## Rules
 
 - Only run `homeboy *` commands.
 - Do not invent IDs or flags.
-- If an identifier or value is required and cannot be derived from Homeboy output, ask the user for it explicitly.
+- If a value is required and cannot be derived, ask the user.
 
-## Step 0 — Inspect current Homeboy state (no writes yet)
+## Step 1 — Check if this directory is managed
 
 Run:
 
-1. `homeboy doctor scan --scope all --fail-on error`
-2. `homeboy project list`
-3. `homeboy project list --current`
-4. `homeboy component list`
-5. `homeboy module list`
+1. `homeboy context`
 
-## Choose a scope
+### If `managed: false` (UNMANAGED REPO)
 
-Prefer component-scoped initialization unless the user explicitly intends project-level remote operations.
+This is a NEW repo. Skip to "New Project/Component Initialization" below.
+Do NOT run doctor scan, project list, or component list - they are irrelevant for unmanaged repos.
 
-Choose:
+### If `managed: true` (EXISTING REPO)
 
-- **Project**: repo represents a deployable environment and user intends remote ops (`ssh`, `wp`, `db`, `deploy`).
-- **Component**: repo (or subdirectory) is a build/version/deploy unit.
-- **Module**: repo is meant to be installed and run as a Homeboy module.
+This repo is already configured. The `matchedComponents` array tells you which component(s) are associated.
+Proceed to "Existing Configuration Verification" below.
 
-If multiple scopes could apply, ask the user which scope they intend.
+---
 
-## Project initialization
+## New Project/Component Initialization
 
-Goal: ensure the project exists, is active, and has valid config.
+For unmanaged repos, determine what to create:
 
-If the project already exists:
+### Choose a scope
 
-1. `homeboy project show <projectId>`
-2. `homeboy project switch <projectId>`
-3. `homeboy project repair <projectId>`
+Based on the current repo structure:
 
-If the project does not exist:
+- **Project**: repo is a deployable environment (WordPress site, Node.js app) with associated components.
+- **Component**: repo (or subdirectory) is a build/version/deploy unit within a project.
 
-1. Ask for: project `name`, `domain`, `project_type` (e.g. `wordpress`), optional `serverId`, optional `basePath`, optional `tablePrefix`.
+If unclear which scope applies, ask the user.
+
+### Creating a new project
+
+1. Ask for: `name`, `domain`, `project_type` (e.g. `wordpress`), optional `serverId`
 2. Create (activate if desired):
    - `homeboy project create "<name>" <domain> <project_type> --activate`
-3. Apply any missing config:
-   - `homeboy project set <projectId> --domain <domain> --server-id <serverId>`
-4. Repair:
-   - `homeboy project repair <projectId>`
+3. Verify:
+   - `homeboy project show <projectId>`
 
-Verify:
+### Creating a new component
 
-- `homeboy project list --current`
-- `homeboy project show <projectId>`
-
-## Component initialization
-
-Goal: ensure a correct component configuration exists for the repo (or selected subdirectory).
-
-1. Decide which component should represent this repo.
-   - If you don’t know the intended `componentId`, ask the user.
-2. If the component exists:
+1. Ask for: `name`, `remotePath`, `buildArtifact`
+2. Create:
+   - `homeboy component create "<name>" --local-path "." --remote-path "<remotePath>" --build-artifact "<buildArtifact>"`
+3. Verify:
    - `homeboy component show <componentId>`
-   - Fix missing/incorrect values with:
-     - `homeboy component set <componentId> ...`
-3. If the component does not exist:
-   - Ask for required values: `name`, `localPath`, `remotePath`, `buildArtifact`.
-   - Create:
-     - `homeboy component create "<name>" --local-path "<localPath>" --remote-path "<remotePath>" --build-artifact "<buildArtifact>"`
-4. If versioning/build are relevant, ensure the component is configured with appropriate `--version-target ...` and `--build-command ...`.
+4. If versioning/build are relevant, configure:
+   - `homeboy component set <componentId> --version-target "<file>" --build-command "<command>"`
 
-Verify readiness (only when configured):
+---
 
-- `homeboy version show <componentId>`
-- `homeboy build <componentId>`
+## Existing Configuration Verification
 
-## Module initialization
+For managed repos (`managed: true`), verify and repair existing configuration:
 
-Goal: ensure the module is installed and runnable.
+1. `homeboy doctor scan --scope all --fail-on error`
+2. `homeboy component show <matchedComponentId>`
+3. If issues found:
+   - `homeboy component set <componentId> ...` to fix missing/incorrect values
+4. Verify build (if configured):
+   - `homeboy build <componentId>`
 
-1. Check what’s installed:
-   - `homeboy module list`
-2. If the module is missing, ask for:
-   - module git URL
-   - desired module id (optional; Homeboy can derive but explicit is better)
-3. Install/update:
-   - `homeboy module install <git_url> --id <moduleId>`
-   - `homeboy module update <moduleId>`
-4. Verify:
-   - `homeboy module list`
-   - `homeboy module run <moduleId> --help`
+---
 
-## Success checklist
+## Success Checklist
 
-Report what was initialized and what to run next:
+Report what was initialized and suggest next steps:
 
-- Project: active `projectId` is set, and `doctor scan` has no errors.
-- Component: `componentId` exists and `version`/`build` commands succeed (when applicable).
-- Module: module installs/updates, and `module run` works.
+- **Unmanaged → Created project/component**: `homeboy context` now shows `managed: true`
+- **Managed → Verified/repaired**: Doctor scan passes, component commands succeed
 
-Suggested next steps:
+### Suggested next steps
 
 - Project: `homeboy deploy <projectId> --dry-run --all`
 - Component: `homeboy version bump <componentId> patch --changelog-add "..."`
-- Module: `homeboy module setup <moduleId>`

@@ -18,8 +18,8 @@ mod commands;
 mod docs;
 
 use commands::{
-    build, changelog, component, config, db, deploy, doctor, error, file, git, init, logs, module,
-    pm2, project, server, ssh, version, wp,
+    build, changelog, component, config, context, db, deploy, doctor, error, file, git, init, logs,
+    module, pm2, project, server, ssh, version, wp,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -67,6 +67,8 @@ enum Commands {
     Component(component::ComponentArgs),
     /// Manage global config.json
     Config(config::ConfigArgs),
+    /// Show context for current working directory
+    Context(context::ContextArgs),
     /// Execute CLI-compatible modules
     Module(module::ModuleArgs),
     /// Initialize a repo for use with Homeboy

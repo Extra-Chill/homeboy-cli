@@ -6,6 +6,8 @@
 homeboy version <COMMAND>
 ```
 
+This command accepts the global flags `--json` and `--dry-run` (see [Root command](../cli/homeboy-root-command.md)).
+
 ## Subcommands
 
 ### `show`
@@ -20,13 +22,23 @@ homeboy version show <componentId>
 homeboy version bump <componentId> <patch|minor|major> \
   [--changelog-add "<message>"]... \
   [--project-id <projectId>]
+```
+
+Arguments:
+
+- `<componentId>`: component ID
+- `<patch|minor|major>`: version bump type
+
+Options:
+
+- `--changelog-add "<message>"`: add a changelog item to the configured "next" section (repeatable)
+- `--project-id <projectId>`: optional project ID override (defaults to active project)
 
 Dry-run mode:
 
 ```sh
 homeboy --dry-run version bump <componentId> <patch|minor|major> \
   --changelog-add "<message>"
-```
 ```
 
 ## JSON output

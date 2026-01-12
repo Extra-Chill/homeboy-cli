@@ -6,6 +6,8 @@
 homeboy project <COMMAND>
 ```
 
+This command accepts the global flags `--json` and `--dry-run` (see [Root command](../cli/homeboy-root-command.md)).
+
 ## Subcommands
 
 ### `list`
@@ -14,7 +16,9 @@ homeboy project <COMMAND>
 homeboy project list [--current]
 ```
 
-- `--current`: return only the active project ID.
+Options:
+
+- `--current`: show only the active project ID.
 
 ### `show`
 
@@ -22,7 +26,9 @@ homeboy project list [--current]
 homeboy project show [<projectId>]
 ```
 
-- `projectId` (optional): if omitted, uses the active project.
+Arguments:
+
+- `<projectId>` (optional): project ID (uses active project if not specified)
 
 ### `create`
 
@@ -31,7 +37,18 @@ homeboy project show [<projectId>]
 homeboy project create <name> <domain> <project_type> [--server-id <serverId>] [--base-path <path>] [--table-prefix <prefix>] [--activate]
 ```
 
-- `--activate`: set the new project as the active project.
+Arguments:
+
+- `<name>`: project name
+- `<domain>`: public site domain
+- `<project_type>`: project type (e.g. `wordpress`)
+
+Options:
+
+- `--server-id <serverId>`: optional server ID
+- `--base-path <path>`: optional remote base path
+- `--table-prefix <prefix>`: optional WordPress table prefix
+- `--activate`: switch active project after create
 
 JSON output:
 
@@ -53,6 +70,19 @@ JSON output:
 ```sh
 homeboy project set <projectId> [--name <name>] [--domain <domain>] [--project-type <type>] [--server-id <serverId>] [--base-path <path>] [--table-prefix <prefix>]
 ```
+
+Arguments:
+
+- `<projectId>`: project ID
+
+Options:
+
+- `--name <name>`: project name
+- `--domain <domain>`: public site domain
+- `--project-type <type>`: project type (e.g. `wordpress`)
+- `--server-id <serverId>`: server ID
+- `--base-path <path>`: remote base path
+- `--table-prefix <prefix>`: WordPress table prefix
 
 JSON output:
 
@@ -76,7 +106,11 @@ JSON output:
 homeboy project repair <projectId>
 ```
 
-Repairs a project file whose filename (project id) does not match its stored project name.
+Repairs a project file whose name doesn't match the stored project name.
+
+Arguments:
+
+- `<projectId>`: project ID (file stem)
 
 JSON output:
 

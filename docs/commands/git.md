@@ -6,6 +6,8 @@
 homeboy git <COMMAND>
 ```
 
+This command accepts the global flags `--json` and `--dry-run` (see [Root command](../cli/homeboy-root-command.md)).
+
 ## Subcommands
 
 - `status <componentId>`

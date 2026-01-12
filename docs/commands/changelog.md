@@ -24,8 +24,8 @@ This prints raw markdown to stdout.
 ### `add`
 
 ```sh
-homeboy changelog add <componentId> <message> [--project-id <projectId>]
-homeboy --json <spec> changelog add
+homeboy changelog add [componentId] [message] [--project-id <projectId>]
+homeboy changelog add --json <spec>
 ```
 
 Notes:
@@ -35,7 +35,7 @@ Notes:
 
 Adds one or more changelog items to the configured "next" section in the component's changelog file.
 
-`--json` is global, but not every command supports JSON input. (For example, `homeboy version` rejects `--json`.)
+`--json` is global. Some subcommands allow using it as an input mode override (for example `homeboy changelog add --json @payload.json`).
 
 Configuration / defaults:
 

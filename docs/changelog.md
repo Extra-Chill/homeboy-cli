@@ -4,6 +4,13 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## 0.5.0
+
+- Refactor deploy to use a generic core implementation
+- Replace component isNetwork flag with extractCommand for post-upload extraction
+- Unify module runtime config around runCommand/setupCommand/readyCheck/env and remove plugin-specific fields
+- Update docs and examples for new generic deployment and module behavior
+
 ## 0.4.1
 
 - Rename plugin terminology to module across CLI/docs

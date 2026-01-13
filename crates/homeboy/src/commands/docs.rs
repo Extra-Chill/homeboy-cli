@@ -49,6 +49,7 @@ pub struct DocsContentOutput {
     pub segments: Vec<String>,
     pub slug: String,
     pub content: String,
+    pub source: String,
     pub available_topics: Vec<String>,
 }
 
@@ -121,6 +122,7 @@ pub fn run(args: DocsArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<D
             segments: resolved.segments,
             slug,
             content: resolved.content,
+            source: resolved.source,
             available_topics: docs::available_topics(),
         }),
         0,

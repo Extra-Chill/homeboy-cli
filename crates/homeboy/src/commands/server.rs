@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::fs;
 use std::process::Command;
 
-use homeboy_core::config::{slugify_id, AppPaths, ConfigManager, ServerConfig};
+use homeboy_core::config::{create_from_json, slugify_id, AppPaths, ConfigManager, CreateSummary, ServerConfig};
 use homeboy_core::Error;
 
 #[derive(Serialize)]
@@ -16,6 +16,8 @@ pub struct ServerOutput {
     updated: Option<Vec<String>>,
     deleted: Option<Vec<String>>,
     key: Option<ServerKeyOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    import: Option<CreateSummary>,
 }
 
 #[derive(Serialize)]
@@ -38,17 +40,25 @@ pub struct ServerArgs {
 enum ServerCommand {
     /// Register a new SSH server
     Create {
-        /// Server display name
-        name: String,
+        /// JSON input spec for create/update (supports single or bulk)
+        #[arg(long)]
+        json: Option<String>,
+
+        /// Skip items that already exist (JSON mode only)
+        #[arg(long)]
+        skip_existing: bool,
+
+        /// Server display name (CLI mode)
+        name: Option<String>,
         /// SSH host
         #[arg(long)]
-        host: String,
+        host: Option<String>,
         /// SSH username
         #[arg(long)]
-        user: String,
+        user: Option<String>,
         /// SSH port (default: 22)
-        #[arg(long, default_value = "22")]
-        port: u16,
+        #[arg(long)]
+        port: Option<u16>,
     },
     /// Display server configuration
     Show {
@@ -131,11 +141,44 @@ pub fn run(
 ) -> homeboy_core::Result<(ServerOutput, i32)> {
     match args.command {
         ServerCommand::Create {
+            json,
+            skip_existing,
             name,
             host,
             user,
             port,
-        } => create(&name, &host, &user, port),
+        } => {
+            if let Some(spec) = json {
+                return create_json(&spec, skip_existing);
+            }
+
+            let name = name.ok_or_else(|| {
+                homeboy_core::Error::validation_invalid_argument(
+                    "name",
+                    "Missing required argument: name (or use --json)",
+                    None,
+                    None,
+                )
+            })?;
+            let host = host.ok_or_else(|| {
+                homeboy_core::Error::validation_invalid_argument(
+                    "host",
+                    "Missing required argument: --host (or use --json)",
+                    None,
+                    None,
+                )
+            })?;
+            let user = user.ok_or_else(|| {
+                homeboy_core::Error::validation_invalid_argument(
+                    "user",
+                    "Missing required argument: --user (or use --json)",
+                    None,
+                    None,
+                )
+            })?;
+
+            create(&name, &host, &user, port.unwrap_or(22))
+        }
         ServerCommand::Show { server_id } => show(&server_id),
         ServerCommand::Set {
             server_id,
@@ -164,6 +207,25 @@ fn run_key(args: KeyArgs) -> homeboy_core::Result<(ServerOutput, i32)> {
         } => key_use(&server_id, &private_key_path),
         KeyCommand::Unset { server_id } => key_unset(&server_id),
     }
+}
+
+fn create_json(spec: &str, skip_existing: bool) -> homeboy_core::Result<(ServerOutput, i32)> {
+    let summary = create_from_json::<ServerConfig>(spec, skip_existing)?;
+    let exit_code = if summary.errors > 0 { 1 } else { 0 };
+
+    Ok((
+        ServerOutput {
+            command: "server.create".to_string(),
+            server_id: None,
+            server: None,
+            servers: None,
+            updated: None,
+            deleted: None,
+            key: None,
+            import: Some(summary),
+        },
+        exit_code,
+    ))
 }
 
 fn create(
@@ -198,6 +260,7 @@ fn create(
             updated: Some(vec!["created".to_string()]),
             deleted: None,
             key: None,
+            import: None,
         },
         0,
     ))
@@ -215,6 +278,7 @@ fn show(server_id: &str) -> homeboy_core::Result<(ServerOutput, i32)> {
             updated: None,
             deleted: None,
             key: None,
+            import: None,
         },
         0,
     ))
@@ -263,6 +327,7 @@ fn set(
             updated: Some(changes),
             deleted: None,
             key: None,
+            import: None,
         },
         0,
     ))
@@ -296,6 +361,7 @@ fn delete(server_id: &str, force: bool) -> homeboy_core::Result<(ServerOutput, i
             updated: None,
             deleted: Some(vec![server_id.to_string()]),
             key: None,
+            import: None,
         },
         0,
     ))
@@ -313,6 +379,7 @@ fn list() -> homeboy_core::Result<(ServerOutput, i32)> {
             updated: None,
             deleted: None,
             key: None,
+            import: None,
         },
         0,
     ))
@@ -387,6 +454,7 @@ fn key_generate(server_id: &str) -> homeboy_core::Result<(ServerOutput, i32)> {
                 identity_file: Some(key_path_str),
                 imported: None,
             }),
+            import: None,
         },
         0,
     ))
@@ -421,6 +489,7 @@ fn key_show(server_id: &str) -> homeboy_core::Result<(ServerOutput, i32)> {
                 identity_file: None,
                 imported: None,
             }),
+            import: None,
         },
         0,
     ))
@@ -456,6 +525,7 @@ fn key_use(server_id: &str, private_key_path: &str) -> homeboy_core::Result<(Ser
                 identity_file: Some(expanded_path),
                 imported: None,
             }),
+            import: None,
         },
         0,
     ))
@@ -482,6 +552,7 @@ fn key_unset(server_id: &str) -> homeboy_core::Result<(ServerOutput, i32)> {
                 identity_file: None,
                 imported: None,
             }),
+            import: None,
         },
         0,
     ))
@@ -573,6 +644,7 @@ fn key_import(
                 identity_file: Some(key_path_str),
                 imported: Some(expanded_path),
             }),
+            import: None,
         },
         0,
     ))

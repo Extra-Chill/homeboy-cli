@@ -214,7 +214,6 @@ mod tests {
                 remote_files: homeboy_core::config::RemoteFileConfig::default(),
                 remote_logs: homeboy_core::config::RemoteLogConfig::default(),
                 database: homeboy_core::config::DatabaseConfig::default(),
-                local_environment: homeboy_core::config::LocalEnvironmentConfig::default(),
                 tools: homeboy_core::config::ToolsConfig::default(),
                 api: homeboy_core::config::ApiConfig::default(),
                 changelog_next_section_label: None,

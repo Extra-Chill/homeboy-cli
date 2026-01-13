@@ -1,6 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
+use std::path::Path;
 use std::sync::OnceLock;
 
+use homeboy_core::config::AppPaths;
 use homeboy_core::token;
 
 include!(concat!(env!("OUT_DIR"), "/generated_docs.rs"));
@@ -17,18 +19,56 @@ pub struct ResolvedDoc {
     pub key: String,
     pub segments: Vec<String>,
     pub content: String,
+    pub source: String,
 }
 
 pub fn resolve(topic: &[String]) -> ResolvedDoc {
     let (topic_label, key, segments) = normalize_topic(topic);
-    let content = docs_index().get(key.as_str()).copied().unwrap_or_default();
 
+    // First check embedded core docs
+    if let Some(content) = docs_index().get(key.as_str()).copied() {
+        return ResolvedDoc {
+            topic_label,
+            key,
+            segments,
+            content: content.to_string(),
+            source: "core".to_string(),
+        };
+    }
+
+    // Then check module docs
+    if let Some((content, module_id)) = load_module_doc(&key) {
+        return ResolvedDoc {
+            topic_label,
+            key,
+            segments,
+            content,
+            source: module_id,
+        };
+    }
+
+    // Not found
     ResolvedDoc {
         topic_label,
         key,
         segments,
-        content: content.to_string(),
+        content: String::new(),
+        source: String::new(),
     }
+}
+
+fn load_module_doc(topic: &str) -> Option<(String, String)> {
+    let modules_dir = AppPaths::modules().ok()?;
+    let entries = std::fs::read_dir(&modules_dir).ok()?;
+
+    for entry in entries.flatten() {
+        let module_id = entry.file_name().to_string_lossy().to_string();
+        let doc_file = entry.path().join("docs").join(format!("{}.md", topic));
+        if let Ok(content) = std::fs::read_to_string(&doc_file) {
+            return Some((content, module_id));
+        }
+    }
+    None
 }
 
 fn normalize_topic(topic: &[String]) -> (String, String, Vec<String>) {
@@ -70,8 +110,47 @@ fn normalize_topic(topic: &[String]) -> (String, String, Vec<String>) {
 }
 
 pub fn available_topics() -> Vec<String> {
-    let mut keys: Vec<&'static str> = GENERATED_DOCS.iter().map(|(key, _)| *key).collect();
-    keys.sort_unstable();
+    let mut topics: BTreeSet<String> = GENERATED_DOCS
+        .iter()
+        .map(|(key, _)| key.to_string())
+        .collect();
 
-    keys.into_iter().map(|key| key.to_string()).collect()
+    // Add module docs (integrated namespace)
+    if let Ok(modules_dir) = AppPaths::modules() {
+        if let Ok(entries) = std::fs::read_dir(&modules_dir) {
+            for entry in entries.flatten() {
+                let docs_dir = entry.path().join("docs");
+                if docs_dir.exists() {
+                    collect_doc_topics(&docs_dir, "", &mut topics);
+                }
+            }
+        }
+    }
+
+    topics.into_iter().collect()
+}
+
+fn collect_doc_topics(dir: &Path, prefix: &str, topics: &mut BTreeSet<String>) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = path.file_name().unwrap().to_string_lossy();
+                let new_prefix = if prefix.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{}/{}", prefix, name)
+                };
+                collect_doc_topics(&path, &new_prefix, topics);
+            } else if path.extension().is_some_and(|ext| ext == "md") {
+                let stem = path.file_stem().unwrap().to_string_lossy();
+                let topic = if prefix.is_empty() {
+                    stem.to_string()
+                } else {
+                    format!("{}/{}", prefix, stem)
+                };
+                topics.insert(topic);
+            }
+        }
+    }
 }

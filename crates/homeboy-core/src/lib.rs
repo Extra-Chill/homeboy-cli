@@ -8,7 +8,6 @@ pub mod doctor;
 pub mod git;
 pub mod http;
 pub mod json;
-pub mod json_input;
 pub mod keychain;
 pub mod module;
 pub mod module_settings;

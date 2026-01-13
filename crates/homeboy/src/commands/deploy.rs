@@ -7,6 +7,7 @@ use std::path::Path;
 use homeboy_core::config::{ConfigManager, ProjectRecord};
 use homeboy_core::context::{resolve_project_ssh_with_base_path, RemoteProjectContext};
 use homeboy_core::deploy::{deploy_artifact, DeployResult};
+use homeboy_core::json::parse_bulk_ids;
 use homeboy_core::module::{load_module, DeployVerification};
 use homeboy_core::ssh::{execute_local_command_in_dir, SshClient};
 use homeboy_core::version::{default_pattern_for_file, parse_version};
@@ -21,6 +22,10 @@ type BuildRunner = fn(&Component) -> (Option<i32>, Option<String>);
 pub struct DeployArgs {
     /// Project ID
     pub project_id: String,
+
+    /// JSON input spec for bulk operations
+    #[arg(long)]
+    pub json: Option<String>,
 
     /// Component IDs to deploy
     pub component_ids: Vec<String>,
@@ -137,7 +142,7 @@ pub fn run(args: DeployArgs, _global: &crate::commands::GlobalArgs) -> CmdResult
 }
 
 fn run_with_loaders(
-    args: DeployArgs,
+    mut args: DeployArgs,
     project_loader: ProjectLoader,
     ssh_resolver: SshResolver,
     build_runner: BuildRunner,
@@ -155,6 +160,12 @@ fn run_with_loaders(
             None,
             None,
         ));
+    }
+
+    // Parse JSON input if provided and merge into component_ids
+    if let Some(ref spec) = args.json {
+        let input = parse_bulk_ids(spec)?;
+        args.component_ids = input.component_ids;
     }
 
     let project = project_loader(&args.project_id)?;

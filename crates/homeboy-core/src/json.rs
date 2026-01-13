@@ -423,3 +423,54 @@ fn value_type_name(value: &Value) -> &'static str {
         Value::Object(_) => "object",
     }
 }
+
+// === Bulk Operations ===
+
+/// Detect if input is JSON (starts with '{') or a plain ID
+pub fn is_json_input(input: &str) -> bool {
+    input.trim_start().starts_with('{')
+}
+
+/// Standardized bulk execution result
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkResult<T: Serialize> {
+    pub action: String,
+    pub results: Vec<ItemOutcome<T>>,
+    pub summary: BulkSummary,
+}
+
+/// Outcome for a single item in a bulk operation
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemOutcome<T: Serialize> {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(flatten)]
+    pub result: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Summary of bulk operation results
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkSummary {
+    pub total: usize,
+    pub succeeded: usize,
+    pub failed: usize,
+}
+
+/// Simple bulk input with just component IDs
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkIdsInput {
+    pub component_ids: Vec<String>,
+}
+
+/// Parse JSON spec into a BulkIdsInput
+pub fn parse_bulk_ids(json_spec: &str) -> Result<BulkIdsInput> {
+    let raw = read_json_spec_to_string(json_spec)?;
+    serde_json::from_str(&raw)
+        .map_err(|e| Error::validation_invalid_json(e, Some("parse bulk IDs input".to_string())))
+}

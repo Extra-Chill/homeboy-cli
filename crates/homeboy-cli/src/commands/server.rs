@@ -1,10 +1,9 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
-use std::fs;
-use std::process::Command;
 
+use homeboy::Error;
 use homeboy::server::{self, Server};
-use homeboy::{project, Error};
+use homeboy::project;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -355,72 +354,21 @@ fn list() -> homeboy::Result<(ServerOutput, i32)> {
 }
 
 fn key_generate(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
-    server::load(server_id)?;
-
-    let key_path = server::key_path(server_id)?;
-    let key_path_str = key_path.to_string_lossy().to_string();
-
-    if let Some(parent) = key_path.parent() {
-        fs::create_dir_all(parent).map_err(|err| {
-            Error::internal_io(
-                err.to_string(),
-                Some("create ssh key directory".to_string()),
-            )
-        })?;
-    }
-
-    let _ = fs::remove_file(&key_path);
-    let _ = fs::remove_file(format!("{}.pub", key_path_str));
-
-    let output = Command::new("ssh-keygen")
-        .args([
-            "-t",
-            "rsa",
-            "-b",
-            "4096",
-            "-f",
-            &key_path_str,
-            "-N",
-            "",
-            "-C",
-            &format!("homeboy-{}", server_id),
-        ])
-        .output()
-        .map_err(|err| Error::internal_io(err.to_string(), Some("run ssh-keygen".to_string())))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(Error::internal_unexpected(format!(
-            "ssh-keygen failed: {}",
-            stderr
-        )));
-    }
-
-    let mut server = server::load(server_id)?;
-    server.identity_file = Some(key_path_str.clone());
-    server::save(&server)?;
-
-    let pub_key_path = format!("{}.pub", key_path_str);
-    let public_key = fs::read_to_string(&pub_key_path).map_err(|err| {
-        Error::internal_io(
-            err.to_string(),
-            Some("read generated ssh public key".to_string()),
-        )
-    })?;
+    let result = server::generate_key(server_id)?;
 
     Ok((
         ServerOutput {
             command: "server.key.generate".to_string(),
             server_id: Some(server_id.to_string()),
-            server: Some(server),
+            server: Some(result.server),
             servers: None,
             updated: Some(vec!["identity_file".to_string()]),
             deleted: None,
             key: Some(ServerKeyOutput {
                 action: "generate".to_string(),
                 server_id: server_id.to_string(),
-                public_key: Some(public_key.trim().to_string()),
-                identity_file: Some(key_path_str),
+                public_key: Some(result.public_key),
+                identity_file: Some(result.identity_file),
                 imported: None,
             }),
             import: None,
@@ -430,18 +378,7 @@ fn key_generate(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
 }
 
 fn key_show(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
-    server::load(server_id)?;
-
-    let key_path = server::key_path(server_id)?;
-    let pub_key_path = format!("{}.pub", key_path.to_string_lossy());
-
-    let public_key = fs::read_to_string(&pub_key_path).map_err(|err| {
-        if err.kind() == std::io::ErrorKind::NotFound {
-            Error::ssh_identity_file_not_found(server_id.to_string(), pub_key_path.clone())
-        } else {
-            Error::internal_io(err.to_string(), Some("read ssh public key".to_string()))
-        }
-    })?;
+    let public_key = server::get_public_key(server_id)?;
 
     Ok((
         ServerOutput {
@@ -454,7 +391,7 @@ fn key_show(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
             key: Some(ServerKeyOutput {
                 action: "show".to_string(),
                 server_id: server_id.to_string(),
-                public_key: Some(public_key.trim().to_string()),
+                public_key: Some(public_key),
                 identity_file: None,
                 imported: None,
             }),
@@ -465,19 +402,8 @@ fn key_show(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
 }
 
 fn key_use(server_id: &str, private_key_path: &str) -> homeboy::Result<(ServerOutput, i32)> {
-    let mut server = server::load(server_id)?;
-
-    let expanded_path = shellexpand::tilde(private_key_path).to_string();
-
-    if !std::path::Path::new(&expanded_path).exists() {
-        return Err(Error::ssh_identity_file_not_found(
-            server_id.to_string(),
-            expanded_path,
-        ));
-    }
-
-    server.identity_file = Some(expanded_path.clone());
-    server::save(&server)?;
+    let server = server::use_key(server_id, private_key_path)?;
+    let identity_file = server.identity_file.clone();
 
     Ok((
         ServerOutput {
@@ -491,7 +417,7 @@ fn key_use(server_id: &str, private_key_path: &str) -> homeboy::Result<(ServerOu
                 action: "use".to_string(),
                 server_id: server_id.to_string(),
                 public_key: None,
-                identity_file: Some(expanded_path),
+                identity_file,
                 imported: None,
             }),
             import: None,
@@ -501,10 +427,7 @@ fn key_use(server_id: &str, private_key_path: &str) -> homeboy::Result<(ServerOu
 }
 
 fn key_unset(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
-    let mut server = server::load(server_id)?;
-
-    server.identity_file = None;
-    server::save(&server)?;
+    let server = server::unset_key(server_id)?;
 
     Ok((
         ServerOutput {
@@ -531,87 +454,22 @@ fn key_import(
     server_id: &str,
     private_key_path: &str,
 ) -> homeboy::Result<(ServerOutput, i32)> {
-    server::load(server_id)?;
-
-    let expanded_path = shellexpand::tilde(private_key_path).to_string();
-
-    let private_key = fs::read_to_string(&expanded_path).map_err(|err| {
-        Error::internal_io(err.to_string(), Some("read ssh private key".to_string()))
-    })?;
-
-    if !private_key.contains("-----BEGIN") || !private_key.contains("PRIVATE KEY-----") {
-        return Err(Error::validation_invalid_argument(
-            "privateKeyPath",
-            "File doesn't appear to be a valid SSH private key",
-            Some(server_id.to_string()),
-            Some(vec![expanded_path.clone()]),
-        ));
-    }
-
-    let output = Command::new("ssh-keygen")
-        .args(["-y", "-f", &expanded_path])
-        .output()
-        .map_err(|err| {
-            Error::internal_io(err.to_string(), Some("run ssh-keygen -y".to_string()))
-        })?;
-
-    if !output.status.success() {
-        return Err(Error::internal_unexpected(
-            "Failed to derive public key from private key".to_string(),
-        ));
-    }
-
-    let public_key = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-    let key_path = server::key_path(server_id)?;
-    let key_path_str = key_path.to_string_lossy().to_string();
-
-    if let Some(parent) = key_path.parent() {
-        fs::create_dir_all(parent).map_err(|err| {
-            Error::internal_io(
-                err.to_string(),
-                Some("create ssh key directory".to_string()),
-            )
-        })?;
-    }
-
-    fs::write(&key_path, &private_key).map_err(|err| {
-        Error::internal_io(err.to_string(), Some("write ssh private key".to_string()))
-    })?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&key_path, fs::Permissions::from_mode(0o600)).map_err(|err| {
-            Error::internal_io(
-                err.to_string(),
-                Some("set ssh private key permissions".to_string()),
-            )
-        })?;
-    }
-
-    fs::write(format!("{}.pub", key_path_str), &public_key).map_err(|err| {
-        Error::internal_io(err.to_string(), Some("write ssh public key".to_string()))
-    })?;
-
-    let mut server = server::load(server_id)?;
-    server.identity_file = Some(key_path_str.clone());
-    server::save(&server)?;
+    let result = server::import_key(server_id, private_key_path)?;
 
     Ok((
         ServerOutput {
             command: "server.key.import".to_string(),
             server_id: Some(server_id.to_string()),
-            server: Some(server),
+            server: Some(result.server),
             servers: None,
             updated: Some(vec!["identity_file".to_string()]),
             deleted: None,
             key: Some(ServerKeyOutput {
                 action: "import".to_string(),
                 server_id: server_id.to_string(),
-                public_key: Some(public_key),
-                identity_file: Some(key_path_str),
-                imported: Some(expanded_path),
+                public_key: Some(result.public_key),
+                identity_file: Some(result.identity_file),
+                imported: Some(result.imported_from),
             }),
             import: None,
         },

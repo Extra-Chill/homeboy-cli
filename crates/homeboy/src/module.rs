@@ -1199,9 +1199,9 @@ pub fn update(module_id: &str, force: bool) -> Result<UpdateResult> {
 }
 
 /// Uninstall a module. Automatically detects symlinks vs cloned directories.
-/// - Symlinked modules: removes symlink only (source preserved), no --force needed
-/// - Cloned modules: removes directory entirely, requires --force
-pub fn uninstall(module_id: &str, force: bool) -> Result<PathBuf> {
+/// - Symlinked modules: removes symlink only (source preserved)
+/// - Cloned modules: removes directory entirely
+pub fn uninstall(module_id: &str) -> Result<PathBuf> {
     let module_dir = paths::module(module_id)?;
     if !module_dir.exists() {
         return Err(Error::module_not_found(module_id.to_string()));
@@ -1213,16 +1213,7 @@ pub fn uninstall(module_id: &str, force: bool) -> Result<PathBuf> {
             Error::internal_io(e.to_string(), Some("remove symlink".to_string()))
         })?;
     } else {
-        // Cloned module: requires --force since we're deleting actual files
-        if !force {
-            return Err(Error::validation_invalid_argument(
-                "force",
-                "This will permanently delete the module. Use --force to confirm.",
-                None,
-                None,
-            ));
-        }
-
+        // Cloned module: remove the directory
         std::fs::remove_dir_all(&module_dir).map_err(|e| {
             Error::internal_io(e.to_string(), Some("remove module directory".to_string()))
         })?;

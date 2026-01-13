@@ -48,7 +48,7 @@ When `--list` is used, output is JSON.
 
 ## Errors
 
-If resolved content is empty, the command fails with a missing-key style error:
+If the topic does not exist in embedded core docs or installed module docs, the command fails with a missing-key style error:
 
 - `config_missing_key("docs.<topic>")`
 

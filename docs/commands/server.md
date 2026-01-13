@@ -28,16 +28,24 @@ homeboy server show <serverId>
 ### `set`
 
 ```sh
-homeboy server set <serverId> [--name <name>] [--host <host>] [--user <user>] [--port <port>]
+homeboy server set <serverId> --json <JSON>
 ```
+
+Updates a server by merging a JSON object into `servers/<id>.json`.
+
+Options:
+
+- `--json <JSON>`: JSON object to merge into config (supports `@file` and `-` for stdin)
 
 ### `delete`
 
 ```sh
-homeboy server delete <serverId> --force
+homeboy server delete <serverId>
 ```
 
-Note: `--force` is required (no interactive prompt).
+Deletion is safety-checked:
+
+- If any project references this server ID, the command errors and asks you to update/delete those projects first.
 
 ### `list`
 

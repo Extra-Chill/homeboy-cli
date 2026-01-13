@@ -44,9 +44,6 @@ enum DbCommand {
         /// Table name and row ID
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
-        /// Confirm destructive operation
-        #[arg(long)]
-        confirm: bool,
     },
     /// Drop a database table
     DropTable {
@@ -55,9 +52,6 @@ enum DbCommand {
         /// Table name
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
-        /// Confirm destructive operation
-        #[arg(long)]
-        confirm: bool,
     },
     /// Open SSH tunnel to database
     Tunnel {
@@ -92,16 +86,8 @@ pub fn run(
         DbCommand::Tables { project_id, args } => tables(&project_id, &args),
         DbCommand::Describe { project_id, args } => describe(&project_id, &args),
         DbCommand::Query { project_id, args } => query(&project_id, &args),
-        DbCommand::DeleteRow {
-            project_id,
-            args,
-            confirm,
-        } => delete_row(&project_id, &args, confirm),
-        DbCommand::DropTable {
-            project_id,
-            args,
-            confirm,
-        } => drop_table(&project_id, &args, confirm),
+        DbCommand::DeleteRow { project_id, args } => delete_row(&project_id, &args),
+        DbCommand::DropTable { project_id, args } => drop_table(&project_id, &args),
         DbCommand::Tunnel {
             project_id,
             local_port,
@@ -177,17 +163,7 @@ fn query(project_id: &str, args: &[String]) -> homeboy::Result<(DbOutput, i32)> 
     ))
 }
 
-fn delete_row(
-    project_id: &str,
-    args: &[String],
-    confirm: bool,
-) -> homeboy::Result<(DbOutput, i32)> {
-    if !confirm {
-        return Err(homeboy::Error::config(
-            "Use --confirm to execute destructive operations".to_string(),
-        ));
-    }
-
+fn delete_row(project_id: &str, args: &[String]) -> homeboy::Result<(DbOutput, i32)> {
     let (subtarget, remaining) = parse_subtarget(project_id, args)?;
 
     if remaining.len() < 2 {
@@ -213,17 +189,7 @@ fn delete_row(
     ))
 }
 
-fn drop_table(
-    project_id: &str,
-    args: &[String],
-    confirm: bool,
-) -> homeboy::Result<(DbOutput, i32)> {
-    if !confirm {
-        return Err(homeboy::Error::config(
-            "Use --confirm to execute destructive operations".to_string(),
-        ));
-    }
-
+fn drop_table(project_id: &str, args: &[String]) -> homeboy::Result<(DbOutput, i32)> {
     let (subtarget, remaining) = parse_subtarget(project_id, args)?;
 
     let table_name = remaining

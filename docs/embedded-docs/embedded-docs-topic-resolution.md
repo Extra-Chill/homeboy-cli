@@ -1,6 +1,6 @@
 # Embedded docs: topic resolution and keys
 
-Homeboy embeds markdown files from `homeboy-core/docs/` into the CLI binary at build time.
+Homeboy embeds markdown files from `homeboy/docs/` into the CLI binary at build time.
 
 In addition, `homeboy docs` reads documentation provided by installed modules. For each installed module, it looks under:
 
@@ -12,15 +12,15 @@ Module docs use the same key format as embedded docs (relative path within the m
 
 Embedded documentation keys are derived from markdown file paths:
 
-- Root: `homeboy-core/docs/`
-- Key: relative path from `homeboy-core/docs/`, with OS separators normalized to `/`
+- Root: `homeboy/docs/`
+- Key: relative path from `homeboy/docs/`, with OS separators normalized to `/`
 - Key: `.md` extension removed
 
 Examples:
 
-- `homeboy-core/docs/index.md` → key `index`
-- `homeboy-core/docs/changelog.md` → key `changelog`
-- `homeboy-core/docs/commands/docs.md` → key `commands/docs`
+- `homeboy/docs/index.md` → key `index`
+- `homeboy/docs/changelog.md` → key `changelog`
+- `homeboy/docs/commands/docs.md` → key `commands/docs`
 
 ## `homeboy docs <topic...>` normalization
 
@@ -34,7 +34,9 @@ Examples:
 
 If normalization yields no segments (for example: topic args are only whitespace or only `/`), the command behaves as if no topic was provided (defaults to `index`). In this case `topic_label` is set to `"unknown"` (the resolved key still becomes `index`).
 
-If the resolved key does not exist in embedded core docs or module docs, `homeboy docs` returns an error.
+If the resolved key does not exist in embedded core docs or module docs, `homeboy docs` returns an error (`config_missing_key("docs.<topic>")`).
+
+Note: the internal resolver now returns an error directly instead of returning an empty `ResolvedDoc`.
 
 Segment normalization is performed by `homeboy::token::normalize_doc_segment`.
 

@@ -6,12 +6,20 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## 0.7.0
+
+- Refactor CLI commands to delegate business logic to the core library
+- Add core git module for component-scoped git operations
+- Add core version module for version target read/update utilities
+- Improve changes command output for local working tree state
+- Refresh embedded CLI docs and JSON output contract
+
 ## 0.6.0
 
 - Add universal --merge flag for component/project/server set commands
 - Fix changelog entry spacing to preserve blank line before next version
 - Refactor core into a headless/public API; treat the CLI as one interface
-- Move business logic into homeboy-core and reduce CLI responsibilities
+- Move business logic into the `homeboy` core library and reduce CLI responsibilities
 - Standardize command/output layers and keep TTY concerns in the CLI
 - Introduce/expand the module system and module settings
 - Add generic auth support plus a generic API client/command
@@ -192,11 +200,9 @@ All notable changes to Homeboy CLI are documented in this file.
 ## 0.1.6
 
 ### New Features
-- **Embedded docs**: Embed `homeboy-core/docs/**/*.md` into the CLI binary at build time, so `homeboy docs` works in Homebrew/releases.
-- **Changelog command**: Added `homeboy changelog` shortcut (equivalent to `homeboy docs changelog`).
+- **Embedded docs**: Embed `homeboy/docs/**/*.md` into the CLI binary at build time, so `homeboy docs` works in Homebrew/releases.
+- **Docs source of truth**: Keep CLI documentation under `homeboy/docs/` and embed it into the CLI binary.
 
-### Improvements
-- **Docs source of truth**: Keep CLI documentation under `homeboy-core/docs/` and embed it into the CLI binary.
 - **Docs topic listing**: `available_topics` is now generated dynamically from embedded keys (newline-separated).
 
 ## 0.1.5
@@ -220,7 +226,7 @@ All notable changes to Homeboy CLI are documented in this file.
   - Runs a component build in its `local_path`
 
 ### Improvements
-- **Version Utilities**: Refactored version parsing to shared `homeboy-core` library
+- **Version Utilities**: Refactored version parsing to shared `homeboy` core library
   - `parse_version`, `default_pattern_for_file`, `increment_version` now in core
   - Enables future reuse across CLI components
 

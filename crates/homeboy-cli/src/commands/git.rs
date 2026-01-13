@@ -17,6 +17,10 @@ pub struct GitArgs {
 enum GitCommand {
     /// Show git status for a component
     Status {
+        /// Use current working directory (ad-hoc mode)
+        #[arg(long)]
+        cwd: bool,
+
         /// JSON input spec for bulk operations.
         /// Use "-" for stdin, "@file.json" for file, or inline JSON string.
         #[arg(long)]
@@ -27,6 +31,10 @@ enum GitCommand {
     },
     /// Stage all changes and commit
     Commit {
+        /// Use current working directory (ad-hoc mode)
+        #[arg(long)]
+        cwd: bool,
+
         /// JSON input spec for bulk operations.
         /// Use "-" for stdin, "@file.json" for file, or inline JSON string.
         #[arg(long)]
@@ -35,11 +43,16 @@ enum GitCommand {
         /// Component ID (non-JSON mode)
         component_id: Option<String>,
 
-        /// Commit message (non-JSON mode)
+        /// Commit message
+        #[arg(short, long)]
         message: Option<String>,
     },
     /// Push local commits to remote
     Push {
+        /// Use current working directory (ad-hoc mode)
+        #[arg(long)]
+        cwd: bool,
+
         /// JSON input spec for bulk operations.
         /// Use "-" for stdin, "@file.json" for file, or inline JSON string.
         #[arg(long)]
@@ -54,6 +67,10 @@ enum GitCommand {
     },
     /// Pull remote changes
     Pull {
+        /// Use current working directory (ad-hoc mode)
+        #[arg(long)]
+        cwd: bool,
+
         /// JSON input spec for bulk operations.
         /// Use "-" for stdin, "@file.json" for file, or inline JSON string.
         #[arg(long)]
@@ -64,12 +81,18 @@ enum GitCommand {
     },
     /// Create a git tag
     Tag {
+        /// Use current working directory (ad-hoc mode)
+        #[arg(long)]
+        cwd: bool,
+
         /// Component ID
-        component_id: String,
+        component_id: Option<String>,
+
         /// Tag name (e.g., v0.1.2)
         ///
-        /// If omitted, tag defaults to v<component version>.
+        /// Required when using --cwd. Otherwise defaults to v<component version>.
         tag_name: Option<String>,
+
         /// Tag message (creates annotated tag)
         #[arg(short, long)]
         message: Option<String>,
@@ -85,7 +108,14 @@ pub enum GitCommandOutput {
 
 pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<GitCommandOutput> {
     match args.command {
-        GitCommand::Status { json, component_id } => {
+        GitCommand::Status { cwd, json, component_id } => {
+            // Priority: --cwd > --json > component_id
+            if cwd {
+                let output = git::status_cwd()?;
+                let exit_code = output.exit_code;
+                return Ok((GitCommandOutput::Single(output), exit_code));
+            }
+
             if let Some(spec) = json {
                 let output = git::status_bulk(&spec)?;
                 let exit_code = if output.summary.failed > 0 { 1 } else { 0 };
@@ -95,7 +125,7 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             let id = component_id.ok_or_else(|| {
                 homeboy::Error::validation_invalid_argument(
                     "componentId",
-                    "Missing componentId (or use --json for bulk)",
+                    "Missing componentId (or use --cwd or --json)",
                     None,
                     None,
                 )
@@ -105,10 +135,26 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             Ok((GitCommandOutput::Single(output), exit_code))
         }
         GitCommand::Commit {
+            cwd,
             json,
             component_id,
             message,
         } => {
+            // Priority: --cwd > --json > component_id
+            if cwd {
+                let msg = message.ok_or_else(|| {
+                    homeboy::Error::validation_invalid_argument(
+                        "message",
+                        "Missing message (use -m or --message)",
+                        None,
+                        None,
+                    )
+                })?;
+                let output = git::commit_cwd(&msg)?;
+                let exit_code = output.exit_code;
+                return Ok((GitCommandOutput::Single(output), exit_code));
+            }
+
             if let Some(spec) = json {
                 let output = git::commit_bulk(&spec)?;
                 let exit_code = if output.summary.failed > 0 { 1 } else { 0 };
@@ -118,7 +164,7 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             let id = component_id.ok_or_else(|| {
                 homeboy::Error::validation_invalid_argument(
                     "componentId",
-                    "Missing componentId (or use --json for bulk)",
+                    "Missing componentId (or use --cwd or --json)",
                     None,
                     None,
                 )
@@ -126,7 +172,7 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             let msg = message.ok_or_else(|| {
                 homeboy::Error::validation_invalid_argument(
                     "message",
-                    "Missing message (or use --json for bulk)",
+                    "Missing message (use -m or --message)",
                     None,
                     None,
                 )
@@ -136,10 +182,18 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             Ok((GitCommandOutput::Single(output), exit_code))
         }
         GitCommand::Push {
+            cwd,
             json,
             component_id,
             tags,
         } => {
+            // Priority: --cwd > --json > component_id
+            if cwd {
+                let output = git::push_cwd(tags)?;
+                let exit_code = output.exit_code;
+                return Ok((GitCommandOutput::Single(output), exit_code));
+            }
+
             if let Some(spec) = json {
                 let output = git::push_bulk(&spec)?;
                 let exit_code = if output.summary.failed > 0 { 1 } else { 0 };
@@ -149,7 +203,7 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             let id = component_id.ok_or_else(|| {
                 homeboy::Error::validation_invalid_argument(
                     "componentId",
-                    "Missing componentId (or use --json for bulk)",
+                    "Missing componentId (or use --cwd or --json)",
                     None,
                     None,
                 )
@@ -158,7 +212,14 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             let exit_code = output.exit_code;
             Ok((GitCommandOutput::Single(output), exit_code))
         }
-        GitCommand::Pull { json, component_id } => {
+        GitCommand::Pull { cwd, json, component_id } => {
+            // Priority: --cwd > --json > component_id
+            if cwd {
+                let output = git::pull_cwd()?;
+                let exit_code = output.exit_code;
+                return Ok((GitCommandOutput::Single(output), exit_code));
+            }
+
             if let Some(spec) = json {
                 let output = git::pull_bulk(&spec)?;
                 let exit_code = if output.summary.failed > 0 { 1 } else { 0 };
@@ -168,7 +229,7 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             let id = component_id.ok_or_else(|| {
                 homeboy::Error::validation_invalid_argument(
                     "componentId",
-                    "Missing componentId (or use --json for bulk)",
+                    "Missing componentId (or use --cwd or --json)",
                     None,
                     None,
                 )
@@ -178,19 +239,44 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             Ok((GitCommandOutput::Single(output), exit_code))
         }
         GitCommand::Tag {
+            cwd,
             component_id,
             tag_name,
             message,
         } => {
+            // Priority: --cwd > component_id
+            if cwd {
+                let tag = tag_name.ok_or_else(|| {
+                    homeboy::Error::validation_invalid_argument(
+                        "tagName",
+                        "Tag name is required when using --cwd",
+                        None,
+                        None,
+                    )
+                })?;
+                let output = git::tag_cwd(&tag, message.as_deref())?;
+                let exit_code = output.exit_code;
+                return Ok((GitCommandOutput::Single(output), exit_code));
+            }
+
+            let id = component_id.ok_or_else(|| {
+                homeboy::Error::validation_invalid_argument(
+                    "componentId",
+                    "Missing componentId (or use --cwd)",
+                    None,
+                    None,
+                )
+            })?;
+
             let derived_tag_name = match tag_name {
                 Some(name) => name,
                 None => {
-                    let (out, _) = version::show_version_output(&component_id)?;
+                    let (out, _) = version::show_version_output(&id)?;
                     format!("v{}", out.version)
                 }
             };
 
-            let output = git::tag(&component_id, &derived_tag_name, message.as_deref())?;
+            let output = git::tag(&id, &derived_tag_name, message.as_deref())?;
             let exit_code = output.exit_code;
             Ok((GitCommandOutput::Single(output), exit_code))
         }

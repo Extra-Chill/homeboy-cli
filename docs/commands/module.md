@@ -45,25 +45,25 @@ Installs a module into Homeboy's modules directory.
 ### `update`
 
 ```sh
-homeboy module update <moduleId> [--force]
+homeboy module update <moduleId>
 ```
 
 Updates a git-cloned module.
 
 - If the module is symlinked, Homeboy returns an error (linked modules are updated at the source directory).
-- If the module has uncommitted changes, `--force` is required.
+- Update runs without an extra confirmation flag.
 - Homeboy reads `sourceUrl` from the module's `homeboy.json` to report the module URL in JSON output.
 
 ### `uninstall`
 
 ```sh
-homeboy module uninstall <moduleId> [--force]
+homeboy module uninstall <moduleId>
 ```
 
 Uninstalls a module.
 
-- If the module is **symlinked**, Homeboy removes the symlink (the source directory is preserved) and `--force` is not required.
-- If the module is **git-cloned**, Homeboy deletes the module directory and `--force` is required.
+- If the module is **symlinked**, Homeboy removes the symlink (the source directory is preserved).
+- If the module is **git-cloned**, Homeboy deletes the module directory.
 
 ### `action`
 

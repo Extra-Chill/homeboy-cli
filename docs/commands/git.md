@@ -13,11 +13,22 @@ This command does not accept `--dry-run` (and has no `--json` root flag). Output
 ### Single Component Mode
 
 - `status <componentId>`
-- `commit <componentId> <message>`
-- `push <componentId> --tags` (optional flag)
+- `commit <componentId> -m <message>`
+- `push <componentId> [--tags]`
 - `pull <componentId>`
 - `tag <componentId> [tagName] [-m <message>]`
   - If `tagName` is omitted, Homeboy tags `v<component version>` (from `homeboy version show`).
+
+### CWD Mode (--cwd)
+
+All subcommands support `--cwd` for ad-hoc operations in any git directory without requiring component registration:
+
+- `status --cwd`
+- `commit --cwd -m <message>`
+- `push --cwd [--tags]`
+- `pull --cwd`
+- `tag --cwd <tagName> [-m <message>]`
+  - Tag name is **required** when using `--cwd` (no auto-derivation from version).
 
 ### Bulk Mode (--json)
 

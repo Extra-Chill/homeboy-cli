@@ -16,6 +16,10 @@ pub struct ChangelogArgs {
 pub enum ChangelogCommand {
     /// Add changelog items to the configured "next" section
     Add {
+        /// Use current working directory (ad-hoc mode with auto-detection)
+        #[arg(long)]
+        cwd: bool,
+
         /// JSON input spec for batch operations.
         ///
         /// Use "-" to read from stdin, "@file.json" to read from a file, or an inline JSON string.
@@ -26,6 +30,7 @@ pub enum ChangelogCommand {
         component_id: Option<String>,
 
         /// Changelog item content (non-JSON mode)
+        #[arg(short, long)]
         message: Option<String>,
     },
 }
@@ -72,10 +77,25 @@ pub fn run(
             Ok((ChangelogOutput::Show(out), code))
         }
         Some(ChangelogCommand::Add {
+            cwd,
             json,
             component_id,
             message,
         }) => {
+            // Priority: --cwd > --json > component_id
+            if cwd {
+                let msg = message.ok_or_else(|| {
+                    homeboy::Error::validation_invalid_argument(
+                        "message",
+                        "Missing message (use -m or --message)",
+                        None,
+                        None,
+                    )
+                })?;
+                let output = changelog::add_items_cwd(&[msg])?;
+                return Ok((ChangelogOutput::Add(output), 0));
+            }
+
             if let Some(spec) = json.as_deref() {
                 let output = changelog::add_items_bulk(spec, "changelog.add")?;
                 return Ok((ChangelogOutput::Add(output), 0));
@@ -84,43 +104,35 @@ pub fn run(
             let component_id = component_id.ok_or_else(|| {
                 homeboy::Error::validation_invalid_argument(
                     "componentId",
-                    "Missing componentId",
+                    "Missing componentId (or use --cwd)",
                     None,
                     None,
                 )
             })?;
 
-            let message = message.ok_or_else(|| {
+            let msg = message.ok_or_else(|| {
                 homeboy::Error::validation_invalid_argument(
                     "message",
-                    "Missing message",
+                    "Missing message (use -m or --message)",
                     None,
                     None,
                 )
             })?;
 
-            let output = changelog::add_items(&component_id, &[message])?;
+            let output = changelog::add_items(&component_id, &[msg])?;
             Ok((ChangelogOutput::Add(output), 0))
         }
     }
 }
 
 fn show_markdown() -> CmdResult<String> {
-    let resolved = docs::resolve(&["changelog".to_string()]);
-
-    if resolved.content.is_empty() {
-        return Err(homeboy::Error::config_missing_key("docs.changelog", None));
-    }
+    let resolved = docs::resolve(&["changelog".to_string()])?;
 
     Ok((resolved.content, 0))
 }
 
 fn show_json() -> CmdResult<ChangelogShowOutput> {
-    let resolved = docs::resolve(&["changelog".to_string()]);
-
-    if resolved.content.is_empty() {
-        return Err(homeboy::Error::config_missing_key("docs.changelog", None));
-    }
+    let resolved = docs::resolve(&["changelog".to_string()])?;
 
     Ok((
         ChangelogShowOutput {

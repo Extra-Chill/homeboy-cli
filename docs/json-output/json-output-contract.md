@@ -6,8 +6,8 @@ Exceptions:
 
 - `homeboy docs` prints raw markdown content unless `--list` is used.
 - `homeboy init` prints raw markdown.
-- `homeboy changelog` prints raw markdown for show mode.
-- `homeboy list` prints clap help text.
+- `homeboy changelog` prints raw markdown for `show` mode.
+- `homeboy list` prints clap help text (raw; not JSON-wrapped).
 - `homeboy ssh` connect mode and `homeboy logs show --follow` use interactive passthrough output.
 
 ## Top-level envelope

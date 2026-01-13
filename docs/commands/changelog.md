@@ -24,13 +24,25 @@ This prints raw markdown to stdout.
 ### `add`
 
 ```sh
-homeboy changelog add [componentId] [message] [--json <spec>]
+homeboy changelog add <componentId> -m <message>
+homeboy changelog add --cwd -m <message>
+homeboy changelog add --json <spec>
 ```
 
 Notes:
 
-- In non-JSON mode, `add` accepts *positional* `componentId` and `message`.
-- When `--json` is provided, positional args are ignored and the payload's `messages` array is applied in order.
+- Use `-m` or `--message` to provide the changelog entry.
+- When `--cwd` is used, Homeboy auto-detects the changelog file (see CWD Mode below).
+- When `--json` is provided, other args are ignored and the payload's `messages` array is applied in order.
+
+### CWD Mode (--cwd)
+
+The `add` subcommand supports `--cwd` for ad-hoc operations in any directory without requiring component registration. When using `--cwd`, Homeboy auto-detects the changelog file by checking for (in order):
+
+1. `CHANGELOG.md`
+2. `docs/changelog.md`
+3. `HISTORY.md`
+4. `changelog.md`
 
 Adds one or more changelog items to the configured "next" section in the component's changelog file.
 

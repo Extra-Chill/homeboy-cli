@@ -71,14 +71,7 @@ pub fn run_markdown(args: DocsArgs) -> CmdResult<String> {
     }
 
     let topic = strip_format_flag(&args.topic);
-    let resolved = docs::resolve(&topic);
-
-    if resolved.content.is_empty() {
-        return Err(homeboy::Error::config_missing_key(
-            format!("docs.{}", topic.join(".")),
-            None,
-        ));
-    }
+    let resolved = docs::resolve(&topic)?;
 
     Ok((resolved.content, 0))
 }
@@ -94,14 +87,7 @@ pub fn run(args: DocsArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<D
     }
 
     let topic = strip_format_flag(&args.topic);
-    let resolved = docs::resolve(&topic);
-
-    if resolved.content.is_empty() {
-        return Err(homeboy::Error::config_missing_key(
-            format!("docs.{}", topic.join(".")),
-            None,
-        ));
-    }
+    let resolved = docs::resolve(&topic)?;
 
     let topic_str = topic.join(" ");
     let slug = resolved

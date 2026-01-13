@@ -95,22 +95,18 @@ JSON mode:
 ### `set`
 
 ```sh
-homeboy project set <projectId> [--name <name>] [--domain <domain>] [--module <moduleId>]... [--server-id <serverId>] [--base-path <path>] [--table-prefix <prefix>] [--component-ids <componentId,componentId,...>]
+homeboy project set <projectId> --json <JSON>
 ```
 
-Arguments:
-
-- `<projectId>`: project ID
+Updates a project by merging a JSON object into `projects/<id>.json`.
 
 Options:
 
-- `--name <name>`: project name
-- `--domain <domain>`: public site domain
-- `--module <moduleId>`: replace the `modules` list (repeatable)
-- `--server-id <serverId>`: server ID
-- `--base-path <path>`: remote base path
-- `--table-prefix <prefix>`: table prefix
-- `--component-ids <componentId,componentId,...>`: replace component IDs (comma-separated)
+- `--json <JSON>`: JSON object to merge into config (supports `@file` and `-` for stdin)
+
+Notes:
+
+- `set` no longer supports individual field flags; use `--json` and provide the fields you want to update.
 
 JSON output:
 

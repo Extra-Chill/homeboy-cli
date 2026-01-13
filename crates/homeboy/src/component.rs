@@ -271,11 +271,14 @@ pub fn create_from_cli(
     local_path: Option<String>,
     remote_path: Option<String>,
     build_artifact: Option<String>,
+    version_targets: Vec<String>,
+    build_command: Option<String>,
+    extract_command: Option<String>,
 ) -> Result<CreateResult> {
     let name = name.ok_or_else(|| {
         Error::validation_invalid_argument(
             "name",
-            "Missing required argument: name",
+            "Missing required argument: name (or use --json)",
             None,
             None,
         )
@@ -284,7 +287,7 @@ pub fn create_from_cli(
     let local_path = local_path.ok_or_else(|| {
         Error::validation_invalid_argument(
             "local_path",
-            "Missing required argument: local_path",
+            "Missing required argument: --local-path (or use --json)",
             None,
             None,
         )
@@ -293,7 +296,7 @@ pub fn create_from_cli(
     let remote_path = remote_path.ok_or_else(|| {
         Error::validation_invalid_argument(
             "remote_path",
-            "Missing required argument: remote_path",
+            "Missing required argument: --remote-path (or use --json)",
             None,
             None,
         )
@@ -302,15 +305,14 @@ pub fn create_from_cli(
     let build_artifact = build_artifact.ok_or_else(|| {
         Error::validation_invalid_argument(
             "build_artifact",
-            "Missing required argument: build_artifact",
+            "Missing required argument: --build-artifact (or use --json)",
             None,
             None,
         )
     })?;
 
     let id = slugify_id(&name)?;
-    let path = paths::component(&id)?;
-    if path.exists() {
+    if exists(&id) {
         return Err(Error::validation_invalid_argument(
             "component.name",
             format!("Component '{}' already exists", id),
@@ -319,7 +321,15 @@ pub fn create_from_cli(
         ));
     }
 
-    let component = Component::new(id.clone(), name, local_path, remote_path, build_artifact);
+    let expanded_path = shellexpand::tilde(&local_path).to_string();
+
+    let mut component = Component::new(id.clone(), name, expanded_path, remote_path, build_artifact);
+    if !version_targets.is_empty() {
+        component.version_targets = Some(parse_version_targets(&version_targets)?);
+    }
+    component.build_command = build_command;
+    component.extract_command = extract_command;
+
     save(&component)?;
 
     Ok(CreateResult { id, component })
@@ -461,25 +471,29 @@ fn update_project_references(old_id: &str, new_id: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn delete_with_validation(id: &str, force: bool) -> Result<()> {
+pub fn delete_safe(id: &str) -> Result<()> {
     if !exists(id) {
         return Err(Error::component_not_found(id.to_string()));
     }
 
-    if !force {
-        let component = load(id)?;
-        if !component.modules.is_empty() {
-            return Err(Error::validation_invalid_argument(
-                "component",
-                format!(
-                    "Component '{}' has {} module(s) configured. Use --force to delete anyway.",
-                    id,
-                    component.modules.len()
-                ),
-                Some(id.to_string()),
-                None,
-            ));
-        }
+    let projects = project::list().unwrap_or_default();
+    let using: Vec<String> = projects
+        .iter()
+        .filter(|p| p.config.component_ids.contains(&id.to_string()))
+        .map(|p| p.id.clone())
+        .collect();
+
+    if !using.is_empty() {
+        return Err(Error::validation_invalid_argument(
+            "component",
+            format!(
+                "Component '{}' is used by projects: {}. Remove from projects first.",
+                id,
+                using.join(", ")
+            ),
+            Some(id.to_string()),
+            Some(using),
+        ));
     }
 
     delete(id)

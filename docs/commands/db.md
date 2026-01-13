@@ -36,21 +36,18 @@ Note: `query` is intended for SELECT-only operations. Non-SELECT statements are 
 ### `delete-row`
 
 ```sh
-homeboy db delete-row <projectId> [<subtarget>] <table> <rowId> --confirm
+homeboy db delete-row <projectId> [<subtarget>] <table> <rowId>
 ```
 
 Notes:
 
-- `--confirm` is required.
 - `<rowId>` must be numeric.
 
 ### `drop-table`
 
 ```sh
-homeboy db drop-table <projectId> [<subtarget>] <table> --confirm
+homeboy db drop-table <projectId> [<subtarget>] <table>
 ```
-
-Note: `--confirm` is required.
 
 ### `tunnel`
 

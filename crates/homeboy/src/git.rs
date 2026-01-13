@@ -803,6 +803,181 @@ pub fn changes_project(project_id: &str, include_diff: bool) -> Result<BulkChang
     Ok(build_bulk_changes_output(&proj.component_ids, include_diff))
 }
 
+/// Get changes for the current working directory (ad-hoc mode).
+pub fn changes_cwd(include_diff: bool) -> Result<ChangesOutput> {
+    let path = std::env::current_dir()
+        .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))?
+        .to_string_lossy()
+        .to_string();
+
+    let latest_tag = get_latest_tag(&path)?;
+    let commits = get_commits_since_tag(&path, latest_tag.as_deref())?;
+    let uncommitted = get_uncommitted_changes(&path)?;
+    let diff = if include_diff {
+        Some(get_diff(&path)?)
+    } else {
+        None
+    };
+
+    Ok(ChangesOutput {
+        component_id: "cwd".to_string(),
+        path,
+        success: true,
+        latest_tag,
+        commits,
+        uncommitted,
+        diff,
+        error: None,
+    })
+}
+
+// === CWD Git Operations ===
+
+fn get_cwd_path() -> Result<String> {
+    std::env::current_dir()
+        .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Get git status for the current working directory.
+pub fn status_cwd() -> Result<GitOutput> {
+    let path = get_cwd_path()?;
+
+    let output = execute_git(&path, &["status", "--porcelain=v1"])
+        .map_err(|e| Error::other(e.to_string()))?;
+
+    Ok(GitOutput {
+        component_id: "cwd".to_string(),
+        path,
+        action: "status".to_string(),
+        success: output.status.success(),
+        exit_code: to_exit_code(output.status),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    })
+}
+
+/// Stage all changes and commit in the current working directory.
+pub fn commit_cwd(message: &str) -> Result<GitOutput> {
+    let path = get_cwd_path()?;
+
+    let status_output = execute_git(&path, &["status", "--porcelain=v1"])
+        .map_err(|e| Error::other(e.to_string()))?;
+
+    let status_stdout = String::from_utf8_lossy(&status_output.stdout).to_string();
+
+    if status_stdout.trim().is_empty() {
+        return Ok(GitOutput {
+            component_id: "cwd".to_string(),
+            path,
+            action: "commit".to_string(),
+            success: true,
+            exit_code: 0,
+            stdout: "Nothing to commit, working tree clean".to_string(),
+            stderr: String::new(),
+        });
+    }
+
+    let add_output = execute_git(&path, &["add", "."])
+        .map_err(|e| Error::other(e.to_string()))?;
+
+    if !add_output.status.success() {
+        let exit_code = to_exit_code(add_output.status);
+        return Ok(GitOutput {
+            component_id: "cwd".to_string(),
+            path,
+            action: "commit".to_string(),
+            success: false,
+            exit_code,
+            stdout: String::from_utf8_lossy(&add_output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&add_output.stderr).to_string(),
+        });
+    }
+
+    let commit_output = execute_git(&path, &["commit", "-m", message])
+        .map_err(|e| Error::other(e.to_string()))?;
+
+    let exit_code = to_exit_code(commit_output.status);
+
+    Ok(GitOutput {
+        component_id: "cwd".to_string(),
+        path,
+        action: "commit".to_string(),
+        success: commit_output.status.success(),
+        exit_code,
+        stdout: String::from_utf8_lossy(&commit_output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&commit_output.stderr).to_string(),
+    })
+}
+
+/// Push local commits in the current working directory.
+pub fn push_cwd(tags: bool) -> Result<GitOutput> {
+    let path = get_cwd_path()?;
+
+    let push_args: Vec<&str> = if tags {
+        vec!["push", "--tags"]
+    } else {
+        vec!["push"]
+    };
+
+    let output = execute_git(&path, &push_args)
+        .map_err(|e| Error::other(e.to_string()))?;
+    let exit_code = to_exit_code(output.status);
+
+    Ok(GitOutput {
+        component_id: "cwd".to_string(),
+        path,
+        action: "push".to_string(),
+        success: output.status.success(),
+        exit_code,
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    })
+}
+
+/// Pull remote changes in the current working directory.
+pub fn pull_cwd() -> Result<GitOutput> {
+    let path = get_cwd_path()?;
+
+    let output = execute_git(&path, &["pull"])
+        .map_err(|e| Error::other(e.to_string()))?;
+    let exit_code = to_exit_code(output.status);
+
+    Ok(GitOutput {
+        component_id: "cwd".to_string(),
+        path,
+        action: "pull".to_string(),
+        success: output.status.success(),
+        exit_code,
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    })
+}
+
+/// Create a git tag in the current working directory.
+pub fn tag_cwd(tag_name: &str, message: Option<&str>) -> Result<GitOutput> {
+    let path = get_cwd_path()?;
+
+    let tag_args: Vec<&str> = match message {
+        Some(msg) => vec!["tag", "-a", tag_name, "-m", msg],
+        None => vec!["tag", tag_name],
+    };
+
+    let output = execute_git(&path, &tag_args)
+        .map_err(|e| Error::other(e.to_string()))?;
+    let exit_code = to_exit_code(output.status);
+
+    Ok(GitOutput {
+        component_id: "cwd".to_string(),
+        path,
+        action: "tag".to_string(),
+        success: output.status.success(),
+        exit_code,
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

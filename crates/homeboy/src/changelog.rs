@@ -498,6 +498,72 @@ pub fn add_items(component_id: &str, messages: &[String]) -> Result<AddItemsOutp
     })
 }
 
+// === CWD Changelog Operations ===
+
+/// Default changelog settings for use without a component.
+pub fn default_settings() -> EffectiveChangelogSettings {
+    resolve_effective_settings(None)
+}
+
+/// Well-known changelog file names for auto-detection
+const CHANGELOG_CANDIDATES: &[&str] = &[
+    "CHANGELOG.md",
+    "docs/changelog.md",
+    "HISTORY.md",
+    "changelog.md",
+];
+
+/// Detect changelog file in a directory by checking for well-known files.
+pub fn detect_changelog_path(base_path: &str) -> Option<PathBuf> {
+    for candidate in CHANGELOG_CANDIDATES {
+        let full_path = Path::new(base_path).join(candidate);
+        if full_path.exists() {
+            return Some(full_path);
+        }
+    }
+    None
+}
+
+/// Add changelog items in the current working directory.
+pub fn add_items_cwd(messages: &[String]) -> Result<AddItemsOutput> {
+    let cwd = std::env::current_dir()
+        .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))?;
+    let cwd_str = cwd.to_string_lossy().to_string();
+
+    let changelog_path = detect_changelog_path(&cwd_str).ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "changelog",
+            "No changelog file found in current directory. Looked for: CHANGELOG.md, docs/changelog.md, HISTORY.md, changelog.md",
+            None,
+            None,
+        )
+    })?;
+
+    let settings = default_settings();
+    let content = fs::read_to_string(&changelog_path)
+        .map_err(|e| Error::internal_io(e.to_string(), Some("read changelog".to_string())))?;
+
+    let (updated, changed, items_added) = add_next_section_items(
+        &content,
+        &settings.next_section_aliases,
+        messages,
+    )?;
+
+    if changed {
+        fs::write(&changelog_path, &updated)
+            .map_err(|e| Error::internal_io(e.to_string(), Some("write changelog".to_string())))?;
+    }
+
+    Ok(AddItemsOutput {
+        component_id: "cwd".to_string(),
+        changelog_path: changelog_path.to_string_lossy().to_string(),
+        next_section_label: settings.next_section_label,
+        messages: messages.to_vec(),
+        items_added,
+        changed,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

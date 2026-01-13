@@ -10,6 +10,10 @@ pub struct ChangesArgs {
     /// Component ID (single mode)
     pub component_id: Option<String>,
 
+    /// Use current working directory (ad-hoc mode, no component registration required)
+    #[arg(long)]
+    pub cwd: bool,
+
     /// Show changes for all components in a project
     #[arg(long)]
     pub project: Option<String>,
@@ -35,7 +39,12 @@ pub enum ChangesCommandOutput {
 }
 
 pub fn run(args: ChangesArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<ChangesCommandOutput> {
-    // Priority: --json > --project > component_id
+    // Priority: --cwd > --json > --project > component_id
+    if args.cwd {
+        let output = git::changes_cwd(args.include_diff)?;
+        return Ok((ChangesCommandOutput::Single(output), 0));
+    }
+
     if let Some(json) = &args.json {
         let output = git::changes_bulk(json, args.include_diff)?;
         let exit_code = if output.summary.with_commits > 0 || output.summary.with_uncommitted > 0 {

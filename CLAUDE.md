@@ -1,4 +1,4 @@
-# Agent Instructions (homeboy-core)
+# Agent Instructions (homeboy)
 
 > **Note**: For project-wide architecture and future refactor plans, see the root [`../CLAUDE.md`](../CLAUDE.md).
 

@@ -1,9 +1,7 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
-use homeboy::Error;
 use homeboy::server::{self, Server};
-use homeboy::project;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,29 +66,14 @@ enum ServerCommand {
     Set {
         /// Server ID
         server_id: String,
-        /// Merge JSON object into config (any field, supports @file and - for stdin)
+        /// JSON object to merge into config (supports @file and - for stdin)
         #[arg(long, value_name = "JSON")]
-        merge: Option<String>,
-        /// Server display name
-        #[arg(long)]
-        name: Option<String>,
-        /// SSH host
-        #[arg(long)]
-        host: Option<String>,
-        /// SSH username
-        #[arg(long)]
-        user: Option<String>,
-        /// SSH port
-        #[arg(long)]
-        port: Option<u16>,
+        json: String,
     },
     /// Remove a server configuration
     Delete {
         /// Server ID
         server_id: String,
-        /// Confirm deletion
-        #[arg(long)]
-        force: bool,
     },
     /// List all configured servers
     List,
@@ -154,43 +137,25 @@ pub fn run(
                 return create_json(&spec, skip_existing);
             }
 
-            let name = name.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "name",
-                    "Missing required argument: name (or use --json)",
-                    None,
-                    None,
-                )
-            })?;
-            let host = host.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "host",
-                    "Missing required argument: --host (or use --json)",
-                    None,
-                    None,
-                )
-            })?;
-            let user = user.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "user",
-                    "Missing required argument: --user (or use --json)",
-                    None,
-                    None,
-                )
-            })?;
+            let result = server::create_from_cli(name, host, user, port)?;
 
-            create(&name, &host, &user, port.unwrap_or(22))
+            Ok((
+                ServerOutput {
+                    command: "server.create".to_string(),
+                    server_id: Some(result.id),
+                    server: Some(result.server),
+                    servers: None,
+                    updated: Some(vec!["created".to_string()]),
+                    deleted: None,
+                    key: None,
+                    import: None,
+                },
+                0,
+            ))
         }
         ServerCommand::Show { server_id } => show(&server_id),
-        ServerCommand::Set {
-            server_id,
-            merge,
-            name,
-            host,
-            user,
-            port,
-        } => set(&server_id, merge, name, host, user, port),
-        ServerCommand::Delete { server_id, force } => delete(&server_id, force),
+        ServerCommand::Set { server_id, json } => set(&server_id, &json),
+        ServerCommand::Delete { server_id } => delete(&server_id),
         ServerCommand::List => list(),
         ServerCommand::Key(key_args) => run_key(key_args),
     }
@@ -231,34 +196,6 @@ fn create_json(spec: &str, skip_existing: bool) -> homeboy::Result<(ServerOutput
     ))
 }
 
-fn create(
-    name: &str,
-    host: &str,
-    user: &str,
-    port: u16,
-) -> homeboy::Result<(ServerOutput, i32)> {
-    let result = server::create_from_cli(
-        Some(name.to_string()),
-        Some(host.to_string()),
-        Some(user.to_string()),
-        Some(port),
-    )?;
-
-    Ok((
-        ServerOutput {
-            command: "server.create".to_string(),
-            server_id: Some(result.id),
-            server: Some(result.server),
-            servers: None,
-            updated: Some(vec!["created".to_string()]),
-            deleted: None,
-            key: None,
-            import: None,
-        },
-        0,
-    ))
-}
-
 fn show(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
     let svr = server::load(server_id)?;
 
@@ -277,49 +214,14 @@ fn show(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
     ))
 }
 
-fn set(
-    server_id: &str,
-    merge: Option<String>,
-    name: Option<String>,
-    host: Option<String>,
-    user: Option<String>,
-    port: Option<u16>,
-) -> homeboy::Result<(ServerOutput, i32)> {
-    // Handle --merge via public API (mutually exclusive with individual flags)
-    if let Some(spec) = merge {
-        let result = server::merge_from_json(server_id, &spec)?;
-        let server = server::load(server_id)?;
-        return Ok((
-            ServerOutput {
-                command: "server.set".to_string(),
-                server_id: Some(server_id.to_string()),
-                server: Some(server),
-                servers: None,
-                updated: Some(result.updated_fields),
-                deleted: None,
-                key: None,
-                import: None,
-            },
-            0,
-        ));
-    }
-
-    if name.is_none() && host.is_none() && user.is_none() && port.is_none() {
-        return Err(Error::validation_invalid_argument(
-            "fields",
-            "No changes specified",
-            None,
-            None,
-        ));
-    }
-
-    let result = server::update(server_id, name, host, user, port)?;
-
+fn set(server_id: &str, json: &str) -> homeboy::Result<(ServerOutput, i32)> {
+    let result = server::merge_from_json(server_id, json)?;
+    let server = server::load(server_id)?;
     Ok((
         ServerOutput {
             command: "server.set".to_string(),
             server_id: Some(server_id.to_string()),
-            server: Some(result.server),
+            server: Some(server),
             servers: None,
             updated: Some(result.updated_fields),
             deleted: None,
@@ -330,34 +232,8 @@ fn set(
     ))
 }
 
-fn delete(server_id: &str, force: bool) -> homeboy::Result<(ServerOutput, i32)> {
-    if !force {
-        return Err(Error::validation_invalid_argument(
-            "force",
-            "Use --force to confirm deletion",
-            None,
-            None,
-        ));
-    }
-
-    server::load(server_id)?;
-
-    let projects = project::list()?;
-    for proj in projects {
-        if proj.config.server_id.as_deref() == Some(server_id) {
-            return Err(Error::validation_invalid_argument(
-                "server",
-                format!(
-                    "Server is used by project '{}'. Update or delete the project first.",
-                    proj.id
-                ),
-                Some(server_id.to_string()),
-                Some(vec![proj.id.clone()]),
-            ));
-        }
-    }
-
-    server::delete(server_id)?;
+fn delete(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
+    server::delete_safe(server_id)?;
 
     Ok((
         ServerOutput {

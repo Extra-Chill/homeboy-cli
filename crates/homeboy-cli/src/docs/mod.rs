@@ -22,39 +22,35 @@ pub struct ResolvedDoc {
     pub source: String,
 }
 
-pub fn resolve(topic: &[String]) -> ResolvedDoc {
+pub fn resolve(topic: &[String]) -> homeboy::Result<ResolvedDoc> {
     let (topic_label, key, segments) = normalize_topic(topic);
 
     // First check embedded core docs
     if let Some(content) = docs_index().get(key.as_str()).copied() {
-        return ResolvedDoc {
+        return Ok(ResolvedDoc {
             topic_label,
             key,
             segments,
             content: content.to_string(),
             source: "core".to_string(),
-        };
+        });
     }
 
     // Then check module docs
     if let Some((content, module_id)) = load_module_doc(&key) {
-        return ResolvedDoc {
+        return Ok(ResolvedDoc {
             topic_label,
             key,
             segments,
             content,
             source: module_id,
-        };
+        });
     }
 
-    // Not found
-    ResolvedDoc {
-        topic_label,
-        key,
-        segments,
-        content: String::new(),
-        source: String::new(),
-    }
+    Err(homeboy::Error::config_missing_key(
+        format!("docs.{}", key),
+        None,
+    ))
 }
 
 fn load_module_doc(topic: &str) -> Option<(String, String)> {

@@ -1,6 +1,6 @@
 # Homeboy CLI
 
-Homeboy is a config-driven automation engine for development and deployment automation.
+Homeboy is a config-driven engine for development and deployment automation.
 
 It standardizes common operations (project/component discovery, remote execution, deployments) and produces machine-readable output via a stable JSON envelope for most commands.
 
@@ -14,6 +14,7 @@ See the monorepo-level documentation for installation options:
 - [Homebrew tap](../homebrew-tap/README.md)
 
 This README stays focused on the CLI codebase layout and links to the canonical CLI reference docs under `docs/`.
+
 ## Commands
 
 See:
@@ -45,6 +46,7 @@ homeboy project list
 homeboy module list
 homeboy pm2 <projectId> status
 homeboy wp <projectId> plugin list
+homeboy changes <componentId>
 homeboy ssh <projectId>   # interactive passthrough
 homeboy logs show <projectId> <path> --follow   # interactive passthrough
 ```
@@ -80,4 +82,6 @@ Key management commands (generate/import/use/unset/show) are documented in [serv
 
 ## License
 
-MIT
+See `../LICENSE` for the repository license.
+
+Note: `homeboy` (CLI) is distributed under the same license as the rest of this repository unless explicitly stated otherwise in build/distribution tooling.

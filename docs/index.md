@@ -7,7 +7,8 @@ Homeboy is a config-driven automation engine for development and deployment auto
 ## CLI
 
 - Root command + global flags: [Root command](cli/homeboy-root-command.md)
-- Full command list: [Commands index](commands/commands-index.md)
+- Full built-in command list: [Commands index](commands/commands-index.md)
+- Changes summary command: [changes](commands/changes.md)
 - JSON output envelope: [JSON output contract](json-output/json-output-contract.md)
 - Embedded docs behavior: [Embedded docs topic resolution](embedded-docs/embedded-docs-topic-resolution.md)
 - Changelog content: [Changelog](changelog.md)

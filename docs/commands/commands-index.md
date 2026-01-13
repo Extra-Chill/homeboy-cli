@@ -3,6 +3,7 @@
 - [build](build.md)
 - [changelog](changelog.md)
 - [component](component.md)
+- [changes](changes.md)
 - [config](config.md)
 - [context](context.md)
 - [db](db.md)
@@ -22,6 +23,8 @@
 - [version](version.md)
 
 This list covers built-in CLI commands.
+
+Note: some modules also expose additional top-level CLI commands at runtime (loaded from installed modules).
 
 Related:
 

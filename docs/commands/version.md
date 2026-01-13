@@ -14,13 +14,25 @@ This command accepts the global flag `--dry-run` (see [Root command](../cli/home
 
 ```sh
 homeboy version show <componentId>
+homeboy version show --cwd
 ```
 
 ### `bump`
 
 ```sh
 homeboy version bump <componentId> <patch|minor|major>
+homeboy version bump --cwd <patch|minor|major>
 ```
+
+### CWD Mode (--cwd)
+
+Both subcommands support `--cwd` for ad-hoc operations in any directory without requiring component registration. When using `--cwd`, Homeboy auto-detects version files by checking for:
+
+1. `Cargo.toml` (Rust)
+2. `package.json` (Node.js)
+3. `composer.json` (PHP)
+4. `style.css` (WordPress themes)
+5. `*.php` with WordPress plugin/theme header
 
 This command:
 

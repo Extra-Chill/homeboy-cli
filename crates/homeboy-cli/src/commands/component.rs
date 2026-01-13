@@ -2,7 +2,6 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 
 use homeboy::component::{self, Component, CreateSummary};
-use homeboy::project;
 
 use super::CmdResult;
 
@@ -54,38 +53,14 @@ enum ComponentCommand {
     Set {
         /// Component ID
         id: String,
-        /// Merge JSON object into config (any field, supports @file and - for stdin)
+        /// JSON object to merge into config (supports @file and - for stdin)
         #[arg(long, value_name = "JSON")]
-        merge: Option<String>,
-        /// Update display name
-        #[arg(long)]
-        name: Option<String>,
-        /// Update local path
-        #[arg(long)]
-        local_path: Option<String>,
-        /// Update remote path
-        #[arg(long)]
-        remote_path: Option<String>,
-        /// Update build artifact path
-        #[arg(long)]
-        build_artifact: Option<String>,
-        /// Replace version targets with the provided list (repeatable "file" or "file::pattern")
-        #[arg(long = "version-target", value_name = "TARGET")]
-        version_targets: Vec<String>,
-        /// Update build command
-        #[arg(long)]
-        build_command: Option<String>,
-        /// Update extract command (e.g., "unzip -o {artifact} && rm {artifact}")
-        #[arg(long)]
-        extract_command: Option<String>,
+        json: String,
     },
     /// Delete a component configuration
     Delete {
         /// Component ID
         id: String,
-        /// Skip confirmation
-        #[arg(long)]
-        force: bool,
     },
     /// Rename a component (changes ID based on new name)
     Rename {
@@ -131,72 +106,32 @@ pub fn run(
                 return create_json(&spec, skip_existing);
             }
 
-            let name = name.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "name",
-                    "Missing required argument: name (or use --json)",
-                    None,
-                    None,
-                )
-            })?;
-            let local_path = local_path.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "localPath",
-                    "Missing required argument: --local-path (or use --json)",
-                    None,
-                    None,
-                )
-            })?;
-            let remote_path = remote_path.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "remotePath",
-                    "Missing required argument: --remote-path (or use --json)",
-                    None,
-                    None,
-                )
-            })?;
-            let build_artifact = build_artifact.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "buildArtifact",
-                    "Missing required argument: --build-artifact (or use --json)",
-                    None,
-                    None,
-                )
-            })?;
-
-            create(
-                &name,
-                &local_path,
-                &remote_path,
-                &build_artifact,
+            let result = component::create_from_cli(
+                name,
+                local_path,
+                remote_path,
+                build_artifact,
                 version_targets,
                 build_command,
                 extract_command,
-            )
+            )?;
+
+            Ok((
+                ComponentOutput {
+                    action: "create".to_string(),
+                    component_id: Some(result.id),
+                    success: true,
+                    updated_fields: vec![],
+                    component: Some(result.component),
+                    components: vec![],
+                    import: None,
+                },
+                0,
+            ))
         }
         ComponentCommand::Show { id } => show(&id),
-        ComponentCommand::Set {
-            id,
-            merge,
-            name,
-            local_path,
-            remote_path,
-            build_artifact,
-            version_targets,
-            build_command,
-            extract_command,
-        } => set(SetComponentArgs {
-            id,
-            merge,
-            name,
-            local_path,
-            remote_path,
-            build_artifact,
-            version_targets,
-            build_command,
-            extract_command,
-        }),
-        ComponentCommand::Delete { id, force } => delete(&id, force),
+        ComponentCommand::Set { id, json } => set(&id, &json),
+        ComponentCommand::Delete { id } => delete(&id),
         ComponentCommand::Rename { id, new_name } => rename(&id, &new_name),
         ComponentCommand::List => list(),
     }
@@ -220,57 +155,6 @@ fn create_json(spec: &str, skip_existing: bool) -> CmdResult<ComponentOutput> {
     ))
 }
 
-fn create(
-    name: &str,
-    local_path: &str,
-    remote_path: &str,
-    build_artifact: &str,
-    version_targets: Vec<String>,
-    build_command: Option<String>,
-    extract_command: Option<String>,
-) -> CmdResult<ComponentOutput> {
-    let id = component::slugify_id(name)?;
-
-    if component::exists(&id) {
-        return Err(homeboy::Error::validation_invalid_argument(
-            "component.name",
-            format!("Component '{}' already exists", id),
-            Some(id),
-            None,
-        ));
-    }
-
-    let expanded_path = shellexpand::tilde(local_path).to_string();
-
-    let mut component = Component::new(
-        id.to_string(),
-        name.to_string(),
-        expanded_path,
-        remote_path.to_string(),
-        build_artifact.to_string(),
-    );
-    if !version_targets.is_empty() {
-        component.version_targets = Some(component::parse_version_targets(&version_targets)?);
-    }
-    component.build_command = build_command;
-    component.extract_command = extract_command;
-
-    component::save(&component)?;
-
-    Ok((
-        ComponentOutput {
-            action: "create".to_string(),
-            component_id: Some(id.to_string()),
-            success: true,
-            updated_fields: vec![],
-            component: Some(component),
-            components: vec![],
-            import: None,
-        },
-        0,
-    ))
-}
-
 fn show(id: &str) -> CmdResult<ComponentOutput> {
     let component = component::load(id)?;
 
@@ -288,104 +172,15 @@ fn show(id: &str) -> CmdResult<ComponentOutput> {
     ))
 }
 
-struct SetComponentArgs {
-    id: String,
-    merge: Option<String>,
-    name: Option<String>,
-    local_path: Option<String>,
-    remote_path: Option<String>,
-    build_artifact: Option<String>,
-    version_targets: Vec<String>,
-    build_command: Option<String>,
-    extract_command: Option<String>,
-}
-
-fn set(args: SetComponentArgs) -> CmdResult<ComponentOutput> {
-    let SetComponentArgs {
-        id,
-        merge,
-        name,
-        local_path,
-        remote_path,
-        build_artifact,
-        version_targets,
-        build_command,
-        extract_command,
-    } = args;
-
-    // Handle --merge via public API (mutually exclusive with individual flags)
-    if let Some(spec) = merge {
-        let result = component::merge_from_json(&id, &spec)?;
-        let component = component::load(&id)?;
-        return Ok((
-            ComponentOutput {
-                action: "set".to_string(),
-                component_id: Some(id.clone()),
-                success: true,
-                updated_fields: result.updated_fields,
-                component: Some(component),
-                components: vec![],
-                import: None,
-            },
-            0,
-        ));
-    }
-
-    let mut component = component::load(&id)?;
-    let mut updated_fields: Vec<String> = vec![];
-
-    if let Some(value) = name {
-        component.name = value;
-        updated_fields.push("name".to_string());
-    }
-
-    if let Some(value) = local_path {
-        component.local_path = shellexpand::tilde(&value).to_string();
-        updated_fields.push("localPath".to_string());
-    }
-
-    if let Some(value) = remote_path {
-        component.remote_path = value;
-        updated_fields.push("remotePath".to_string());
-    }
-
-    if let Some(value) = build_artifact {
-        component.build_artifact = value;
-        updated_fields.push("buildArtifact".to_string());
-    }
-
-    if !version_targets.is_empty() {
-        component.version_targets = Some(component::parse_version_targets(&version_targets)?);
-        updated_fields.push("versionTargets".to_string());
-    }
-
-    if let Some(value) = build_command {
-        component.build_command = Some(value);
-        updated_fields.push("buildCommand".to_string());
-    }
-
-    if let Some(value) = extract_command {
-        component.extract_command = Some(value);
-        updated_fields.push("extractCommand".to_string());
-    }
-
-    if updated_fields.is_empty() {
-        return Err(homeboy::Error::validation_invalid_argument(
-            "fields",
-            "No fields specified to update",
-            Some(id.clone()),
-            None,
-        ));
-    }
-
-    component::save(&component)?;
-
+fn set(id: &str, json: &str) -> CmdResult<ComponentOutput> {
+    let result = component::merge_from_json(id, json)?;
+    let component = component::load(id)?;
     Ok((
         ComponentOutput {
             action: "set".to_string(),
-            component_id: Some(id.clone()),
+            component_id: Some(id.to_string()),
             success: true,
-            updated_fields,
+            updated_fields: result.updated_fields,
             component: Some(component),
             components: vec![],
             import: None,
@@ -394,34 +189,8 @@ fn set(args: SetComponentArgs) -> CmdResult<ComponentOutput> {
     ))
 }
 
-fn delete(id: &str, force: bool) -> CmdResult<ComponentOutput> {
-    if !component::exists(id) {
-        return Err(homeboy::Error::component_not_found(id.to_string()));
-    }
-
-    if !force {
-        let projects = project::list().unwrap_or_default();
-        let using: Vec<String> = projects
-            .iter()
-            .filter(|p| p.config.component_ids.contains(&id.to_string()))
-            .map(|p| p.id.clone())
-            .collect();
-
-        if !using.is_empty() {
-            return Err(homeboy::Error::validation_invalid_argument(
-                "component",
-                format!(
-                    "Component '{}' is used by projects: {}. Use --force to delete anyway.",
-                    id,
-                    using.join(", ")
-                ),
-                Some(id.to_string()),
-                Some(using),
-            ));
-        }
-    }
-
-    component::delete(id)?;
+fn delete(id: &str) -> CmdResult<ComponentOutput> {
+    component::delete_safe(id)?;
 
     Ok((
         ComponentOutput {

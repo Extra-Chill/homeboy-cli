@@ -525,3 +525,292 @@ pub fn bump_component_version(
         changelog_changed,
     })
 }
+
+// === CWD Version Operations ===
+
+/// Version file detection candidate
+struct VersionCandidate {
+    file: &'static str,
+    pattern: &'static str,
+}
+
+/// Well-known version file patterns for auto-detection
+const VERSION_CANDIDATES: &[VersionCandidate] = &[
+    VersionCandidate {
+        file: "Cargo.toml",
+        pattern: r#"version\s*=\s*"(\d+\.\d+\.\d+)""#,
+    },
+    VersionCandidate {
+        file: "package.json",
+        pattern: r#""version"\s*:\s*"(\d+\.\d+\.\d+)""#,
+    },
+    VersionCandidate {
+        file: "composer.json",
+        pattern: r#""version"\s*:\s*"(\d+\.\d+\.\d+)""#,
+    },
+    VersionCandidate {
+        file: "style.css",
+        pattern: r"Version:\s*(\d+\.\d+\.\d+)",
+    },
+];
+
+/// Detect version targets in a directory by checking for well-known version files.
+pub fn detect_version_targets(base_path: &str) -> Result<Vec<(String, String, String)>> {
+    let mut found = Vec::new();
+
+    // Check well-known files first
+    for candidate in VERSION_CANDIDATES {
+        let full_path = format!("{}/{}", base_path, candidate.file);
+        if Path::new(&full_path).exists() {
+            let content = fs::read_to_string(&full_path).ok();
+            if let Some(content) = content {
+                if parse_version(&content, candidate.pattern).is_some() {
+                    found.push((
+                        candidate.file.to_string(),
+                        candidate.pattern.to_string(),
+                        full_path,
+                    ));
+                }
+            }
+        }
+    }
+
+    // Check for PHP plugin files (*.php with Version: header)
+    if let Ok(entries) = fs::read_dir(base_path) {
+        let php_pattern = r"Version:\s*(\d+\.\d+\.\d+)";
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "php") {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    // Only match if it looks like a WordPress plugin header
+                    if content.contains("Plugin Name:") || content.contains("Theme Name:") {
+                        if parse_version(&content, php_pattern).is_some() {
+                            let filename = path.file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("unknown.php");
+                            found.push((
+                                filename.to_string(),
+                                php_pattern.to_string(),
+                                path.to_string_lossy().to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(found)
+}
+
+fn get_cwd_path() -> Result<String> {
+    std::env::current_dir()
+        .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Read version from auto-detected version files in the current working directory.
+pub fn read_version_cwd() -> Result<ComponentVersionInfo> {
+    let cwd = get_cwd_path()?;
+    let detected = detect_version_targets(&cwd)?;
+
+    if detected.is_empty() {
+        return Err(Error::validation_invalid_argument(
+            "versionTargets",
+            "No version files found in current directory. Looked for: Cargo.toml, package.json, composer.json, style.css, *.php with plugin/theme header",
+            None,
+            None,
+        ));
+    }
+
+    // Use the first detected file as primary
+    let (file, pattern, full_path) = &detected[0];
+
+    let content = fs::read_to_string(full_path)
+        .map_err(|e| Error::internal_io(e.to_string(), Some("read version file".to_string())))?;
+
+    let versions = parse_versions(&content, pattern).ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "versionPattern",
+            format!("Invalid version regex pattern '{}'", pattern),
+            None,
+            Some(vec![pattern.clone()]),
+        )
+    })?;
+
+    if versions.is_empty() {
+        return Err(build_version_parse_error(file, pattern, &content));
+    }
+
+    let unique: BTreeSet<String> = versions.iter().cloned().collect();
+    if unique.len() != 1 {
+        return Err(Error::internal_unexpected(format!(
+            "Multiple different versions found in {}: {}",
+            file,
+            unique.into_iter().collect::<Vec<_>>().join(", ")
+        )));
+    }
+
+    let version = versions[0].clone();
+
+    Ok(ComponentVersionInfo {
+        version,
+        targets: vec![VersionTargetInfo {
+            file: file.clone(),
+            pattern: pattern.clone(),
+            full_path: full_path.clone(),
+            match_count: versions.len(),
+        }],
+    })
+}
+
+/// Bump version in auto-detected version files in the current working directory.
+pub fn bump_version_cwd(bump_type: &str, dry_run: bool) -> Result<BumpResult> {
+    let cwd = get_cwd_path()?;
+    let detected = detect_version_targets(&cwd)?;
+
+    if detected.is_empty() {
+        return Err(Error::validation_invalid_argument(
+            "versionTargets",
+            "No version files found in current directory",
+            None,
+            None,
+        ));
+    }
+
+    // Read current version from primary (first) file
+    let (primary_file, primary_pattern, primary_full_path) = &detected[0];
+
+    let primary_content = fs::read_to_string(primary_full_path)
+        .map_err(|e| Error::internal_io(e.to_string(), Some("read version file".to_string())))?;
+
+    let primary_versions = parse_versions(&primary_content, primary_pattern).ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "versionPattern",
+            format!("Invalid version regex pattern '{}'", primary_pattern),
+            None,
+            Some(vec![primary_pattern.clone()]),
+        )
+    })?;
+
+    if primary_versions.is_empty() {
+        return Err(build_version_parse_error(primary_file, primary_pattern, &primary_content));
+    }
+
+    let unique_primary: BTreeSet<String> = primary_versions.iter().cloned().collect();
+    if unique_primary.len() != 1 {
+        return Err(Error::internal_unexpected(format!(
+            "Multiple different versions found in {}: {}",
+            primary_file,
+            unique_primary.into_iter().collect::<Vec<_>>().join(", ")
+        )));
+    }
+
+    let old_version = primary_versions[0].clone();
+    let new_version = increment_version(&old_version, bump_type).ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "version",
+            format!("Invalid version format: {}", old_version),
+            None,
+            Some(vec![old_version.clone()]),
+        )
+    })?;
+
+    // Try to find and finalize changelog
+    let changelog_path = changelog::detect_changelog_path(&cwd);
+    let (changelog_finalized, changelog_changed, changelog_path_str) = if let Some(cl_path) = &changelog_path {
+        let changelog_content = fs::read_to_string(cl_path).unwrap_or_default();
+        let settings = changelog::default_settings();
+
+        if let Ok((finalized, changed)) = changelog::finalize_next_section(
+            &changelog_content,
+            &settings.next_section_aliases,
+            &new_version,
+            false,
+        ) {
+            if changed && !dry_run {
+                let _ = fs::write(cl_path, &finalized);
+            }
+            (true, changed, cl_path.to_string_lossy().to_string())
+        } else {
+            (false, false, cl_path.to_string_lossy().to_string())
+        }
+    } else {
+        (false, false, String::new())
+    };
+
+    // Update all detected version files
+    let mut target_infos = Vec::new();
+
+    for (file, pattern, full_path) in &detected {
+        let content = fs::read_to_string(full_path)
+            .map_err(|e| Error::internal_io(e.to_string(), Some("read version file".to_string())))?;
+
+        let versions = parse_versions(&content, pattern).ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "versionPattern",
+                format!("Invalid version regex pattern '{}'", pattern),
+                None,
+                Some(vec![pattern.clone()]),
+            )
+        })?;
+
+        if versions.is_empty() {
+            return Err(Error::internal_unexpected(format!(
+                "Could not find version in {}",
+                file
+            )));
+        }
+
+        // Validate all versions match expected
+        let unique: BTreeSet<String> = versions.iter().cloned().collect();
+        if unique.len() != 1 {
+            return Err(Error::internal_unexpected(format!(
+                "Multiple different versions found in {}: {}",
+                file,
+                unique.into_iter().collect::<Vec<_>>().join(", ")
+            )));
+        }
+
+        let found = &versions[0];
+        if found != &old_version {
+            return Err(Error::internal_unexpected(format!(
+                "Version mismatch in {}: found {}, expected {}",
+                file, found, old_version
+            )));
+        }
+
+        let match_count = versions.len();
+
+        if !dry_run {
+            let (new_content, _) = replace_versions(&content, pattern, &new_version)
+                .ok_or_else(|| {
+                    Error::validation_invalid_argument(
+                        "versionPattern",
+                        format!("Failed to replace version in {}", file),
+                        None,
+                        None,
+                    )
+                })?;
+
+            fs::write(full_path, &new_content)
+                .map_err(|e| Error::internal_io(e.to_string(), Some("write version file".to_string())))?;
+        }
+
+        target_infos.push(VersionTargetInfo {
+            file: file.clone(),
+            pattern: pattern.clone(),
+            full_path: full_path.clone(),
+            match_count,
+        });
+    }
+
+    Ok(BumpResult {
+        old_version,
+        new_version,
+        targets: target_infos,
+        changelog_path: changelog_path_str,
+        changelog_finalized,
+        changelog_changed,
+    })
+}

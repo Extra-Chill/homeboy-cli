@@ -1,6 +1,6 @@
 # `homeboy component`
 
-Manage standalone component configurations.
+Manage standalone component configurations stored under `components/<id>.json`.
 
 ## Synopsis
 
@@ -26,7 +26,7 @@ Options:
 - `--build-artifact <path>`: build artifact path relative to `localPath` (required in CLI mode)
 - `--version-target <TARGET>`: version target in format `file` or `file::pattern` (repeatable)
 - `--build-command <command>`: build command to run in `localPath`
-- `--extract-command <command>`: command to run after upload (optional)
+- `--extract-command <command>`: command to run after upload (optional; supports `{artifact}` and `{targetDir}`)
 
 ### `show`
 
@@ -37,26 +37,36 @@ homeboy component show <id>
 ### `set`
 
 ```sh
-homeboy component set <id> [OPTIONS]
+homeboy component set <id> --json <JSON>
 ```
+
+Updates a component by merging a JSON object into `components/<id>.json`.
 
 Options:
 
-- `--name <name>`: update display name
-- `--local-path <path>`: update local path
-- `--remote-path <path>`: update remote path
-- `--build-artifact <path>`: update build artifact path
-- `--version-target <TARGET>`: replace version targets (repeatable `file` or `file::pattern`)
-- `--build-command <command>`: update build command
-- `--extract-command <command>`: update extract command
+- `--json <JSON>`: JSON object to merge into config (supports `@file` and `-` for stdin)
+
+Notes:
+
+- `set` no longer supports individual field flags; use `--json` and provide the fields you want to update.
 
 ### `delete`
 
 ```sh
-homeboy component delete <id> [--force]
+homeboy component delete <id>
 ```
 
-If the component is referenced by one or more projects, `--force` is required.
+Deletion is safety-checked:
+
+- If the component is referenced by one or more projects, the command errors and asks you to remove it from those projects first.
+
+### `rename`
+
+```sh
+homeboy component rename <id> <newName>
+```
+
+Renames a component by changing its ID to `slugify_id(<newName>)` and rewriting any project files that reference the old ID.
 
 ### `list`
 
@@ -72,7 +82,7 @@ homeboy component list
 
 ```json
 {
-  "action": "create|show|set|delete|list|component.create",
+  "action": "create|show|set|delete|rename|list|component.create",
   "componentId": "<id>|null",
   "success": true,
   "updatedFields": ["name", "localPath"],
@@ -85,7 +95,7 @@ homeboy component list
 Notes:
 
 - `action` is `component.create` only for JSON import mode (`homeboy component create --json ...`).
-- Other subcommands use `create`, `show`, `set`, `delete`, or `list`.
+- Other subcommands use `create`, `show`, `set`, `delete`, `rename`, or `list`.
 
 
 ## Related

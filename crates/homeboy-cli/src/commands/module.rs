@@ -58,17 +58,11 @@ enum ModuleCommand {
     Update {
         /// Module ID
         module_id: String,
-        /// Force update even if module has local changes
-        #[arg(long)]
-        force: bool,
     },
     /// Uninstall a module
     Uninstall {
         /// Module ID
         module_id: String,
-        /// Force deletion for git-cloned modules (not needed for symlinked modules)
-        #[arg(long)]
-        force: bool,
     },
     /// Execute a module action (API call or builtin)
     Action {
@@ -104,8 +98,8 @@ pub fn run(args: ModuleArgs, _global: &crate::commands::GlobalArgs) -> CmdResult
         } => run_module(&module_id, project, component, input, args),
         ModuleCommand::Setup { module_id } => setup_module(&module_id),
         ModuleCommand::Install { source, id } => install_module(&source, id),
-        ModuleCommand::Update { module_id, force } => update_module(&module_id, force),
-        ModuleCommand::Uninstall { module_id, force } => uninstall_module(&module_id, force),
+        ModuleCommand::Update { module_id } => update_module(&module_id),
+        ModuleCommand::Uninstall { module_id } => uninstall_module(&module_id),
         ModuleCommand::Action {
             module_id,
             action_id,
@@ -247,19 +241,6 @@ fn run_module(
     ))
 }
 
-fn confirm_dangerous_action(force: bool, message: &str) -> homeboy::Result<()> {
-    if force {
-        return Ok(());
-    }
-
-    Err(homeboy::Error::validation_invalid_argument(
-        "force",
-        format!("{message} Re-run with --force to confirm."),
-        None,
-        None,
-    ))
-}
-
 fn install_module(source: &str, id: Option<String>) -> CmdResult<ModuleOutput> {
     let result = homeboy::module::install(source, id.as_deref())?;
     let linked = is_module_linked(&result.module_id);
@@ -275,7 +256,7 @@ fn install_module(source: &str, id: Option<String>) -> CmdResult<ModuleOutput> {
     ))
 }
 
-fn update_module(module_id: &str, force: bool) -> CmdResult<ModuleOutput> {
+fn update_module(module_id: &str) -> CmdResult<ModuleOutput> {
     let module_dir = module_path(module_id);
     if !module_dir.exists() {
         return Err(homeboy::Error::module_not_found(module_id));
@@ -288,13 +269,6 @@ fn update_module(module_id: &str, force: bool) -> CmdResult<ModuleOutput> {
             Some(module_id.to_string()),
             "Module is linked. Update the source directory directly.",
         ));
-    }
-
-    if !git::is_workdir_clean(&module_dir) {
-        confirm_dangerous_action(
-            force,
-            "Module has uncommitted changes; update may overwrite them.",
-        )?;
     }
 
     // Load module to get sourceUrl from manifest
@@ -332,9 +306,9 @@ fn update_module(module_id: &str, force: bool) -> CmdResult<ModuleOutput> {
     ))
 }
 
-fn uninstall_module(module_id: &str, force: bool) -> CmdResult<ModuleOutput> {
+fn uninstall_module(module_id: &str) -> CmdResult<ModuleOutput> {
     let was_linked = is_module_linked(module_id);
-    let path = homeboy::module::uninstall(module_id, force)?;
+    let path = homeboy::module::uninstall(module_id)?;
 
     Ok((
         ModuleOutput::Uninstall {

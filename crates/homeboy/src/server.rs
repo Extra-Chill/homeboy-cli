@@ -2,6 +2,7 @@ use crate::error::{Error, Result};
 use crate::local_files::{self, FileSystem};
 use crate::json;
 use crate::paths;
+use crate::project;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
@@ -318,18 +319,24 @@ pub fn rename(id: &str, new_name: &str) -> Result<CreateResult> {
     })
 }
 
-pub fn delete_with_validation(id: &str, force: bool) -> Result<()> {
+pub fn delete_safe(id: &str) -> Result<()> {
     if !exists(id) {
         return Err(Error::server_not_found(id.to_string()));
     }
 
-    if !force {
-        return Err(Error::validation_invalid_argument(
-            "force",
-            "Use --force to confirm deletion",
-            Some(id.to_string()),
-            None,
-        ));
+    let projects = project::list().unwrap_or_default();
+    for proj in projects {
+        if proj.config.server_id.as_deref() == Some(id) {
+            return Err(Error::validation_invalid_argument(
+                "server",
+                format!(
+                    "Server is used by project '{}'. Update or delete the project first.",
+                    proj.id
+                ),
+                Some(id.to_string()),
+                Some(vec![proj.id.clone()]),
+            ));
+        }
     }
 
     delete(id)

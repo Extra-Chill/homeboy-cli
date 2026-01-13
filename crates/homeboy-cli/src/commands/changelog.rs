@@ -2,6 +2,7 @@ use clap::{Args, Subcommand};
 use serde::{Deserialize, Serialize};
 
 use crate::docs;
+use crate::input::load_op_data;
 
 use super::CmdResult;
 use homeboy::changelog;
@@ -98,8 +99,7 @@ pub fn run(
             message,
         }) => {
             if let Some(spec) = json.as_deref() {
-                let data: ChangelogAddData =
-                    homeboy::json::load_op_data(spec, "changelog.add")?;
+                let data: ChangelogAddData = load_op_data(spec, "changelog.add")?;
 
                 let (out, code) = add_next_items(&data.component_id, &data.messages)?;
 

@@ -1,5 +1,9 @@
+use crate::json::{read_json_file, set_json_pointer, write_json_file_pretty};
 use crate::module::{load_module, ModuleManifest};
+use crate::{Error, Result};
 use regex::Regex;
+use std::fs;
+use std::path::Path;
 
 /// Parse version from content using regex pattern.
 /// Pattern must contain a capture group for the version string.
@@ -85,4 +89,86 @@ pub fn increment_version(version: &str, bump_type: &str) -> Option<String> {
     };
 
     Some(format!("{}.{}.{}", new_major, new_minor, new_patch))
+}
+
+/// Update version in a file, handling both JSON and text-based version files.
+/// Returns the number of replacements made.
+pub fn update_version_in_file(
+    path: &str,
+    pattern: &str,
+    old_version: &str,
+    new_version: &str,
+    modules: &[String],
+) -> Result<usize> {
+    // JSON files with default pattern use structured update
+    if Path::new(path)
+        .extension()
+        .is_some_and(|ext| ext == "json")
+        && default_pattern_for_file(path, modules).as_deref() == Some(pattern)
+    {
+        let mut json = read_json_file(path)?;
+        let Some(current) = json.get("version").and_then(|v| v.as_str()) else {
+            return Err(Error::config_missing_key("version", Some(path.to_string())));
+        };
+
+        if current != old_version {
+            return Err(Error::internal_unexpected(format!(
+                "Version mismatch in {}: found {}, expected {}",
+                path, current, old_version
+            )));
+        }
+
+        set_json_pointer(
+            &mut json,
+            "/version",
+            serde_json::Value::String(new_version.to_string()),
+        )?;
+        write_json_file_pretty(path, &json)?;
+        return Ok(1);
+    }
+
+    // Text files use regex replacement
+    let content = fs::read_to_string(path)
+        .map_err(|e| Error::internal_io(e.to_string(), Some("read version file".to_string())))?;
+
+    let versions = parse_versions(&content, pattern).ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "versionPattern",
+            format!("Invalid version regex pattern '{}'", pattern),
+            None,
+            Some(vec![pattern.to_string()]),
+        )
+    })?;
+
+    if versions.is_empty() {
+        return Err(Error::internal_unexpected(format!(
+            "Could not find version in {}",
+            path
+        )));
+    }
+
+    // Validate all found versions match expected
+    for v in &versions {
+        if v != old_version {
+            return Err(Error::internal_unexpected(format!(
+                "Version mismatch in {}: found {}, expected {}",
+                path, v, old_version
+            )));
+        }
+    }
+
+    let (new_content, replaced_count) = replace_versions(&content, pattern, new_version)
+        .ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "versionPattern",
+                format!("Invalid version regex pattern '{}'", pattern),
+                None,
+                Some(vec![pattern.to_string()]),
+            )
+        })?;
+
+    fs::write(path, &new_content)
+        .map_err(|e| Error::internal_io(e.to_string(), Some("write version file".to_string())))?;
+
+    Ok(replaced_count)
 }

@@ -7,7 +7,7 @@ pub mod context;
 pub mod deploy;
 pub mod git;
 pub mod http;
-pub mod json;
+pub(crate) mod json;
 pub mod keychain;
 pub mod module;
 pub mod module_settings;

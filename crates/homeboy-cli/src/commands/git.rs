@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 
 use homeboy::config::ConfigManager;
-use homeboy::json::read_json_spec_to_string;
+
+use crate::input::read_json_spec_to_string;
 
 use crate::commands::version;
 

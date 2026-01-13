@@ -5,12 +5,10 @@ use regex::Regex;
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
 
 use homeboy::config::{ConfigManager, VersionTarget};
-use homeboy::json::{read_json_file, set_json_pointer, write_json_file_pretty};
 use homeboy::version::{
-    default_pattern_for_file, increment_version, parse_versions, replace_versions,
+    default_pattern_for_file, increment_version, parse_versions, update_version_in_file,
 };
 use homeboy::Error;
 
@@ -210,28 +208,6 @@ fn validate_single_version(
     Ok((found, versions.len()))
 }
 
-fn replace_versions_in_content(
-    content: &str,
-    pattern: &str,
-    expected_old: &str,
-    new_version: &str,
-) -> homeboy::Result<(String, usize)> {
-    let all_versions = extract_versions_from_content(content, pattern)?;
-    let _ = validate_single_version(all_versions, "<content>", expected_old)?;
-
-    let (replaced, replaced_count) =
-        replace_versions(content, pattern, new_version).ok_or_else(|| {
-            Error::validation_invalid_argument(
-                "versionPattern",
-                format!("Invalid version regex pattern '{}'", pattern),
-                None,
-                Some(vec![pattern.to_string()]),
-            )
-        })?;
-
-    Ok((replaced, replaced_count))
-}
-
 fn write_updated_version(
     full_path: &str,
     version_pattern: &str,
@@ -239,44 +215,7 @@ fn write_updated_version(
     new_version: &str,
     modules: &[String],
 ) -> homeboy::Result<usize> {
-    if Path::new(full_path)
-        .extension()
-        .is_some_and(|ext| ext == "json")
-        && default_pattern_for_file(full_path, modules).as_deref() == Some(version_pattern)
-    {
-        let mut json = read_json_file(full_path)?;
-        let Some(current) = json.get("version").and_then(|v| v.as_str()) else {
-            return Err(Error::config_missing_key(
-                "version",
-                Some(full_path.to_string()),
-            ));
-        };
-
-        if current != old_version {
-            return Err(Error::internal_unexpected(format!(
-                "Version mismatch in {}: found {}, expected {}",
-                full_path, current, old_version
-            )));
-        }
-
-        set_json_pointer(
-            &mut json,
-            "/version",
-            serde_json::Value::String(new_version.to_string()),
-        )?;
-        write_json_file_pretty(full_path, &json)?;
-        return Ok(1);
-    }
-
-    let content = fs::read_to_string(full_path).map_err(|err| {
-        Error::internal_io(err.to_string(), Some("read version file".to_string()))
-    })?;
-    let (new_content, replaced_count) =
-        replace_versions_in_content(&content, version_pattern, old_version, new_version)?;
-    fs::write(full_path, &new_content).map_err(|err| {
-        Error::internal_io(err.to_string(), Some("write version file".to_string()))
-    })?;
-    Ok(replaced_count)
+    update_version_in_file(full_path, version_pattern, old_version, new_version, modules)
 }
 
 pub fn show_version_output(component_id: &str) -> homeboy::Result<(VersionShowOutput, i32)> {

@@ -7,8 +7,9 @@ use std::path::Path;
 use homeboy::config::{ConfigManager, ProjectRecord};
 use homeboy::context::{resolve_project_ssh_with_base_path, RemoteProjectContext};
 use homeboy::deploy::{deploy_artifact, DeployResult};
-use homeboy::json::parse_bulk_ids;
 use homeboy::module::{load_module, DeployVerification};
+
+use crate::input::parse_bulk_ids;
 use homeboy::ssh::{execute_local_command_in_dir, SshClient};
 use homeboy::version::{default_pattern_for_file, parse_version};
 

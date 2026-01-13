@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::files::{self, FileSystem};
+use crate::local_files::{self, FileSystem};
 use crate::json;
 use crate::paths;
 use serde::{Deserialize, Serialize};
@@ -41,19 +41,19 @@ pub fn load(id: &str) -> Result<Server> {
     if !path.exists() {
         return Err(Error::server_not_found(id.to_string()));
     }
-    let content = files::local().read(&path)?;
+    let content = local_files::local().read(&path)?;
     json::from_str(&content)
 }
 
 pub fn list() -> Result<Vec<Server>> {
     let dir = paths::servers()?;
-    let entries = files::local().list(&dir)?;
+    let entries = local_files::local().list(&dir)?;
 
     let mut servers: Vec<Server> = entries
         .into_iter()
         .filter(|e| e.is_json() && !e.is_dir)
         .filter_map(|e| {
-            let content = files::local().read(&e.path).ok()?;
+            let content = local_files::local().read(&e.path).ok()?;
             json::from_str(&content).ok()
         })
         .collect();
@@ -75,9 +75,9 @@ pub fn save(server: &Server) -> Result<()> {
     }
 
     let path = paths::server(&server.id)?;
-    files::ensure_app_dirs()?;
+    local_files::ensure_app_dirs()?;
     let content = json::to_string_pretty(server)?;
-    files::local().write(&path, &content)?;
+    local_files::local().write(&path, &content)?;
     Ok(())
 }
 
@@ -86,7 +86,7 @@ pub fn delete(id: &str) -> Result<()> {
     if !path.exists() {
         return Err(Error::server_not_found(id.to_string()));
     }
-    files::local().delete(&path)?;
+    local_files::local().delete(&path)?;
     Ok(())
 }
 
@@ -292,7 +292,7 @@ pub fn rename(id: &str, new_name: &str) -> Result<CreateResult> {
     server.id = new_id.clone();
     server.name = new_name.to_string();
 
-    files::ensure_app_dirs()?;
+    local_files::ensure_app_dirs()?;
     std::fs::rename(&old_path, &new_path).map_err(|e| {
         Error::internal_io(e.to_string(), Some("rename server".to_string()))
     })?;
@@ -479,7 +479,7 @@ pub fn generate_key(server_id: &str) -> Result<KeyGenerateResult> {
     let key_path_str = key_path.to_string_lossy().to_string();
 
     if let Some(parent) = key_path.parent() {
-        files::local().ensure_dir(parent)?;
+        local_files::local().ensure_dir(parent)?;
     }
 
     let _ = std::fs::remove_file(&key_path);
@@ -504,7 +504,7 @@ pub fn generate_key(server_id: &str) -> Result<KeyGenerateResult> {
     let server = set_identity_file(server_id, Some(key_path_str.clone()))?;
 
     let pub_key_path = format!("{}.pub", key_path_str);
-    let public_key = files::local().read(std::path::Path::new(&pub_key_path))?;
+    let public_key = local_files::local().read(std::path::Path::new(&pub_key_path))?;
 
     Ok(KeyGenerateResult {
         server,
@@ -567,7 +567,7 @@ pub fn import_key(server_id: &str, source_path: &str) -> Result<KeyImportResult>
     let key_path_str = key_path.to_string_lossy().to_string();
 
     if let Some(parent) = key_path.parent() {
-        files::local().ensure_dir(parent)?;
+        local_files::local().ensure_dir(parent)?;
     }
 
     std::fs::write(&key_path, &private_key).map_err(|e| {

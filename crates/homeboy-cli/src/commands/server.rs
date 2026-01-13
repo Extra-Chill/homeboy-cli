@@ -281,7 +281,12 @@ fn set(
     port: Option<u16>,
 ) -> homeboy::Result<(ServerOutput, i32)> {
     if name.is_none() && host.is_none() && user.is_none() && port.is_none() {
-        return Err(Error::other("No changes specified".to_string()));
+        return Err(Error::validation_invalid_argument(
+            "fields",
+            "No changes specified",
+            None,
+            None,
+        ));
     }
 
     let result = server::update(server_id, name, host, user, port)?;
@@ -303,7 +308,12 @@ fn set(
 
 fn delete(server_id: &str, force: bool) -> homeboy::Result<(ServerOutput, i32)> {
     if !force {
-        return Err(Error::other("Use --force to confirm deletion".to_string()));
+        return Err(Error::validation_invalid_argument(
+            "force",
+            "Use --force to confirm deletion",
+            None,
+            None,
+        ));
     }
 
     server::load(server_id)?;
@@ -311,10 +321,15 @@ fn delete(server_id: &str, force: bool) -> homeboy::Result<(ServerOutput, i32)> 
     let projects = project::list()?;
     for proj in projects {
         if proj.config.server_id.as_deref() == Some(server_id) {
-            return Err(Error::other(format!(
-                "Server is used by project '{}'. Update or delete the project first.",
-                proj.id
-            )));
+            return Err(Error::validation_invalid_argument(
+                "server",
+                format!(
+                    "Server is used by project '{}'. Update or delete the project first.",
+                    proj.id
+                ),
+                Some(server_id.to_string()),
+                Some(vec![proj.id.clone()]),
+            ));
         }
     }
 

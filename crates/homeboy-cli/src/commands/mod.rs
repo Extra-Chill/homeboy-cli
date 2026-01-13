@@ -32,8 +32,11 @@ pub(crate) fn run_markdown(
         crate::Commands::Docs(args) => docs::run_markdown(args),
         crate::Commands::Init(args) => init::run_markdown(args),
         crate::Commands::Changelog(args) => changelog::run_markdown(args),
-        _ => Err(homeboy::Error::other(
-            "Invalid raw markdown response mode".to_string(),
+        _ => Err(homeboy::Error::validation_invalid_argument(
+            "output_mode",
+            "Command does not support markdown output",
+            None,
+            None,
         )),
     }
 }
@@ -44,7 +47,12 @@ pub(crate) fn run_json(
 ) -> (homeboy::Result<homeboy::output::CmdSuccess>, i32) {
     match command {
         crate::Commands::Init(_) => {
-            let err = homeboy::Error::other("Init uses markdown output mode".to_string());
+            let err = homeboy::Error::validation_invalid_argument(
+                "output_mode",
+                "Init command uses markdown output mode",
+                None,
+                None,
+            );
             homeboy::output::map_cmd_result_to_json::<serde_json::Value>(Err(err))
         }
         crate::Commands::Project(args) => homeboy::output::map_cmd_result_to_json(
@@ -99,7 +107,12 @@ pub(crate) fn run_json(
             api::run(args, global).map(|(data, exit_code)| (data, vec![], exit_code)),
         ),
         crate::Commands::List => {
-            let err = homeboy::Error::other("List uses raw output mode".to_string());
+            let err = homeboy::Error::validation_invalid_argument(
+                "output_mode",
+                "List command uses raw output mode",
+                None,
+                None,
+            );
             homeboy::output::map_cmd_result_to_json::<serde_json::Value>(Err(err))
         }
     }

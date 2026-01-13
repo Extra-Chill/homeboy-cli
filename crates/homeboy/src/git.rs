@@ -41,6 +41,39 @@ pub fn pull_repo(repo_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Check if a git working directory has no uncommitted changes.
+pub fn is_workdir_clean(path: &Path) -> bool {
+    let output = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(path)
+        .output();
+
+    match output {
+        Ok(output) => output.status.success() && output.stdout.is_empty(),
+        Err(_) => false,
+    }
+}
+
+/// Pull with fast-forward only, inheriting stdio for interactive output.
+pub fn pull_ff_only_interactive(path: &Path) -> Result<()> {
+    use std::process::Stdio;
+
+    let status = Command::new("git")
+        .args(["pull", "--ff-only"])
+        .current_dir(path)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .map_err(|e| Error::git_command_failed(format!("Failed to run git pull: {}", e)))?;
+
+    if !status.success() {
+        return Err(Error::git_command_failed("git pull --ff-only failed".to_string()));
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 pub struct CommitInfo {
     pub hash: String,

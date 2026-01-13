@@ -1,10 +1,7 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
-use homeboy::base_path;
-use homeboy::project;
-use homeboy::context::resolve_project_ssh;
-use homeboy::shell;
+use homeboy::logs;
 
 use crate::commands::CmdResult;
 
@@ -90,25 +87,22 @@ pub struct LogContent {
 }
 
 fn list(project_id: &str) -> CmdResult<LogsOutput> {
-    let project = project::load_record(project_id)?;
-
-    let entries = project
-        .config
-        .remote_logs
-        .pinned_logs
-        .iter()
-        .map(|log| LogEntry {
-            path: log.path.clone(),
-            label: log.label.clone(),
-            tail_lines: log.tail_lines,
-        })
-        .collect();
+    let entries = logs::list(project_id)?;
 
     Ok((
         LogsOutput {
             command: "logs.list".to_string(),
             project_id: project_id.to_string(),
-            entries: Some(entries),
+            entries: Some(
+                entries
+                    .into_iter()
+                    .map(|e| LogEntry {
+                        path: e.path,
+                        label: e.label,
+                        tail_lines: e.tail_lines,
+                    })
+                    .collect(),
+            ),
             log: None,
             cleared_path: None,
         },
@@ -117,13 +111,8 @@ fn list(project_id: &str) -> CmdResult<LogsOutput> {
 }
 
 fn show(project_id: &str, path: &str, lines: u32, follow: bool) -> CmdResult<LogsOutput> {
-    let ctx = resolve_project_ssh(project_id)?;
-
-    let full_path = base_path::join_remote_path(ctx.base_path.as_deref(), path)?;
-
     if follow {
-        let tail_cmd = format!("tail -f {}", shell::quote_path(&full_path));
-        let code = ctx.client.execute_interactive(Some(&tail_cmd));
+        let code = logs::follow(project_id, path)?;
 
         Ok((
             LogsOutput {
@@ -136,12 +125,7 @@ fn show(project_id: &str, path: &str, lines: u32, follow: bool) -> CmdResult<Log
             code,
         ))
     } else {
-        let command = format!("tail -n {} {}", lines, shell::quote_path(&full_path));
-        let output = ctx.client.execute(&command);
-
-        if !output.success {
-            return Err(homeboy::Error::other(output.stderr));
-        }
+        let content = logs::show(project_id, path, lines)?;
 
         Ok((
             LogsOutput {
@@ -149,9 +133,9 @@ fn show(project_id: &str, path: &str, lines: u32, follow: bool) -> CmdResult<Log
                 project_id: project_id.to_string(),
                 entries: None,
                 log: Some(LogContent {
-                    path: full_path,
-                    lines,
-                    content: output.stdout,
+                    path: content.path,
+                    lines: content.lines,
+                    content: content.content,
                 }),
                 cleared_path: None,
             },
@@ -161,16 +145,7 @@ fn show(project_id: &str, path: &str, lines: u32, follow: bool) -> CmdResult<Log
 }
 
 fn clear(project_id: &str, path: &str) -> CmdResult<LogsOutput> {
-    let ctx = resolve_project_ssh(project_id)?;
-
-    let full_path = base_path::join_remote_path(ctx.base_path.as_deref(), path)?;
-
-    let command = format!(": > {}", shell::quote_path(&full_path));
-    let output = ctx.client.execute(&command);
-
-    if !output.success {
-        return Err(homeboy::Error::other(output.stderr));
-    }
+    let cleared_path = logs::clear(project_id, path)?;
 
     Ok((
         LogsOutput {
@@ -178,7 +153,7 @@ fn clear(project_id: &str, path: &str) -> CmdResult<LogsOutput> {
             project_id: project_id.to_string(),
             entries: None,
             log: None,
-            cleared_path: Some(full_path),
+            cleared_path: Some(cleared_path),
         },
         0,
     ))

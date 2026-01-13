@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::files::{self, FileSystem};
+use crate::local_files::{self, FileSystem};
 use crate::json;
 use crate::paths;
 use serde::{Deserialize, Serialize};
@@ -281,7 +281,7 @@ pub fn load_record(id: &str) -> Result<ProjectRecord> {
     if !path.exists() {
         return Err(Error::project_not_found(id.to_string()));
     }
-    let content = files::local().read(&path)?;
+    let content = local_files::local().read(&path)?;
     let config: Project = json::from_str(&content)?;
 
     let expected_id = slugify_id(&config.name)?;
@@ -308,13 +308,13 @@ pub fn load_record(id: &str) -> Result<ProjectRecord> {
 
 pub fn list() -> Result<Vec<ProjectRecord>> {
     let dir = paths::projects()?;
-    let entries = files::local().list(&dir)?;
+    let entries = local_files::local().list(&dir)?;
 
     let mut projects: Vec<ProjectRecord> = entries
         .into_iter()
         .filter(|e| e.is_json() && !e.is_dir)
         .filter_map(|e| {
-            let content = files::local().read(&e.path).ok()?;
+            let content = local_files::local().read(&e.path).ok()?;
             let config: Project = json::from_str(&content).ok()?;
             let id = e.path.file_stem()?.to_string_lossy().to_string();
             let expected_id = slugify_id(&config.name).ok()?;
@@ -342,9 +342,9 @@ pub fn save(id: &str, project: &Project) -> Result<()> {
     }
 
     let path = paths::project(id)?;
-    files::ensure_app_dirs()?;
+    local_files::ensure_app_dirs()?;
     let content = json::to_string_pretty(project)?;
-    files::local().write(&path, &content)?;
+    local_files::local().write(&path, &content)?;
     Ok(())
 }
 
@@ -353,7 +353,7 @@ pub fn delete(id: &str) -> Result<()> {
     if !path.exists() {
         return Err(Error::project_not_found(id.to_string()));
     }
-    files::local().delete(&path)?;
+    local_files::local().delete(&path)?;
     Ok(())
 }
 
@@ -590,7 +590,7 @@ pub fn rename(id: &str, new_name: &str) -> Result<RenameResult> {
         ));
     }
 
-    files::ensure_app_dirs()?;
+    local_files::ensure_app_dirs()?;
     std::fs::rename(&old_path, &new_path).map_err(|e| {
         Error::internal_io(e.to_string(), Some("rename project".to_string()))
     })?;
@@ -613,7 +613,7 @@ pub fn repair(id: &str) -> Result<RenameResult> {
         return Err(Error::project_not_found(id.to_string()));
     }
 
-    let content = files::local().read(&path)?;
+    let content = local_files::local().read(&path)?;
     let project: Project = json::from_str(&content)?;
     let expected_id = slugify_id(&project.name)?;
 
@@ -638,7 +638,7 @@ pub fn repair(id: &str) -> Result<RenameResult> {
         ));
     }
 
-    files::ensure_app_dirs()?;
+    local_files::ensure_app_dirs()?;
     std::fs::rename(&path, &new_path).map_err(|e| {
         Error::internal_io(e.to_string(), Some("repair project rename".to_string()))
     })?;
@@ -648,6 +648,47 @@ pub fn repair(id: &str) -> Result<RenameResult> {
         new_id: expected_id,
         project,
     })
+}
+
+pub fn validate_component_ids(
+    component_ids: Vec<String>,
+    project_id: &str,
+) -> Result<Vec<String>> {
+    use crate::component;
+    use std::collections::HashSet;
+
+    if component_ids.is_empty() {
+        return Err(Error::validation_invalid_argument(
+            "componentIds",
+            "At least one component ID is required",
+            Some(project_id.to_string()),
+            None,
+        ));
+    }
+
+    let mut missing = Vec::new();
+    for component_id in &component_ids {
+        if !component::exists(component_id) {
+            missing.push(component_id.clone());
+        }
+    }
+
+    if !missing.is_empty() {
+        return Err(Error::validation_invalid_argument(
+            "componentIds",
+            "Unknown component IDs (must exist in `homeboy component list`)",
+            Some(project_id.to_string()),
+            Some(missing),
+        ));
+    }
+
+    let mut seen = HashSet::new();
+    let deduped: Vec<String> = component_ids
+        .into_iter()
+        .filter(|id| seen.insert(id.clone()))
+        .collect();
+
+    Ok(deduped)
 }
 
 pub fn set_components(project_id: &str, component_ids: Vec<String>) -> Result<Vec<String>> {
@@ -675,6 +716,42 @@ pub fn remove_components(project_id: &str, component_ids: Vec<String>) -> Result
     Ok(project.component_ids)
 }
 
+pub fn remove_components_validated(
+    project_id: &str,
+    component_ids: Vec<String>,
+) -> Result<Vec<String>> {
+    if component_ids.is_empty() {
+        return Err(Error::validation_invalid_argument(
+            "componentIds",
+            "At least one component ID is required",
+            Some(project_id.to_string()),
+            None,
+        ));
+    }
+
+    let mut project = load(project_id)?;
+
+    let mut missing = Vec::new();
+    for id in &component_ids {
+        if !project.component_ids.contains(id) {
+            missing.push(id.clone());
+        }
+    }
+
+    if !missing.is_empty() {
+        return Err(Error::validation_invalid_argument(
+            "componentIds",
+            "Component IDs not attached to project",
+            Some(project_id.to_string()),
+            Some(missing),
+        ));
+    }
+
+    project.component_ids.retain(|id| !component_ids.contains(id));
+    save(project_id, &project)?;
+    Ok(project.component_ids)
+}
+
 pub fn clear_components(project_id: &str) -> Result<()> {
     let mut project = load(project_id)?;
     project.component_ids.clear();
@@ -684,6 +761,21 @@ pub fn clear_components(project_id: &str) -> Result<()> {
 
 pub fn pin_file(project_id: &str, path: &str, label: Option<String>) -> Result<PinnedRemoteFile> {
     let mut project = load(project_id)?;
+
+    if project
+        .remote_files
+        .pinned_files
+        .iter()
+        .any(|f| f.path == path)
+    {
+        return Err(Error::validation_invalid_argument(
+            "path",
+            "File is already pinned",
+            Some(project_id.to_string()),
+            Some(vec![path.to_string()]),
+        ));
+    }
+
     let pinned = PinnedRemoteFile {
         id: Uuid::new_v4(),
         path: path.to_string(),
@@ -701,6 +793,21 @@ pub fn pin_log(
     tail_lines: u32,
 ) -> Result<PinnedRemoteLog> {
     let mut project = load(project_id)?;
+
+    if project
+        .remote_logs
+        .pinned_logs
+        .iter()
+        .any(|l| l.path == path)
+    {
+        return Err(Error::validation_invalid_argument(
+            "path",
+            "Log is already pinned",
+            Some(project_id.to_string()),
+            Some(vec![path.to_string()]),
+        ));
+    }
+
     let pinned = PinnedRemoteLog {
         id: Uuid::new_v4(),
         path: path.to_string(),
@@ -759,6 +866,42 @@ pub fn unpin_log(project_id: &str, log_id: &str) -> Result<()> {
             "Pinned log not found",
             Some(log_id.to_string()),
             None,
+        ));
+    }
+
+    save(project_id, &project)?;
+    Ok(())
+}
+
+pub fn unpin_file_by_path(project_id: &str, path: &str) -> Result<()> {
+    let mut project = load(project_id)?;
+    let before = project.remote_files.pinned_files.len();
+    project.remote_files.pinned_files.retain(|f| f.path != path);
+
+    if project.remote_files.pinned_files.len() == before {
+        return Err(Error::validation_invalid_argument(
+            "path",
+            "file is not pinned",
+            Some(project_id.to_string()),
+            Some(vec![path.to_string()]),
+        ));
+    }
+
+    save(project_id, &project)?;
+    Ok(())
+}
+
+pub fn unpin_log_by_path(project_id: &str, path: &str) -> Result<()> {
+    let mut project = load(project_id)?;
+    let before = project.remote_logs.pinned_logs.len();
+    project.remote_logs.pinned_logs.retain(|l| l.path != path);
+
+    if project.remote_logs.pinned_logs.len() == before {
+        return Err(Error::validation_invalid_argument(
+            "path",
+            "log is not pinned",
+            Some(project_id.to_string()),
+            Some(vec![path.to_string()]),
         ));
     }
 

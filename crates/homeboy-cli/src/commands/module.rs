@@ -1,8 +1,7 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
-use std::path::Path;
-use std::process::{Command, Stdio};
 
+use homeboy::git;
 use homeboy::module::{
     is_module_compatible, is_module_linked, is_module_ready, load_all_modules, load_module,
     module_path, run_setup,
@@ -253,21 +252,12 @@ fn confirm_dangerous_action(force: bool, message: &str) -> homeboy::Result<()> {
         return Ok(());
     }
 
-    Err(homeboy::Error::other(format!(
-        "{message} Re-run with --force to confirm.",
-    )))
-}
-
-fn is_git_workdir_clean(path: &Path) -> bool {
-    let output = Command::new("git")
-        .args(["status", "--porcelain"])
-        .current_dir(path)
-        .output();
-
-    match output {
-        Ok(output) => output.status.success() && output.stdout.is_empty(),
-        Err(_) => false,
-    }
+    Err(homeboy::Error::validation_invalid_argument(
+        "force",
+        format!("{message} Re-run with --force to confirm."),
+        None,
+        None,
+    ))
 }
 
 fn install_module(source: &str, id: Option<String>) -> CmdResult<ModuleOutput> {
@@ -288,19 +278,19 @@ fn install_module(source: &str, id: Option<String>) -> CmdResult<ModuleOutput> {
 fn update_module(module_id: &str, force: bool) -> CmdResult<ModuleOutput> {
     let module_dir = module_path(module_id);
     if !module_dir.exists() {
-        return Err(homeboy::Error::other(format!(
-            "Module '{module_id}' not found",
-        )));
+        return Err(homeboy::Error::module_not_found(module_id));
     }
 
     // Check if module is linked (symlink) - linked modules are managed externally
     if is_module_linked(module_id) {
-        return Err(homeboy::Error::other(format!(
-            "Module '{module_id}' is linked. Update the source directory directly.",
-        )));
+        return Err(homeboy::Error::config_invalid_value(
+            "module.linked",
+            Some(module_id.to_string()),
+            "Module is linked. Update the source directory directly.",
+        ));
     }
 
-    if !is_git_workdir_clean(&module_dir) {
+    if !git::is_workdir_clean(&module_dir) {
         confirm_dangerous_action(
             force,
             "Module has uncommitted changes; update may overwrite them.",
@@ -309,29 +299,17 @@ fn update_module(module_id: &str, force: bool) -> CmdResult<ModuleOutput> {
 
     // Load module to get sourceUrl from manifest
     let module = load_module(module_id).ok_or_else(|| {
-        homeboy::Error::other(format!(
-            "Module '{module_id}' not found or invalid manifest"
-        ))
+        homeboy::Error::module_not_found(module_id)
     })?;
 
     let source_url = module.source_url.ok_or_else(|| {
-        homeboy::Error::other(format!(
-            "Module '{module_id}' has no sourceUrl. Reinstall with 'homeboy module install <url>'."
-        ))
+        homeboy::Error::config_missing_key(
+            "sourceUrl",
+            Some(format!("module:{}", module_id)),
+        )
     })?;
 
-    let status = Command::new("git")
-        .args(["pull", "--ff-only"])
-        .current_dir(&module_dir)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .map_err(|e| homeboy::Error::other(e.to_string()))?;
-
-    if !status.success() {
-        return Err(homeboy::Error::other("git pull failed".to_string()));
-    }
+    git::pull_ff_only_interactive(&module_dir)?;
 
     // Auto-run setup if module defines a setup_command
     if let Some(module) = load_module(module_id) {

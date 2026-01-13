@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::files::{self, FileSystem};
+use crate::local_files::{self, FileSystem};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -50,7 +50,7 @@ pub fn read_json_spec_to_string(spec: &str) -> Result<String> {
             ));
         }
 
-        return files::local().read(Path::new(path));
+        return local_files::local().read(Path::new(path));
     }
 
     Ok(spec.to_string())

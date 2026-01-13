@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use homeboy::component::{self, Component};
-use homeboy::project::{self, ProjectRecord};
 use homeboy::context::{resolve_project_ssh_with_base_path, RemoteProjectContext};
 use homeboy::deploy::{deploy_artifact, parse_bulk_component_ids, DeployResult};
+use homeboy::project::{self, ProjectRecord};
 use homeboy::module::{load_module, DeployVerification};
 use homeboy::ssh::{execute_local_command_in_dir, SshClient};
 use homeboy::version::{default_pattern_for_file, parse_version, read_local_version};
@@ -172,8 +172,11 @@ fn run_with_loaders(
 
     let all_components = load_components(&project.config.component_ids);
     if all_components.is_empty() {
-        return Err(homeboy::Error::other(
-            "No components configured for project".to_string(),
+        return Err(homeboy::Error::validation_invalid_argument(
+            "componentIds",
+            "No components configured for project",
+            Some(args.project_id.clone()),
+            None,
         ));
     }
 
@@ -418,9 +421,11 @@ fn plan_components_to_deploy(
         return Ok(selected);
     }
 
-    Err(homeboy::Error::other(
-        "No components specified. Use component IDs, --all, or --outdated".to_string(),
-    ))
+    Err(homeboy::Error::validation_missing_argument(vec![
+        "component_ids".to_string(),
+        "--all".to_string(),
+        "--outdated".to_string(),
+    ]))
 }
 
 /// Build is mandatory before deploy. Returns error if no build command configured.

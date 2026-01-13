@@ -12,12 +12,10 @@ pub fn run_markdown(_args: InitArgs) -> CmdResult<String> {
     let resolved = docs::resolve(&topic);
 
     if resolved.content.is_empty() {
-        let available_topics = docs::available_topics();
-        return Err(homeboy::Error::other(format!(
-            "No documentation found for '{}' (available: {})",
-            topic.join(" "),
-            available_topics.join("\n")
-        )));
+        return Err(homeboy::Error::config_missing_key(
+            "docs.commands/homeboy-init",
+            None,
+        ));
     }
 
     Ok((resolved.content, 0))

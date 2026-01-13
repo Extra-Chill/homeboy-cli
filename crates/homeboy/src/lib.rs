@@ -1,5 +1,5 @@
 pub mod api;
-pub mod base_path;
+pub mod auth;
 pub mod build;
 pub mod changelog;
 pub mod cli_tool;
@@ -8,22 +8,25 @@ pub mod context;
 pub mod db;
 pub mod deploy;
 pub mod error;
-pub(crate) mod files;
 pub mod git;
-pub mod http;
+pub mod logs;
+pub mod module;
+pub mod project;
+pub mod remote_files;
+pub mod server;
+pub mod ssh;
+pub mod token;
+pub mod version;
+
+// Internal modules - not part of public API
+pub(crate) mod base_path;
+pub(crate) mod http;
 pub(crate) mod json;
 pub(crate) mod keychain;
-pub mod module;
-pub mod output;
+pub(crate) mod local_files;
 pub(crate) mod paths;
-pub mod project;
-pub mod server;
-pub mod shell;
-pub mod ssh;
+pub(crate) mod shell;
 pub(crate) mod template;
-pub mod token;
-pub mod tty;
-pub mod version;
 
 // Re-exports for convenient access
 pub use error::{Error, ErrorCode, Result};

@@ -2,10 +2,9 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 use std::collections::HashMap;
 
-use homeboy::project;
-use homeboy::http::ApiClient;
-use homeboy::tty::{prompt, prompt_password};
+use homeboy::auth;
 
+use crate::tty::{prompt, prompt_password};
 use super::{CmdResult, GlobalArgs};
 
 #[derive(Args)]
@@ -71,10 +70,7 @@ fn run_login(
     identifier: Option<String>,
     password: Option<String>,
 ) -> CmdResult<AuthOutput> {
-    let project = project::load(project_id)?;
-    let client = ApiClient::new(project_id, &project.api)?;
-
-    // Get credentials - prompt if not provided
+    // CLI handles prompting - core just receives credentials
     let identifier = match identifier {
         Some(id) => id,
         None => prompt("Username/Email: ")?,
@@ -90,23 +86,20 @@ fn run_login(
     credentials.insert("identifier".to_string(), identifier);
     credentials.insert("password".to_string(), password);
 
-    // Execute login flow (device_id handled internally by core)
-    client.login(&credentials)?;
+    // Call core auth module
+    let result = auth::login(project_id, credentials)?;
 
     Ok((
         AuthOutput::Login {
-            project_id: project_id.to_string(),
-            success: true,
+            project_id: result.project_id,
+            success: result.success,
         },
         0,
     ))
 }
 
 fn run_logout(project_id: &str) -> CmdResult<AuthOutput> {
-    let project = project::load(project_id)?;
-    let client = ApiClient::new(project_id, &project.api)?;
-
-    client.logout()?;
+    auth::logout(project_id)?;
 
     Ok((
         AuthOutput::Logout {
@@ -117,17 +110,13 @@ fn run_logout(project_id: &str) -> CmdResult<AuthOutput> {
 }
 
 fn run_status(project_id: &str) -> CmdResult<AuthOutput> {
-    let project = project::load(project_id)?;
-    let client = ApiClient::new(project_id, &project.api)?;
-
-    let authenticated = client.is_authenticated();
+    let status = auth::status(project_id)?;
 
     Ok((
         AuthOutput::Status {
-            project_id: project_id.to_string(),
-            authenticated,
+            project_id: status.project_id,
+            authenticated: status.authenticated,
         },
         0,
     ))
 }
-

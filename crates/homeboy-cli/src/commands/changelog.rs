@@ -109,9 +109,7 @@ fn show_markdown() -> CmdResult<String> {
     let resolved = docs::resolve(&["changelog".to_string()]);
 
     if resolved.content.is_empty() {
-        return Err(homeboy::Error::other(
-            "No changelog found (expected embedded docs topic 'changelog')".to_string(),
-        ));
+        return Err(homeboy::Error::config_missing_key("docs.changelog", None));
     }
 
     Ok((resolved.content, 0))
@@ -121,9 +119,7 @@ fn show_json() -> CmdResult<ChangelogShowOutput> {
     let resolved = docs::resolve(&["changelog".to_string()]);
 
     if resolved.content.is_empty() {
-        return Err(homeboy::Error::other(
-            "No changelog found (expected embedded docs topic 'changelog')".to_string(),
-        ));
+        return Err(homeboy::Error::config_missing_key("docs.changelog", None));
     }
 
     Ok((

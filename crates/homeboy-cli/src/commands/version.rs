@@ -1,11 +1,12 @@
 use clap::{Args, Subcommand, ValueEnum};
-use homeboy::output::CliWarning;
 use serde::Serialize;
 
 use homeboy::component;
 use homeboy::version::{
     read_component_version, bump_component_version, VersionTargetInfo,
 };
+
+use crate::output::{CliWarning, CmdResult};
 
 #[derive(Args)]
 pub struct VersionArgs {
@@ -91,7 +92,7 @@ pub struct VersionBumpOutput {
 pub fn run(
     args: VersionArgs,
     global: &crate::commands::GlobalArgs,
-) -> homeboy::output::CmdResult {
+) -> CmdResult {
     match args.command {
         VersionCommand::Show { component_id } => {
             let (out, exit_code) = show_version_output(&component_id)?;

@@ -1,32 +1,10 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
-use homeboy::component::{self, Component, CreateSummary, VersionTarget};
+use homeboy::component::{self, Component, CreateSummary};
 use homeboy::project;
 
 use super::CmdResult;
-
-fn parse_version_targets(targets: &[String]) -> homeboy::Result<Vec<VersionTarget>> {
-    let mut parsed = Vec::new();
-
-    for target in targets {
-        let mut parts = target.splitn(2, "::");
-        let file = parts
-            .next()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| homeboy::Error::other("Invalid version target".to_string()))?;
-
-        let pattern = parts.next().map(str::trim).filter(|s| !s.is_empty());
-
-        parsed.push(VersionTarget {
-            file: file.to_string(),
-            pattern: pattern.map(|p| p.to_string()),
-        });
-    }
-
-    Ok(parsed)
-}
 
 #[derive(Args)]
 pub struct ComponentArgs {
@@ -240,11 +218,13 @@ fn create(
 ) -> CmdResult<ComponentOutput> {
     let id = component::slugify_id(name)?;
 
-    if component::load(&id).is_ok() {
-        return Err(homeboy::Error::other(format!(
-            "Component '{}' already exists",
-            id
-        )));
+    if component::exists(&id) {
+        return Err(homeboy::Error::validation_invalid_argument(
+            "component.name",
+            format!("Component '{}' already exists", id),
+            Some(id),
+            None,
+        ));
     }
 
     let expanded_path = shellexpand::tilde(local_path).to_string();
@@ -257,7 +237,7 @@ fn create(
         build_artifact.to_string(),
     );
     if !version_targets.is_empty() {
-        component.version_targets = Some(parse_version_targets(&version_targets)?);
+        component.version_targets = Some(component::parse_version_targets(&version_targets)?);
     }
     component.build_command = build_command;
     component.extract_command = extract_command;
@@ -343,7 +323,7 @@ fn set(args: SetComponentArgs) -> CmdResult<ComponentOutput> {
     }
 
     if !version_targets.is_empty() {
-        component.version_targets = Some(parse_version_targets(&version_targets)?);
+        component.version_targets = Some(component::parse_version_targets(&version_targets)?);
         updated_fields.push("versionTargets".to_string());
     }
 
@@ -358,8 +338,11 @@ fn set(args: SetComponentArgs) -> CmdResult<ComponentOutput> {
     }
 
     if updated_fields.is_empty() {
-        return Err(homeboy::Error::other(
-            "No fields specified to update".to_string(),
+        return Err(homeboy::Error::validation_invalid_argument(
+            "fields",
+            "No fields specified to update",
+            Some(id.clone()),
+            None,
         ));
     }
 
@@ -380,11 +363,8 @@ fn set(args: SetComponentArgs) -> CmdResult<ComponentOutput> {
 }
 
 fn delete(id: &str, force: bool) -> CmdResult<ComponentOutput> {
-    if component::load(id).is_err() {
-        return Err(homeboy::Error::other(format!(
-            "Component '{}' not found",
-            id
-        )));
+    if !component::exists(id) {
+        return Err(homeboy::Error::component_not_found(id.to_string()));
     }
 
     if !force {
@@ -396,11 +376,16 @@ fn delete(id: &str, force: bool) -> CmdResult<ComponentOutput> {
             .collect();
 
         if !using.is_empty() {
-            return Err(homeboy::Error::other(format!(
-                "Component '{}' is used by projects: {}. Use --force to delete anyway.",
-                id,
-                using.join(", ")
-            )));
+            return Err(homeboy::Error::validation_invalid_argument(
+                "component",
+                format!(
+                    "Component '{}' is used by projects: {}. Use --force to delete anyway.",
+                    id,
+                    using.join(", ")
+                ),
+                Some(id.to_string()),
+                Some(using),
+            ));
         }
     }
 

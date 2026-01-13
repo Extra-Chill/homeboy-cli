@@ -2,9 +2,7 @@ use clap::{Args, Subcommand, ValueEnum};
 use serde::Serialize;
 
 use homeboy::component::{self, Component};
-use homeboy::project::{self, PinnedRemoteFile, PinnedRemoteLog, Project, ProjectRecord};
-use std::collections::HashSet;
-use uuid::Uuid;
+use homeboy::project::{self, Project, ProjectRecord};
 
 #[derive(Args)]
 pub struct ProjectArgs {
@@ -463,7 +461,7 @@ fn set(
     }
 
     if !component_ids.is_empty() {
-        project.component_ids = resolve_component_ids(component_ids, project_id)?;
+        project.component_ids = project::validate_component_ids(component_ids, project_id)?;
         updated_fields.push("componentIds".to_string());
     }
 
@@ -565,51 +563,11 @@ fn components_list(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
     ))
 }
 
-fn resolve_component_ids(
-    component_ids: Vec<String>,
-    project_id: &str,
-) -> homeboy::Result<Vec<String>> {
-    if component_ids.is_empty() {
-        return Err(homeboy::Error::validation_invalid_argument(
-            "componentIds",
-            "At least one component ID is required",
-            Some(project_id.to_string()),
-            None,
-        ));
-    }
-
-    let mut missing = Vec::new();
-    for component_id in &component_ids {
-        if component::load(component_id).is_err() {
-            missing.push(component_id.clone());
-        }
-    }
-
-    if !missing.is_empty() {
-        return Err(homeboy::Error::validation_invalid_argument(
-            "componentIds",
-            "Unknown component IDs (must exist in `homeboy component list`)",
-            Some(project_id.to_string()),
-            Some(missing),
-        ));
-    }
-
-    let mut seen = HashSet::new();
-    let mut deduped = Vec::new();
-    for id in component_ids {
-        if seen.insert(id.clone()) {
-            deduped.push(id);
-        }
-    }
-
-    Ok(deduped)
-}
-
 fn components_set(
     project_id: &str,
     component_ids: Vec<String>,
 ) -> homeboy::Result<(ProjectOutput, i32)> {
-    let deduped = resolve_component_ids(component_ids, project_id)?;
+    let deduped = project::validate_component_ids(component_ids, project_id)?;
 
     let mut project = project::load(project_id)?;
     project.component_ids = deduped.clone();
@@ -621,7 +579,7 @@ fn components_add(
     project_id: &str,
     component_ids: Vec<String>,
 ) -> homeboy::Result<(ProjectOutput, i32)> {
-    let deduped = resolve_component_ids(component_ids, project_id)?;
+    let deduped = project::validate_component_ids(component_ids, project_id)?;
 
     let mut project = project::load(project_id)?;
     for id in deduped {
@@ -637,37 +595,8 @@ fn components_remove(
     project_id: &str,
     component_ids: Vec<String>,
 ) -> homeboy::Result<(ProjectOutput, i32)> {
-    if component_ids.is_empty() {
-        return Err(homeboy::Error::validation_invalid_argument(
-            "componentIds",
-            "At least one component ID is required",
-            Some(project_id.to_string()),
-            None,
-        ));
-    }
-
-    let mut project = project::load(project_id)?;
-
-    let mut missing_from_project = Vec::new();
-    for id in &component_ids {
-        if !project.component_ids.contains(id) {
-            missing_from_project.push(id.clone());
-        }
-    }
-
-    if !missing_from_project.is_empty() {
-        return Err(homeboy::Error::validation_invalid_argument(
-            "componentIds",
-            "Component IDs not attached to project",
-            Some(project_id.to_string()),
-            Some(missing_from_project),
-        ));
-    }
-
-    project
-        .component_ids
-        .retain(|id| !component_ids.contains(id));
-
+    project::remove_components_validated(project_id, component_ids)?;
+    let project = project::load(project_id)?;
     write_project_components(project_id, "remove", &project)
 }
 
@@ -795,59 +724,16 @@ fn pin_add(
     label: Option<String>,
     tail: u32,
 ) -> homeboy::Result<(ProjectOutput, i32)> {
-    let mut project = project::load(project_id)?;
-
     let type_string = match pin_type {
         ProjectPinType::File => {
-            if project
-                .remote_files
-                .pinned_files
-                .iter()
-                .any(|file| file.path == path)
-            {
-                return Err(homeboy::Error::validation_invalid_argument(
-                    "path",
-                    "File is already pinned",
-                    Some(project_id.to_string()),
-                    Some(vec![path.to_string()]),
-                ));
-            }
-
-            project.remote_files.pinned_files.push(PinnedRemoteFile {
-                id: Uuid::new_v4(),
-                path: path.to_string(),
-                label,
-            });
-
+            project::pin_file(project_id, path, label)?;
             "file"
         }
         ProjectPinType::Log => {
-            if project
-                .remote_logs
-                .pinned_logs
-                .iter()
-                .any(|log| log.path == path)
-            {
-                return Err(homeboy::Error::validation_invalid_argument(
-                    "path",
-                    "Log is already pinned",
-                    Some(project_id.to_string()),
-                    Some(vec![path.to_string()]),
-                ));
-            }
-
-            project.remote_logs.pinned_logs.push(PinnedRemoteLog {
-                id: Uuid::new_v4(),
-                path: path.to_string(),
-                label,
-                tail_lines: tail,
-            });
-
+            project::pin_log(project_id, path, label, tail)?;
             "log"
         }
     };
-
-    project::save(project_id, &project)?;
 
     Ok((
         ProjectOutput {
@@ -879,42 +765,16 @@ fn pin_remove(
     path: &str,
     pin_type: ProjectPinType,
 ) -> homeboy::Result<(ProjectOutput, i32)> {
-    let mut project = project::load(project_id)?;
-
-    let (removed, type_string) = match pin_type {
+    let type_string = match pin_type {
         ProjectPinType::File => {
-            let original_len = project.remote_files.pinned_files.len();
-            project
-                .remote_files
-                .pinned_files
-                .retain(|file| file.path != path);
-
-            (
-                project.remote_files.pinned_files.len() < original_len,
-                "file",
-            )
+            project::unpin_file_by_path(project_id, path)?;
+            "file"
         }
         ProjectPinType::Log => {
-            let original_len = project.remote_logs.pinned_logs.len();
-            project
-                .remote_logs
-                .pinned_logs
-                .retain(|log| log.path != path);
-
-            (project.remote_logs.pinned_logs.len() < original_len, "log")
+            project::unpin_log_by_path(project_id, path)?;
+            "log"
         }
     };
-
-    if !removed {
-        return Err(homeboy::Error::validation_invalid_argument(
-            "path",
-            format!("{} is not pinned", type_string),
-            Some(project_id.to_string()),
-            Some(vec![path.to_string()]),
-        ));
-    }
-
-    project::save(project_id, &project)?;
 
     Ok((
         ProjectOutput {

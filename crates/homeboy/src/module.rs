@@ -1,5 +1,5 @@
 use crate::paths;
-use crate::files::{self, FileSystem};
+use crate::local_files::{self, FileSystem};
 use crate::json;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -282,7 +282,7 @@ pub fn load_module(id: &str) -> Option<ModuleManifest> {
         return None;
     }
 
-    let content = files::local().read(&manifest_path).ok()?;
+    let content = local_files::local().read(&manifest_path).ok()?;
     let mut manifest: ModuleManifest = json::from_str(&content).ok()?;
     manifest.module_path = Some(module_dir.to_string_lossy().to_string());
     Some(manifest)
@@ -305,7 +305,7 @@ pub fn load_all_modules() -> Vec<ModuleManifest> {
         let path = entry.path();
         if path.is_dir() {
             let manifest_path = path.join("homeboy.json");
-            if let Ok(content) = files::local().read(&manifest_path) {
+            if let Ok(content) = local_files::local().read(&manifest_path) {
                 if let Ok(mut manifest) = json::from_str::<ModuleManifest>(&content) {
                     manifest.module_path = Some(path.to_string_lossy().to_string());
                     modules.push(manifest);
@@ -1035,17 +1035,17 @@ fn install_from_url(url: &str, id_override: Option<&str>) -> Result<InstallResul
         ));
     }
 
-    files::ensure_app_dirs()?;
+    local_files::ensure_app_dirs()?;
     git::clone_repo(url, &module_dir)?;
 
     // Write sourceUrl to the module's homeboy.json
     let manifest_path = module_dir.join("homeboy.json");
     if manifest_path.exists() {
-        let content = files::local().read(&manifest_path)?;
+        let content = local_files::local().read(&manifest_path)?;
         let mut manifest: serde_json::Value = json::from_str(&content)?;
         manifest["sourceUrl"] = serde_json::Value::String(url.to_string());
         let updated = json::to_string_pretty(&manifest)?;
-        files::local().write(&manifest_path, &updated)?;
+        local_files::local().write(&manifest_path, &updated)?;
     }
 
     // Auto-run setup if module defines a setup_command
@@ -1096,7 +1096,7 @@ fn install_from_path(source_path: &str, id_override: Option<&str>) -> Result<Ins
     }
 
     // Read manifest to get module id if not provided
-    let manifest_content = files::local().read(&manifest_path)?;
+    let manifest_content = local_files::local().read(&manifest_path)?;
     let manifest: ModuleManifest = json::from_str(&manifest_content)?;
 
     let module_id = match id_override {
@@ -1123,7 +1123,7 @@ fn install_from_path(source_path: &str, id_override: Option<&str>) -> Result<Ins
         ));
     }
 
-    files::ensure_app_dirs()?;
+    local_files::ensure_app_dirs()?;
 
     // Create symlink
     #[cfg(unix)]

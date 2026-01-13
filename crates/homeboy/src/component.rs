@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::files::{self, FileSystem};
+use crate::local_files::{self, FileSystem};
 use crate::json;
 use crate::paths;
 use serde::{Deserialize, Serialize};
@@ -92,19 +92,19 @@ pub fn load(id: &str) -> Result<Component> {
     if !path.exists() {
         return Err(Error::component_not_found(id.to_string()));
     }
-    let content = files::local().read(&path)?;
+    let content = local_files::local().read(&path)?;
     json::from_str(&content)
 }
 
 pub fn list() -> Result<Vec<Component>> {
     let dir = paths::components()?;
-    let entries = files::local().list(&dir)?;
+    let entries = local_files::local().list(&dir)?;
 
     let mut components: Vec<Component> = entries
         .into_iter()
         .filter(|e| e.is_json() && !e.is_dir)
         .filter_map(|e| {
-            let content = files::local().read(&e.path).ok()?;
+            let content = local_files::local().read(&e.path).ok()?;
             json::from_str(&content).ok()
         })
         .collect();
@@ -118,7 +118,7 @@ pub fn list_ids() -> Result<Vec<String>> {
         return Ok(Vec::new());
     }
 
-    let entries = files::local().list(&dir)?;
+    let entries = local_files::local().list(&dir)?;
     let mut ids: Vec<String> = entries
         .into_iter()
         .filter(|e| e.is_json() && !e.is_dir)
@@ -142,9 +142,9 @@ pub fn save(component: &Component) -> Result<()> {
     }
 
     let path = paths::component(&component.id)?;
-    files::ensure_app_dirs()?;
+    local_files::ensure_app_dirs()?;
     let content = json::to_string_pretty(component)?;
-    files::local().write(&path, &content)?;
+    local_files::local().write(&path, &content)?;
     Ok(())
 }
 
@@ -153,12 +153,37 @@ pub fn delete(id: &str) -> Result<()> {
     if !path.exists() {
         return Err(Error::component_not_found(id.to_string()));
     }
-    files::local().delete(&path)?;
+    local_files::local().delete(&path)?;
     Ok(())
 }
 
 pub fn exists(id: &str) -> bool {
     paths::component(id).map(|p| p.exists()).unwrap_or(false)
+}
+
+pub fn parse_version_targets(targets: &[String]) -> Result<Vec<VersionTarget>> {
+    let mut parsed = Vec::new();
+    for target in targets {
+        let mut parts = target.splitn(2, "::");
+        let file = parts
+            .next()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| {
+                Error::validation_invalid_argument(
+                    "version_target",
+                    "Invalid version target format (expected 'file' or 'file::pattern')",
+                    None,
+                    None,
+                )
+            })?;
+        let pattern = parts.next().map(str::trim).filter(|s| !s.is_empty());
+        parsed.push(VersionTarget {
+            file: file.to_string(),
+            pattern: pattern.map(|p| p.to_string()),
+        });
+    }
+    Ok(parsed)
 }
 
 pub fn slugify_id(name: &str) -> Result<String> {
@@ -383,7 +408,7 @@ pub fn rename(id: &str, new_name: &str) -> Result<CreateResult> {
     component.id = new_id.clone();
     component.name = new_name.to_string();
 
-    files::ensure_app_dirs()?;
+    local_files::ensure_app_dirs()?;
     std::fs::rename(&old_path, &new_path).map_err(|e| {
         Error::internal_io(e.to_string(), Some("rename component".to_string()))
     })?;

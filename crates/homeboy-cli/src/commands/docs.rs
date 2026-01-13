@@ -5,6 +5,8 @@ use crate::docs;
 
 use super::CmdResult;
 
+/// Strip --format flag from topic args before passing to docs lookup.
+/// This is CLI-specific preprocessing (clap passes trailing_var_arg including global flags).
 fn strip_format_flag(topic: &[String]) -> Vec<String> {
     let mut cleaned = Vec::new();
     let mut skip_next = false;
@@ -72,13 +74,10 @@ pub fn run_markdown(args: DocsArgs) -> CmdResult<String> {
     let resolved = docs::resolve(&topic);
 
     if resolved.content.is_empty() {
-        let available_topics = docs::available_topics();
-
-        return Err(homeboy::Error::other(format!(
-            "No documentation found for '{}' (available: {})",
-            topic.join(" "),
-            available_topics.join("\n")
-        )));
+        return Err(homeboy::Error::config_missing_key(
+            format!("docs.{}", topic.join(".")),
+            None,
+        ));
     }
 
     Ok((resolved.content, 0))
@@ -98,13 +97,10 @@ pub fn run(args: DocsArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<D
     let resolved = docs::resolve(&topic);
 
     if resolved.content.is_empty() {
-        let available_topics = docs::available_topics();
-
-        return Err(homeboy::Error::other(format!(
-            "No documentation found for '{}' (available: {})",
-            topic.join(" "),
-            available_topics.join("\n")
-        )));
+        return Err(homeboy::Error::config_missing_key(
+            format!("docs.{}", topic.join(".")),
+            None,
+        ));
     }
 
     let topic_str = topic.join(" ");

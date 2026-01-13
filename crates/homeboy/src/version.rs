@@ -1,5 +1,5 @@
 use crate::component::{Component, VersionTarget};
-use crate::files::{self, FileSystem};
+use crate::local_files::{self, FileSystem};
 use crate::json::{self, set_json_pointer};
 use crate::module::{load_module, ModuleManifest};
 use crate::error::{Error, Result};
@@ -112,7 +112,7 @@ pub fn update_version_in_file(
         .is_some_and(|ext| ext == "json")
         && default_pattern_for_file(path, modules).as_deref() == Some(pattern)
     {
-        let content = files::local().read(Path::new(path))?;
+        let content = local_files::local().read(Path::new(path))?;
         let mut json: Value = json::from_str(&content)?;
         let Some(current) = json.get("version").and_then(|v: &Value| v.as_str()) else {
             return Err(Error::config_missing_key("version", Some(path.to_string())));
@@ -131,7 +131,7 @@ pub fn update_version_in_file(
             serde_json::Value::String(new_version.to_string()),
         )?;
         let output = json::to_string_pretty(&json)?;
-        files::local().write(Path::new(path), &output)?;
+        local_files::local().write(Path::new(path), &output)?;
         return Ok(1);
     }
 
@@ -189,7 +189,7 @@ pub fn read_local_version(
     modules: &[String],
 ) -> Option<String> {
     let path = resolve_version_file_path(local_path, &version_target.file);
-    let content = files::local().read(Path::new(&path)).ok()?;
+    let content = local_files::local().read(Path::new(&path)).ok()?;
 
     let pattern: String = version_target.pattern.clone()
         .or_else(|| default_pattern_for_file(&version_target.file, modules))?;
@@ -302,7 +302,7 @@ pub fn read_component_version(component: &Component) -> Result<ComponentVersionI
     let primary_pattern = resolve_target_pattern(primary, &component.modules)?;
     let primary_full_path = resolve_version_file_path(&component.local_path, &primary.file);
 
-    let content = files::local().read(Path::new(&primary_full_path))?;
+    let content = local_files::local().read(Path::new(&primary_full_path))?;
     let versions = parse_versions(&content, &primary_pattern).ok_or_else(|| {
         Error::validation_invalid_argument(
             "versionPattern",
@@ -362,7 +362,7 @@ pub fn bump_component_version(
     let primary_pattern = resolve_target_pattern(primary, &component.modules)?;
     let primary_full_path = resolve_version_file_path(&component.local_path, &primary.file);
 
-    let primary_content = files::local().read(Path::new(&primary_full_path))?;
+    let primary_content = local_files::local().read(Path::new(&primary_full_path))?;
     let primary_versions = parse_versions(&primary_content, &primary_pattern).ok_or_else(|| {
         Error::validation_invalid_argument(
             "versionPattern",
@@ -399,7 +399,7 @@ pub fn bump_component_version(
     let settings = changelog::resolve_effective_settings(Some(component));
     let changelog_path = changelog::resolve_changelog_path(component)?;
 
-    let changelog_content = files::local().read(&changelog_path)?;
+    let changelog_content = local_files::local().read(&changelog_path)?;
 
     let latest_changelog_version = changelog::get_latest_finalized_version(&changelog_content)
         .ok_or_else(|| {
@@ -436,7 +436,7 @@ pub fn bump_component_version(
     )?;
 
     if changelog_changed && !dry_run {
-        files::local().write(&changelog_path, &finalized_changelog)?;
+        local_files::local().write(&changelog_path, &finalized_changelog)?;
     }
 
     // Update all version targets
@@ -445,7 +445,7 @@ pub fn bump_component_version(
     for target in targets {
         let version_pattern = resolve_target_pattern(target, &component.modules)?;
         let full_path = resolve_version_file_path(&component.local_path, &target.file);
-        let content = files::local().read(Path::new(&full_path))?;
+        let content = local_files::local().read(Path::new(&full_path))?;
 
         let versions = parse_versions(&content, &version_pattern).ok_or_else(|| {
             Error::validation_invalid_argument(

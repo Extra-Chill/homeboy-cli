@@ -14,16 +14,18 @@ homeboy component [OPTIONS] <COMMAND>
 ### `create`
 
 ```sh
-homeboy component create [OPTIONS] <NAME>
+homeboy component create [OPTIONS] --local-path <path> --remote-path <path> --build-artifact <path>
 ```
+
+The component ID is derived from the `--local-path` directory name (lowercased). For example, `--local-path /path/to/extrachill-api` creates a component with ID `extrachill-api`.
 
 Options:
 
 - `--json <spec>`: JSON input spec for create/update (supports single or bulk)
 - `--skip-existing`: skip items that already exist (JSON mode only)
-- `--local-path <path>`: absolute path to local source directory (required in CLI mode; `~` is expanded)
-- `--remote-path <path>`: remote path relative to project `basePath` (required in CLI mode)
-- `--build-artifact <path>`: build artifact path relative to `localPath` (required in CLI mode)
+- `--local-path <path>`: absolute path to local source directory (required; ID derived from directory name; `~` is expanded)
+- `--remote-path <path>`: remote path relative to project `basePath` (required)
+- `--build-artifact <path>`: build artifact path relative to `localPath` (required)
 - `--version-target <TARGET>`: version target in format `file` or `file::pattern` (repeatable)
 - `--build-command <command>`: build command to run in `localPath`
 - `--extract-command <command>`: command to run after upload (optional; supports `{artifact}` and `{targetDir}`)
@@ -63,10 +65,17 @@ Deletion is safety-checked:
 ### `rename`
 
 ```sh
-homeboy component rename <id> <newName>
+homeboy component rename <id> <new-id>
 ```
 
-Renames a component by changing its ID to `slugify_id(<newName>)` and rewriting any project files that reference the old ID.
+Renames a component by changing its ID directly and rewriting any project files that reference the old ID. Use this to migrate components to match their repository directory names.
+
+Example:
+
+```sh
+# Rename to match repository directory name
+homeboy component rename extra-chill-api extrachill-api
+```
 
 ### `list`
 
@@ -85,7 +94,7 @@ homeboy component list
   "action": "create|show|set|delete|rename|list|component.create",
   "componentId": "<id>|null",
   "success": true,
-  "updatedFields": ["name", "localPath"],
+  "updatedFields": ["localPath", "remotePath"],
   "component": { },
   "components": [ ],
   "import": null

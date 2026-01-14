@@ -28,6 +28,7 @@ pub(crate) mod shell;
 pub(crate) mod template;
 
 pub(crate) mod base_path;
+pub(crate) mod config;
 pub(crate) mod slugify;
 
 // Re-exports for convenient access

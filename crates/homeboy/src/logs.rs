@@ -44,10 +44,9 @@ pub struct LogSearchResult {
 
 /// Lists pinned log files for a project.
 pub fn list(project_id: &str) -> Result<Vec<LogEntry>> {
-    let project = project::load_record(project_id)?;
+    let project = project::load(project_id)?;
 
     Ok(project
-        .config
         .remote_logs
         .pinned_logs
         .iter()

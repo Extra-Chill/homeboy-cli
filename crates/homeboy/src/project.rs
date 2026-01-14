@@ -1,23 +1,19 @@
+use crate::config::{self, ConfigEntity};
 use crate::error::{Error, Result};
 use crate::json;
-use crate::local_files::{self, FileSystem};
+use crate::local_files;
 use crate::paths;
 use crate::slugify;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use uuid::Uuid;
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProjectRecord {
-    pub id: String,
-    pub config: Project,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
-    pub name: String,
+    #[serde(skip)]
+    pub id: String,
     pub domain: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -67,10 +63,31 @@ impl Project {
             .or_else(|| self.sub_targets.first())
     }
 
-    pub fn find_sub_target(&self, id: &str) -> Option<&SubTarget> {
+    pub fn find_sub_target(&self, target_id: &str) -> Option<&SubTarget> {
         self.sub_targets
             .iter()
-            .find(|t| slugify_id(&t.name).ok().as_deref() == Some(id))
+            .find(|t| slugify_id(&t.name).ok().as_deref() == Some(target_id))
+    }
+}
+
+impl ConfigEntity for Project {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn set_id(&mut self, id: String) {
+        self.id = id;
+    }
+    fn config_path(id: &str) -> Result<PathBuf> {
+        paths::project(id)
+    }
+    fn config_dir() -> Result<PathBuf> {
+        paths::projects()
+    }
+    fn not_found_error(id: String) -> Error {
+        Error::project_not_found(id)
+    }
+    fn entity_type() -> &'static str {
+        "project"
     }
 }
 
@@ -267,127 +284,33 @@ pub struct NewsletterConfig {
 }
 
 pub fn load(id: &str) -> Result<Project> {
-    let record = load_record(id)?;
-    Ok(record.config)
+    config::load::<Project>(id)
 }
 
-pub fn load_record(id: &str) -> Result<ProjectRecord> {
-    let path = paths::project(id)?;
-    if !path.exists() {
-        return Err(Error::project_not_found(id.to_string()));
-    }
-    let content = local_files::local().read(&path)?;
-    let config: Project = json::from_str(&content)?;
-
-    let expected_id = slugify_id(&config.name)?;
-    if expected_id != id {
-        return Err(Error::config_invalid_value(
-            "project.id",
-            Some(id.to_string()),
-            format!(
-                "Project configuration mismatch: file '{}' implies id '{}', but name '{}' implies id '{}'. Run `homeboy project repair {}`.",
-                path.display(),
-                id,
-                config.name,
-                expected_id,
-                id
-            ),
-        ));
-    }
-
-    Ok(ProjectRecord {
-        id: id.to_string(),
-        config,
-    })
+pub fn list() -> Result<Vec<Project>> {
+    config::list::<Project>()
 }
 
-pub fn list() -> Result<Vec<ProjectRecord>> {
-    let dir = paths::projects()?;
-    let entries = local_files::local().list(&dir)?;
-
-    let mut projects: Vec<ProjectRecord> = entries
-        .into_iter()
-        .filter(|e| e.is_json() && !e.is_dir)
-        .filter_map(|e| {
-            let content = local_files::local().read(&e.path).ok()?;
-            let config: Project = json::from_str(&content).ok()?;
-            let id = e.path.file_stem()?.to_string_lossy().to_string();
-            let expected_id = slugify_id(&config.name).ok()?;
-            if expected_id != id {
-                return None;
-            }
-            Some(ProjectRecord { id, config })
-        })
-        .collect();
-    projects.sort_by(|a, b| a.config.name.cmp(&b.config.name));
-    Ok(projects)
+pub fn list_ids() -> Result<Vec<String>> {
+    config::list_ids::<Project>()
 }
 
-pub fn save(id: &str, project: &Project) -> Result<()> {
-    let expected_id = slugify_id(&project.name)?;
-    if expected_id != id {
-        return Err(Error::config_invalid_value(
-            "project.id",
-            Some(id.to_string()),
-            format!(
-                "Project id '{}' must match slug(name) '{}'. Use `homeboy project set {id} --name \"{}\"` to rename.",
-                id, expected_id, project.name
-            ),
-        ));
-    }
+pub fn save(project: &Project) -> Result<()> {
+    config::save(project)
+}
 
-    let path = paths::project(id)?;
-    local_files::ensure_app_dirs()?;
-    let content = json::to_string_pretty(project)?;
-    local_files::local().write(&path, &content)?;
-    Ok(())
+pub fn delete(id: &str) -> Result<()> {
+    config::delete::<Project>(id)
+}
+
+pub fn exists(id: &str) -> bool {
+    config::exists::<Project>(id)
 }
 
 /// Merge JSON into project config. Accepts JSON string, @file, or - for stdin.
 /// ID can be provided as argument or extracted from JSON body.
 pub fn merge_from_json(id: Option<&str>, json_spec: &str) -> Result<json::MergeResult> {
-    let raw = json::read_json_spec_to_string(json_spec)?;
-    let mut parsed: serde_json::Value = json::from_str(&raw)?;
-
-    // Extract ID from JSON if not provided as argument
-    let effective_id = id
-        .map(String::from)
-        .or_else(|| parsed.get("id").and_then(|v| v.as_str()).map(String::from))
-        .ok_or_else(|| {
-            Error::validation_invalid_argument(
-                "id",
-                "Provide project ID as argument or in JSON body",
-                None,
-                None,
-            )
-        })?;
-
-    // Strip id from JSON before merging to avoid setting it as a config field
-    if let Some(obj) = parsed.as_object_mut() {
-        obj.remove("id");
-    }
-
-    let mut project = load(&effective_id)?;
-    let result = json::merge_config(&mut project, parsed)?;
-    save(&effective_id, &project)?;
-
-    Ok(json::MergeResult {
-        id: effective_id,
-        updated_fields: result.updated_fields,
-    })
-}
-
-pub fn delete(id: &str) -> Result<()> {
-    let path = paths::project(id)?;
-    if !path.exists() {
-        return Err(Error::project_not_found(id.to_string()));
-    }
-    local_files::local().delete(&path)?;
-    Ok(())
-}
-
-pub fn exists(id: &str) -> bool {
-    paths::project(id).map(|p| p.exists()).unwrap_or(false)
+    config::merge_from_json::<Project>(id, json_spec)
 }
 
 pub fn slugify_id(name: &str) -> Result<String> {
@@ -419,15 +342,17 @@ pub struct RenameResult {
 }
 
 pub fn create_from_cli(
-    name: Option<String>,
+    id: Option<String>,
     domain: Option<String>,
     server_id: Option<String>,
     base_path: Option<String>,
     table_prefix: Option<String>,
 ) -> Result<CreateResult> {
-    let name = name.ok_or_else(|| {
-        Error::validation_invalid_argument("name", "Missing required argument: name", None, None)
+    let id = id.ok_or_else(|| {
+        Error::validation_invalid_argument("id", "Missing required argument: id", None, None)
     })?;
+
+    slugify::validate_component_id(&id)?;
 
     let domain = domain.ok_or_else(|| {
         Error::validation_invalid_argument(
@@ -438,11 +363,9 @@ pub fn create_from_cli(
         )
     })?;
 
-    let id = slugify_id(&name)?;
-    let path = paths::project(&id)?;
-    if path.exists() {
+    if exists(&id) {
         return Err(Error::validation_invalid_argument(
-            "project.name",
+            "project.id",
             format!("Project '{}' already exists", id),
             Some(id),
             None,
@@ -450,7 +373,7 @@ pub fn create_from_cli(
     }
 
     let project = Project {
-        name,
+        id: id.clone(),
         domain,
         scoped_modules: None,
         server_id,
@@ -468,14 +391,13 @@ pub fn create_from_cli(
         component_ids: Default::default(),
     };
 
-    save(&id, &project)?;
+    save(&project)?;
 
     Ok(CreateResult { id, project })
 }
 
 pub fn update(
     project_id: &str,
-    name: Option<String>,
     domain: Option<String>,
     server_id: Option<Option<String>>,
     base_path: Option<Option<String>>,
@@ -484,11 +406,6 @@ pub fn update(
 ) -> Result<UpdateResult> {
     let mut project = load(project_id)?;
     let mut updated = Vec::new();
-
-    if let Some(new_name) = name {
-        project.name = new_name;
-        updated.push("name".to_string());
-    }
 
     if let Some(new_domain) = domain {
         project.domain = new_domain;
@@ -515,104 +432,57 @@ pub fn update(
         updated.push("componentIds".to_string());
     }
 
-    let new_id = slugify_id(&project.name)?;
-    if new_id != project_id {
-        rename(project_id, &project.name)?;
-    } else {
-        save(project_id, &project)?;
-    }
+    save(&project)?;
 
     Ok(UpdateResult {
-        id: new_id,
+        id: project_id.to_string(),
         project,
         updated_fields: updated,
     })
 }
 
-pub fn rename(id: &str, new_name: &str) -> Result<RenameResult> {
+pub fn rename(id: &str, new_id: &str) -> Result<RenameResult> {
     let mut project = load(id)?;
-    project.name = new_name.to_string();
 
-    let new_id = slugify_id(&project.name)?;
+    slugify::validate_component_id(new_id)?;
+
     if new_id == id {
-        save(id, &project)?;
         return Ok(RenameResult {
             old_id: id.to_string(),
-            new_id,
+            new_id: new_id.to_string(),
             project,
         });
     }
 
     let old_path = paths::project(id)?;
-    let new_path = paths::project(&new_id)?;
+    let new_path = paths::project(new_id)?;
 
     if new_path.exists() {
         return Err(Error::validation_invalid_argument(
-            "project.name",
+            "project.id",
             format!(
                 "Cannot rename project '{}' to '{}': destination already exists",
                 id, new_id
             ),
-            Some(new_id),
+            Some(new_id.to_string()),
             None,
         ));
     }
+
+    project.id = new_id.to_string();
 
     local_files::ensure_app_dirs()?;
     std::fs::rename(&old_path, &new_path)
         .map_err(|e| Error::internal_io(e.to_string(), Some("rename project".to_string())))?;
 
-    if let Err(error) = save(&new_id, &project) {
+    if let Err(error) = save(&project) {
         let _ = std::fs::rename(&new_path, &old_path);
         return Err(error);
     }
 
     Ok(RenameResult {
         old_id: id.to_string(),
-        new_id,
-        project,
-    })
-}
-
-pub fn repair(id: &str) -> Result<RenameResult> {
-    let path = paths::project(id)?;
-    if !path.exists() {
-        return Err(Error::project_not_found(id.to_string()));
-    }
-
-    let content = local_files::local().read(&path)?;
-    let project: Project = json::from_str(&content)?;
-    let expected_id = slugify_id(&project.name)?;
-
-    if expected_id == id {
-        return Ok(RenameResult {
-            old_id: id.to_string(),
-            new_id: id.to_string(),
-            project,
-        });
-    }
-
-    let new_path = paths::project(&expected_id)?;
-    if new_path.exists() {
-        return Err(Error::validation_invalid_argument(
-            "project.name",
-            format!(
-                "Cannot repair project '{}' to '{}': destination already exists",
-                id, expected_id
-            ),
-            Some(expected_id),
-            None,
-        ));
-    }
-
-    local_files::ensure_app_dirs()?;
-    std::fs::rename(&path, &new_path).map_err(|e| {
-        Error::internal_io(e.to_string(), Some("repair project rename".to_string()))
-    })?;
-
-    Ok(RenameResult {
-        old_id: id.to_string(),
-        new_id: expected_id,
+        new_id: new_id.to_string(),
         project,
     })
 }
@@ -658,7 +528,7 @@ pub fn validate_component_ids(component_ids: Vec<String>, project_id: &str) -> R
 pub fn set_components(project_id: &str, component_ids: Vec<String>) -> Result<Vec<String>> {
     let mut project = load(project_id)?;
     project.component_ids = component_ids.clone();
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(component_ids)
 }
 
@@ -669,7 +539,7 @@ pub fn add_components(project_id: &str, component_ids: Vec<String>) -> Result<Ve
             project.component_ids.push(id);
         }
     }
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(project.component_ids)
 }
 
@@ -678,7 +548,7 @@ pub fn remove_components(project_id: &str, component_ids: Vec<String>) -> Result
     project
         .component_ids
         .retain(|id| !component_ids.contains(id));
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(project.component_ids)
 }
 
@@ -716,14 +586,14 @@ pub fn remove_components_validated(
     project
         .component_ids
         .retain(|id| !component_ids.contains(id));
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(project.component_ids)
 }
 
 pub fn clear_components(project_id: &str) -> Result<()> {
     let mut project = load(project_id)?;
     project.component_ids.clear();
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(())
 }
 
@@ -750,7 +620,7 @@ pub fn pin_file(project_id: &str, path: &str, label: Option<String>) -> Result<P
         label,
     };
     project.remote_files.pinned_files.push(pinned.clone());
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(pinned)
 }
 
@@ -783,7 +653,7 @@ pub fn pin_log(
         tail_lines,
     };
     project.remote_logs.pinned_logs.push(pinned.clone());
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(pinned)
 }
 
@@ -810,7 +680,7 @@ pub fn unpin_file(project_id: &str, file_id: &str) -> Result<()> {
         ));
     }
 
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(())
 }
 
@@ -837,7 +707,7 @@ pub fn unpin_log(project_id: &str, log_id: &str) -> Result<()> {
         ));
     }
 
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(())
 }
 
@@ -855,7 +725,7 @@ pub fn unpin_file_by_path(project_id: &str, path: &str) -> Result<()> {
         ));
     }
 
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(())
 }
 
@@ -873,7 +743,7 @@ pub fn unpin_log_by_path(project_id: &str, path: &str) -> Result<()> {
         ));
     }
 
-    save(project_id, &project)?;
+    save(&project)?;
     Ok(())
 }
 
@@ -881,23 +751,8 @@ pub fn unpin_log_by_path(project_id: &str, path: &str) -> Result<()> {
 // JSON Import
 // ============================================================================
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateSummary {
-    pub created: u32,
-    pub skipped: u32,
-    pub errors: u32,
-    pub items: Vec<CreateSummaryItem>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateSummaryItem {
-    pub id: String,
-    pub status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+pub use config::BatchResult as CreateSummary;
+pub use config::BatchResultItem as CreateSummaryItem;
 
 pub fn create_from_json(spec: &str, skip_existing: bool) -> Result<CreateSummary> {
     let value: serde_json::Value = json::from_str(spec)?;
@@ -908,81 +763,46 @@ pub fn create_from_json(spec: &str, skip_existing: bool) -> Result<CreateSummary
         vec![value]
     };
 
-    let mut summary = CreateSummary {
-        created: 0,
-        skipped: 0,
-        errors: 0,
-        items: Vec::new(),
-    };
+    let mut summary = CreateSummary::new();
 
     for item in items {
-        let project: Project = match serde_json::from_value(item.clone()) {
+        let id = match item.get("id").and_then(|v| v.as_str()) {
+            Some(id) => id.to_string(),
+            None => {
+                summary.record_error("unknown".to_string(), "Missing required field: id".to_string());
+                continue;
+            }
+        };
+
+        if let Err(e) = slugify::validate_component_id(&id) {
+            summary.record_error(id, e.message.clone());
+            continue;
+        }
+
+        let mut project: Project = match serde_json::from_value(item.clone()) {
             Ok(p) => p,
             Err(e) => {
-                let id = item
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .map(|n| slugify_id(n).unwrap_or_else(|_| "unknown".to_string()))
-                    .unwrap_or_else(|| "unknown".to_string());
-
-                summary.errors += 1;
-                summary.items.push(CreateSummaryItem {
-                    id,
-                    status: "error".to_string(),
-                    error: Some(format!("Parse error: {}", e)),
-                });
+                summary.record_error(id, format!("Parse error: {}", e));
                 continue;
             }
         };
-
-        let id = match slugify_id(&project.name) {
-            Ok(id) => id,
-            Err(e) => {
-                summary.errors += 1;
-                summary.items.push(CreateSummaryItem {
-                    id: "unknown".to_string(),
-                    status: "error".to_string(),
-                    error: Some(e.message.clone()),
-                });
-                continue;
-            }
-        };
+        project.id = id.clone();
 
         if exists(&id) {
             if skip_existing {
-                summary.skipped += 1;
-                summary.items.push(CreateSummaryItem {
-                    id,
-                    status: "skipped".to_string(),
-                    error: None,
-                });
+                summary.record_skipped(id);
             } else {
-                summary.errors += 1;
-                summary.items.push(CreateSummaryItem {
-                    id: id.clone(),
-                    status: "error".to_string(),
-                    error: Some(format!("Project '{}' already exists", id)),
-                });
+                summary.record_error(id.clone(), format!("Project '{}' already exists", id));
             }
             continue;
         }
 
-        if let Err(e) = save(&id, &project) {
-            summary.errors += 1;
-            summary.items.push(CreateSummaryItem {
-                id,
-                status: "error".to_string(),
-                error: Some(e.message.clone()),
-            });
+        if let Err(e) = save(&project) {
+            summary.record_error(id, e.message.clone());
             continue;
         }
 
-        summary.created += 1;
-        summary.items.push(CreateSummaryItem {
-            id,
-            status: "created".to_string(),
-            error: None,
-        });
+        summary.record_created(id);
     }
 
     Ok(summary)

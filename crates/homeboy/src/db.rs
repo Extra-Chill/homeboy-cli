@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 
 use crate::context::{resolve_project_ssh, resolve_project_ssh_with_base_path};
 use crate::module::{load_all_modules, DatabaseCliConfig};
-use crate::project::{self, ProjectRecord};
+use crate::project::{self, Project};
 use crate::ssh::SshClient;
 use crate::template::{render_map, TemplateVars};
 use crate::token;
@@ -60,7 +60,7 @@ struct DbContext {
 }
 
 fn build_context(project_id: &str, subtarget: Option<&str>) -> Result<DbContext> {
-    let project = project::load_record(project_id)?;
+    let project = project::load(project_id)?;
     let (ctx, base_path) = resolve_project_ssh_with_base_path(project_id)?;
 
     let domain = resolve_domain(&project, subtarget);
@@ -89,23 +89,23 @@ fn build_context(project_id: &str, subtarget: Option<&str>) -> Result<DbContext>
     })
 }
 
-fn resolve_domain(project: &ProjectRecord, subtarget: Option<&str>) -> String {
-    if project.config.sub_targets.is_empty() {
-        return project.config.domain.clone();
+fn resolve_domain(project: &Project, subtarget: Option<&str>) -> String {
+    if project.sub_targets.is_empty() {
+        return project.domain.clone();
     }
 
     let Some(sub_id) = subtarget else {
-        return project.config.domain.clone();
+        return project.domain.clone();
     };
 
-    if let Some(target) = project.config.sub_targets.iter().find(|t| {
+    if let Some(target) = project.sub_targets.iter().find(|t| {
         project::slugify_id(&t.name).ok().as_deref() == Some(sub_id)
             || token::identifier_eq(&t.name, sub_id)
     }) {
         return target.domain.clone();
     }
 
-    project.config.domain.clone()
+    project.domain.clone()
 }
 
 fn parse_json_tables(json: &str) -> Vec<String> {
@@ -363,26 +363,26 @@ pub fn drop_table(
 }
 
 pub fn create_tunnel(project_id: &str, local_port: Option<u16>) -> Result<DbTunnelResult> {
-    let project = project::load_record(project_id)?;
+    let project = project::load(project_id)?;
     let ctx = resolve_project_ssh(project_id)?;
     let server = ctx.server;
     let client = ctx.client;
 
-    let remote_host = if project.config.database.host.is_empty() {
+    let remote_host = if project.database.host.is_empty() {
         DEFAULT_DATABASE_HOST.to_string()
     } else {
-        project.config.database.host.clone()
+        project.database.host.clone()
     };
 
-    let remote_port = project.config.database.port;
+    let remote_port = project.database.port;
     let bind_port = local_port.unwrap_or(DEFAULT_LOCAL_DB_PORT);
 
     let tunnel_info = DbTunnelInfo {
         local_port: bind_port,
         remote_host: remote_host.clone(),
         remote_port,
-        database: project.config.database.name.clone(),
-        user: project.config.database.user.clone(),
+        database: project.database.name.clone(),
+        user: project.database.user.clone(),
     };
 
     let mut ssh_args = Vec::new();
@@ -418,8 +418,8 @@ pub fn create_tunnel(project_id: &str, local_port: Option<u16>) -> Result<DbTunn
 
     Ok(DbTunnelResult {
         project_id: project_id.to_string(),
-        base_path: project.config.base_path.clone(),
-        domain: Some(project.config.domain.clone()),
+        base_path: project.base_path.clone(),
+        domain: Some(project.domain.clone()),
         exit_code,
         success,
         tunnel: tunnel_info,

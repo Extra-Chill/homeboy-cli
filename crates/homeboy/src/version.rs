@@ -259,7 +259,6 @@ fn resolve_target_pattern(target: &VersionTarget) -> Result<String> {
 /// Build a detailed error for version parsing failures
 fn build_version_parse_error(file: &str, pattern: &str, content: &str) -> Error {
     let preview: String = content.chars().take(500).collect();
-    let escaped_pattern = pattern.replace('\\', "\\\\");
 
     let mut hints = Vec::new();
 
@@ -283,7 +282,7 @@ fn build_version_parse_error(file: &str, pattern: &str, content: &str) -> Error 
 
     Error::internal_unexpected(format!(
         "Could not parse version from {} using pattern: {}{}\n\nFile preview (first 500 chars):\n{}",
-        file, escaped_pattern, hints_text, preview
+        file, pattern, hints_text, preview
     ))
 }
 

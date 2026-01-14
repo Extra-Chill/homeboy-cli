@@ -45,8 +45,8 @@ enum ServerCommand {
         #[arg(long)]
         skip_existing: bool,
 
-        /// Server display name (CLI mode)
-        name: Option<String>,
+        /// Server ID (CLI mode)
+        id: Option<String>,
         /// SSH host
         #[arg(long)]
         host: Option<String>,
@@ -63,7 +63,7 @@ enum ServerCommand {
         server_id: String,
     },
     /// Modify server settings
-    #[command(visible_alias = "edit")]
+    #[command(visible_aliases = ["edit", "merge"])]
     Set {
         /// Server ID (optional if provided in JSON body)
         server_id: Option<String>,
@@ -129,7 +129,7 @@ pub fn run(
         ServerCommand::Create {
             json,
             skip_existing,
-            name,
+            id,
             host,
             user,
             port,
@@ -138,7 +138,7 @@ pub fn run(
                 return create_json(&spec, skip_existing);
             }
 
-            let result = server::create_from_cli(name, host, user, port)?;
+            let result = server::create_from_cli(id, host, user, port)?;
 
             Ok((
                 ServerOutput {

@@ -37,7 +37,7 @@ enum VersionCommand {
         bump_type: BumpType,
     },
     /// Set version directly (without incrementing or changelog finalization)
-    #[command(visible_alias = "edit")]
+    #[command(visible_aliases = ["edit", "merge"])]
     Set {
         /// Component ID
         component_id: Option<String>,

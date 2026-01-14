@@ -1,11 +1,13 @@
+use crate::config::{self, ConfigEntity};
 use crate::error::{Error, Result};
 use crate::json;
-use crate::local_files::{self, FileSystem};
+use crate::local_files;
 use crate::paths;
 use crate::project;
 use crate::slugify;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,11 +30,11 @@ pub struct ScopedModuleConfig {
     pub settings: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Component {
+    #[serde(skip)]
     pub id: String,
-    pub name: String,
     pub local_path: String,
     pub remote_path: String,
     pub build_artifact: String,
@@ -57,14 +59,12 @@ pub struct Component {
 impl Component {
     pub fn new(
         id: String,
-        name: String,
         local_path: String,
         remote_path: String,
         build_artifact: String,
     ) -> Self {
         Self {
             id,
-            name,
             local_path,
             remote_path,
             build_artifact,
@@ -79,6 +79,27 @@ impl Component {
     }
 }
 
+impl ConfigEntity for Component {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn set_id(&mut self, id: String) {
+        self.id = id;
+    }
+    fn config_path(id: &str) -> Result<PathBuf> {
+        paths::component(id)
+    }
+    fn config_dir() -> Result<PathBuf> {
+        paths::components()
+    }
+    fn not_found_error(id: String) -> Error {
+        Error::component_not_found(id)
+    }
+    fn entity_type() -> &'static str {
+        "component"
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComponentRecord {
     pub id: String,
@@ -86,111 +107,33 @@ pub struct ComponentRecord {
 }
 
 pub fn load(id: &str) -> Result<Component> {
-    let path = paths::component(id)?;
-    if !path.exists() {
-        return Err(Error::component_not_found(id.to_string()));
-    }
-    let content = local_files::local().read(&path)?;
-    json::from_str(&content)
+    config::load::<Component>(id)
 }
 
 pub fn list() -> Result<Vec<Component>> {
-    let dir = paths::components()?;
-    let entries = local_files::local().list(&dir)?;
-
-    let mut components: Vec<Component> = entries
-        .into_iter()
-        .filter(|e| e.is_json() && !e.is_dir)
-        .filter_map(|e| {
-            let content = local_files::local().read(&e.path).ok()?;
-            json::from_str(&content).ok()
-        })
-        .collect();
-    components.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(components)
+    config::list::<Component>()
 }
 
 pub fn list_ids() -> Result<Vec<String>> {
-    let dir = paths::components()?;
-    if !dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let entries = local_files::local().list(&dir)?;
-    let mut ids: Vec<String> = entries
-        .into_iter()
-        .filter(|e| e.is_json() && !e.is_dir)
-        .filter_map(|e| e.path.file_stem().map(|s| s.to_string_lossy().to_string()))
-        .collect();
-    ids.sort();
-    Ok(ids)
+    config::list_ids::<Component>()
 }
 
 pub fn save(component: &Component) -> Result<()> {
-    let expected_id = slugify_id(&component.name)?;
-    if expected_id != component.id {
-        return Err(Error::config_invalid_value(
-            "component.id",
-            Some(component.id.clone()),
-            format!(
-                "Component id '{}' must match slug(name) '{}'. Use rename to change.",
-                component.id, expected_id
-            ),
-        ));
-    }
-
-    let path = paths::component(&component.id)?;
-    local_files::ensure_app_dirs()?;
-    let content = json::to_string_pretty(component)?;
-    local_files::local().write(&path, &content)?;
-    Ok(())
+    config::save(component)
 }
 
 /// Merge JSON into component config. Accepts JSON string, @file, or - for stdin.
 /// ID can be provided as argument or extracted from JSON body.
 pub fn merge_from_json(id: Option<&str>, json_spec: &str) -> Result<json::MergeResult> {
-    let raw = json::read_json_spec_to_string(json_spec)?;
-    let mut parsed: serde_json::Value = json::from_str(&raw)?;
-
-    // Extract ID from JSON if not provided as argument
-    let effective_id = id
-        .map(String::from)
-        .or_else(|| parsed.get("id").and_then(|v| v.as_str()).map(String::from))
-        .ok_or_else(|| {
-            Error::validation_invalid_argument(
-                "id",
-                "Provide component ID as argument or in JSON body",
-                None,
-                None,
-            )
-        })?;
-
-    // Strip id from JSON before merging to avoid setting it as a config field
-    if let Some(obj) = parsed.as_object_mut() {
-        obj.remove("id");
-    }
-
-    let mut component = load(&effective_id)?;
-    let result = json::merge_config(&mut component, parsed)?;
-    save(&component)?;
-
-    Ok(json::MergeResult {
-        id: effective_id,
-        updated_fields: result.updated_fields,
-    })
+    config::merge_from_json::<Component>(id, json_spec)
 }
 
 pub fn delete(id: &str) -> Result<()> {
-    let path = paths::component(id)?;
-    if !path.exists() {
-        return Err(Error::component_not_found(id.to_string()));
-    }
-    local_files::local().delete(&path)?;
-    Ok(())
+    config::delete::<Component>(id)
 }
 
 pub fn exists(id: &str) -> bool {
-    paths::component(id).map(|p| p.exists()).unwrap_or(false)
+    config::exists::<Component>(id)
 }
 
 pub fn parse_version_targets(targets: &[String]) -> Result<Vec<VersionTarget>> {
@@ -240,7 +183,6 @@ pub struct UpdateResult {
 }
 
 pub fn create_from_cli(
-    name: Option<String>,
     local_path: Option<String>,
     remote_path: Option<String>,
     build_artifact: Option<String>,
@@ -248,15 +190,6 @@ pub fn create_from_cli(
     build_command: Option<String>,
     extract_command: Option<String>,
 ) -> Result<CreateResult> {
-    let name = name.ok_or_else(|| {
-        Error::validation_invalid_argument(
-            "name",
-            "Missing required argument: name (or use --json)",
-            None,
-            None,
-        )
-    })?;
-
     let local_path = local_path.ok_or_else(|| {
         Error::validation_invalid_argument(
             "local_path",
@@ -284,10 +217,11 @@ pub fn create_from_cli(
         )
     })?;
 
-    let id = slugify_id(&name)?;
+    // ID is derived from local_path basename (lowercased)
+    let id = slugify::extract_component_id(&local_path)?;
     if exists(&id) {
         return Err(Error::validation_invalid_argument(
-            "component.name",
+            "component.local_path",
             format!("Component '{}' already exists", id),
             Some(id),
             None,
@@ -296,8 +230,7 @@ pub fn create_from_cli(
 
     let expanded_path = shellexpand::tilde(&local_path).to_string();
 
-    let mut component =
-        Component::new(id.clone(), name, expanded_path, remote_path, build_artifact);
+    let mut component = Component::new(id.clone(), expanded_path, remote_path, build_artifact);
     if !version_targets.is_empty() {
         component.version_targets = Some(parse_version_targets(&version_targets)?);
     }
@@ -311,7 +244,6 @@ pub fn create_from_cli(
 
 pub fn update(
     component_id: &str,
-    name: Option<String>,
     local_path: Option<String>,
     remote_path: Option<String>,
     build_artifact: Option<String>,
@@ -320,23 +252,6 @@ pub fn update(
 ) -> Result<UpdateResult> {
     let mut component = load(component_id)?;
     let mut updated = Vec::new();
-
-    if let Some(new_name) = name {
-        let new_id = slugify_id(&new_name)?;
-        if new_id != component_id {
-            return Err(Error::validation_invalid_argument(
-                "name",
-                format!(
-                    "Changing name would change id from '{}' to '{}'. Use rename command instead.",
-                    component_id, new_id
-                ),
-                Some(new_name),
-                None,
-            ));
-        }
-        component.name = new_name;
-        updated.push("name".to_string());
-    }
 
     if let Some(new_local_path) = local_path {
         component.local_path = new_local_path;
@@ -372,13 +287,14 @@ pub fn update(
     })
 }
 
-pub fn rename(id: &str, new_name: &str) -> Result<CreateResult> {
+pub fn rename(id: &str, new_id: &str) -> Result<CreateResult> {
     let mut component = load(id)?;
-    let new_id = slugify_id(new_name)?;
+    let new_id = new_id.to_lowercase();
+
+    slugify::validate_component_id(&new_id)?;
 
     if new_id == id {
-        component.name = new_name.to_string();
-        save(&component)?;
+        // Same ID, nothing to do
         return Ok(CreateResult {
             id: new_id,
             component,
@@ -390,7 +306,7 @@ pub fn rename(id: &str, new_name: &str) -> Result<CreateResult> {
 
     if new_path.exists() {
         return Err(Error::validation_invalid_argument(
-            "component.name",
+            "component.id",
             format!(
                 "Cannot rename component '{}' to '{}': destination already exists",
                 id, new_id
@@ -401,7 +317,6 @@ pub fn rename(id: &str, new_name: &str) -> Result<CreateResult> {
     }
 
     component.id = new_id.clone();
-    component.name = new_name.to_string();
 
     local_files::ensure_app_dirs()?;
     std::fs::rename(&old_path, &new_path)
@@ -425,16 +340,15 @@ pub fn rename(id: &str, new_name: &str) -> Result<CreateResult> {
 fn update_project_references(old_id: &str, new_id: &str) -> Result<()> {
     let projects = project::list().unwrap_or_default();
     for proj in projects {
-        if proj.config.component_ids.contains(&old_id.to_string()) {
+        if proj.component_ids.contains(&old_id.to_string()) {
             let updated_ids: Vec<String> = proj
-                .config
                 .component_ids
                 .iter()
-                .map(|id| {
-                    if id == old_id {
+                .map(|comp_id: &String| {
+                    if comp_id == old_id {
                         new_id.to_string()
                     } else {
-                        id.clone()
+                        comp_id.clone()
                     }
                 })
                 .collect();
@@ -452,7 +366,7 @@ pub fn delete_safe(id: &str) -> Result<()> {
     let projects = project::list().unwrap_or_default();
     let using: Vec<String> = projects
         .iter()
-        .filter(|p| p.config.component_ids.contains(&id.to_string()))
+        .filter(|p| p.component_ids.contains(&id.to_string()))
         .map(|p| p.id.clone())
         .collect();
 
@@ -476,23 +390,8 @@ pub fn delete_safe(id: &str) -> Result<()> {
 // JSON Import
 // ============================================================================
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateSummary {
-    pub created: u32,
-    pub skipped: u32,
-    pub errors: u32,
-    pub items: Vec<CreateSummaryItem>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateSummaryItem {
-    pub id: String,
-    pub status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+pub use config::BatchResult as CreateSummary;
+pub use config::BatchResultItem as CreateSummaryItem;
 
 pub fn create_from_json(spec: &str, skip_existing: bool) -> Result<CreateSummary> {
     let value: serde_json::Value = json::from_str(spec)?;
@@ -503,61 +402,35 @@ pub fn create_from_json(spec: &str, skip_existing: bool) -> Result<CreateSummary
         vec![value]
     };
 
-    let mut summary = CreateSummary {
-        created: 0,
-        skipped: 0,
-        errors: 0,
-        items: Vec::new(),
-    };
+    let mut summary = CreateSummary::new();
 
     for item in items {
         let component: Component = match serde_json::from_value(item.clone()) {
             Ok(c) => c,
             Err(e) => {
                 let id = item
-                    .get("name")
+                    .get("localPath")
                     .and_then(|v| v.as_str())
-                    .map(|n| slugify_id(n).unwrap_or_else(|_| "unknown".to_string()))
+                    .and_then(|p| slugify::extract_component_id(p).ok())
                     .unwrap_or_else(|| "unknown".to_string());
-
-                summary.errors += 1;
-                summary.items.push(CreateSummaryItem {
-                    id,
-                    status: "error".to_string(),
-                    error: Some(format!("Parse error: {}", e)),
-                });
+                summary.record_error(id, format!("Parse error: {}", e));
                 continue;
             }
         };
 
-        let id = match slugify_id(&component.name) {
+        let id = match slugify::extract_component_id(&component.local_path) {
             Ok(id) => id,
             Err(e) => {
-                summary.errors += 1;
-                summary.items.push(CreateSummaryItem {
-                    id: "unknown".to_string(),
-                    status: "error".to_string(),
-                    error: Some(e.message.clone()),
-                });
+                summary.record_error("unknown".to_string(), e.message.clone());
                 continue;
             }
         };
 
         if exists(&id) {
             if skip_existing {
-                summary.skipped += 1;
-                summary.items.push(CreateSummaryItem {
-                    id,
-                    status: "skipped".to_string(),
-                    error: None,
-                });
+                summary.record_skipped(id);
             } else {
-                summary.errors += 1;
-                summary.items.push(CreateSummaryItem {
-                    id: id.clone(),
-                    status: "error".to_string(),
-                    error: Some(format!("Component '{}' already exists", id)),
-                });
+                summary.record_error(id.clone(), format!("Component '{}' already exists", id));
             }
             continue;
         }
@@ -568,21 +441,11 @@ pub fn create_from_json(spec: &str, skip_existing: bool) -> Result<CreateSummary
         };
 
         if let Err(e) = save(&component_with_id) {
-            summary.errors += 1;
-            summary.items.push(CreateSummaryItem {
-                id,
-                status: "error".to_string(),
-                error: Some(e.message.clone()),
-            });
+            summary.record_error(id, e.message.clone());
             continue;
         }
 
-        summary.created += 1;
-        summary.items.push(CreateSummaryItem {
-            id,
-            status: "created".to_string(),
-            error: None,
-        });
+        summary.record_created(id);
     }
 
     Ok(summary)

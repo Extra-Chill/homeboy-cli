@@ -5,7 +5,7 @@ use crate::component::{self, Component};
 use crate::context::resolve_project_ssh;
 use crate::error::ErrorCode;
 use crate::module::{find_module_by_tool, CliConfig};
-use crate::project::{self, Project, ProjectRecord};
+use crate::project::{self, Project};
 use crate::shell;
 use crate::ssh::{execute_local_command, CommandOutput};
 use crate::template::{render_map, TemplateVars};
@@ -89,7 +89,7 @@ fn run_for_project(tool: &str, project_id: &str, args: &[String]) -> Result<CliT
         tool,
         project_id,
         args,
-        project::load_record,
+        project::load,
         execute_local_command,
     )
 }
@@ -98,7 +98,7 @@ fn run_for_project_with_executor(
     tool: &str,
     project_id: &str,
     args: &[String],
-    project_loader: fn(&str) -> Result<ProjectRecord>,
+    project_loader: fn(&str) -> Result<Project>,
     local_executor: fn(&str) -> CommandOutput,
 ) -> Result<CliToolResult> {
     if args.is_empty() {
@@ -120,7 +120,6 @@ fn run_for_project_with_executor(
     let (target_domain, command) = build_project_command(&project, cli_config, args)?;
 
     let output = if project
-        .config
         .server_id
         .as_ref()
         .map_or(true, |s| s.is_empty())
@@ -144,18 +143,17 @@ fn run_for_project_with_executor(
 }
 
 fn build_project_command(
-    project: &ProjectRecord,
+    project: &Project,
     cli_config: &CliConfig,
     args: &[String],
 ) -> Result<(String, String)> {
     let base_path = project
-        .config
         .base_path
         .clone()
         .filter(|p| !p.is_empty())
         .ok_or_else(|| Error::config("Base path not configured".to_string()))?;
 
-    let (target_domain, command_args) = resolve_subtarget(&project.config, args);
+    let (target_domain, command_args) = resolve_subtarget(project, args);
 
     if command_args.is_empty() {
         return Err(Error::other(

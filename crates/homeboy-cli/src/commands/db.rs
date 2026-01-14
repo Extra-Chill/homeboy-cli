@@ -130,14 +130,14 @@ fn parse_subtarget(
     project_id: &str,
     args: &[String],
 ) -> homeboy::Result<(Option<String>, Vec<String>)> {
-    let project = project::load_record(project_id)?;
+    let project = project::load(project_id)?;
 
-    if project.config.sub_targets.is_empty() {
+    if project.sub_targets.is_empty() {
         return Ok((None, args.to_vec()));
     }
 
     if let Some(sub_id) = args.first() {
-        if project.config.sub_targets.iter().any(|target| {
+        if project.sub_targets.iter().any(|target| {
             project::slugify_id(&target.name).ok().as_deref() == Some(sub_id)
                 || token::identifier_eq(&target.name, sub_id)
         }) {

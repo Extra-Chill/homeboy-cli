@@ -10,7 +10,7 @@ use crate::context::{resolve_project_ssh_with_base_path, RemoteProjectContext};
 use crate::error::{Error, Result};
 use crate::json::read_json_spec_to_string;
 use crate::module::{load_all_modules, DeployVerification};
-use crate::project::{self, ProjectRecord};
+use crate::project::{self, Project};
 use crate::shell;
 use crate::ssh::SshClient;
 use crate::template::{render_map, TemplateVars};
@@ -285,7 +285,6 @@ pub enum DeployReason {
 #[serde(rename_all = "camelCase")]
 pub struct ComponentDeployResult {
     pub id: String,
-    pub name: String,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deploy_reason: Option<DeployReason>,
@@ -303,7 +302,6 @@ impl ComponentDeployResult {
     fn new(component: &Component, base_path: &str) -> Self {
         Self {
             id: component.id.clone(),
-            name: component.name.clone(),
             status: String::new(),
             deploy_reason: None,
             local_version: None,
@@ -377,7 +375,7 @@ pub struct DeployOrchestrationResult {
 /// This is the preferred entry point for callers - it handles project loading
 /// and SSH context resolution, keeping those details encapsulated.
 pub fn run(project_id: &str, config: &DeployConfig) -> Result<DeployOrchestrationResult> {
-    let project = project::load_record(project_id)?;
+    let project = project::load(project_id)?;
     let (ctx, base_path) = resolve_project_ssh_with_base_path(project_id)?;
     deploy_components(config, &project, &ctx, &base_path)
 }
@@ -386,11 +384,11 @@ pub fn run(project_id: &str, config: &DeployConfig) -> Result<DeployOrchestratio
 /// Handles component selection, building, and deployment.
 pub fn deploy_components(
     config: &DeployConfig,
-    project: &ProjectRecord,
+    project: &Project,
     ctx: &RemoteProjectContext,
     base_path: &str,
 ) -> Result<DeployOrchestrationResult> {
-    let all_components = load_project_components(&project.config.component_ids);
+    let all_components = load_project_components(&project.component_ids);
     if all_components.is_empty() {
         return Err(Error::other(
             "No components configured for project".to_string(),

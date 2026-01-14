@@ -27,27 +27,27 @@ Arguments:
 
 ### `create`
 
-
 ```sh
-homeboy project create [OPTIONS] <NAME> <DOMAIN>
+homeboy project create [OPTIONS] [<id>] [<domain>]
 ```
+
+`create` supports two modes:
+
+- **CLI mode**: pass `[<id>] [<domain>]` as positional arguments.
+- **JSON mode**: pass `--json <spec>` (CLI mode arguments are not required).
 
 Options:
 
-- `--json <spec>`: JSON input spec for create/update (single object or array; see below)
+- `--json <spec>`: JSON input spec for create/update (single object or bulk; see below)
 - `--skip-existing`: skip items that already exist (JSON mode only)
-- `--server-id <serverId>`: optional server ID (CLI mode)
-- `--base-path <path>`: optional remote base path (CLI mode)
+- `--server-id <serverId>`: optional server ID
+- `--base-path <path>`: optional remote base path
 - `--table-prefix <prefix>`: optional table prefix (only used by modules that care about table naming)
 
 Arguments (CLI mode):
 
-- `<NAME>`: project name
-- `<DOMAIN>`: public site domain
-
-Options (CLI mode):
-
-- `--module <MODULE>`: enable a module for the project (repeatable). Example: `--module wordpress`
+- `[<id>]`: project ID
+- `[<domain>]`: public site domain
 
 JSON mode:
 
@@ -57,7 +57,7 @@ JSON mode:
 ```json
 {
   "op": "project.create",
-  "data": { "name": "...", "domain": "...", "modules": ["wordpress"] }
+  "data": { "id": "...", "domain": "..." }
 }
 ```
 
@@ -73,7 +73,7 @@ CLI mode:
 {
   "command": "project.create",
   "projectId": "<projectId>",
-  "project": { "id": "<projectId>", "config": {} }
+  "project": { }
 }
 ```
 
@@ -116,40 +116,8 @@ JSON output:
 {
   "command": "project.set",
   "projectId": "<projectId>",
-  "project": {
-    "id": "<projectId>",
-    "config": { }
-  },
+  "project": { },
   "updated": ["domain", "serverId"],
-  "import": null
-}
-```
-
-### `repair`
-
-```sh
-homeboy project repair <projectId>
-```
-
-Repairs a project file whose name doesn't match the stored project name.
-
-Arguments:
-
-- `<projectId>`: project ID (file stem)
-
-JSON output:
-
-> Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). The object below is the `data` payload.
-
-```json
-{
-  "command": "project.repair",
-  "projectId": "<projectId>",
-  "project": {
-    "id": "<projectId>",
-    "config": { }
-  },
-  "updated": ["id"],
   "import": null
 }
 ```
@@ -164,9 +132,7 @@ JSON output (`list`):
   "projects": [
     {
       "id": "<projectId>",
-      "name": "<name>",
-      "domain": "<domain>",
-      "modules": ["<moduleId>"]
+      "domain": "<domain>"
     }
   ]
 }
@@ -180,10 +146,7 @@ JSON output (`show`):
 {
   "command": "project.show",
   "projectId": "<projectId>",
-  "project": {
-    "id": "<projectId>",
-    "config": { }
-  },
+  "project": { },
   "import": null
 }
 ```
@@ -253,10 +216,10 @@ homeboy project components set <projectId> <componentId> [<componentId>...]
 
 Replaces the full `componentIds` list on the project (deduped, order-preserving). Component IDs must exist in `homeboy component list`.
 
-You can also do this via `project set`:
+You can also do this via `project set` by merging `componentIds`:
 
 ```sh
-homeboy project set <projectId> --component-ids chubes-theme,chubes-blocks
+homeboy project set <projectId> --json '{"componentIds":["chubes-theme","chubes-blocks"]}'
 ```
 
 Example:

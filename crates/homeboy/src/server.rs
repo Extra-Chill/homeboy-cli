@@ -1,3 +1,4 @@
+use crate::config::{self, ConfigEntity};
 use crate::error::{Error, Result};
 use crate::json;
 use crate::local_files::{self, FileSystem};
@@ -5,13 +6,14 @@ use crate::paths;
 use crate::project;
 use crate::slugify;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Server {
+    #[serde(skip)]
     pub id: String,
-    pub name: String,
     pub host: String,
     pub user: String,
     #[serde(default = "default_port")]
@@ -38,100 +40,51 @@ impl Server {
     }
 }
 
-pub fn load(id: &str) -> Result<Server> {
-    let path = paths::server(id)?;
-    if !path.exists() {
-        return Err(Error::server_not_found(id.to_string()));
+impl ConfigEntity for Server {
+    fn id(&self) -> &str {
+        &self.id
     }
-    let content = local_files::local().read(&path)?;
-    json::from_str(&content)
+    fn set_id(&mut self, id: String) {
+        self.id = id;
+    }
+    fn config_path(id: &str) -> Result<PathBuf> {
+        paths::server(id)
+    }
+    fn config_dir() -> Result<PathBuf> {
+        paths::servers()
+    }
+    fn not_found_error(id: String) -> Error {
+        Error::server_not_found(id)
+    }
+    fn entity_type() -> &'static str {
+        "server"
+    }
+}
+
+pub fn load(id: &str) -> Result<Server> {
+    config::load::<Server>(id)
 }
 
 pub fn list() -> Result<Vec<Server>> {
-    let dir = paths::servers()?;
-    let entries = local_files::local().list(&dir)?;
-
-    let mut servers: Vec<Server> = entries
-        .into_iter()
-        .filter(|e| e.is_json() && !e.is_dir)
-        .filter_map(|e| {
-            let content = local_files::local().read(&e.path).ok()?;
-            json::from_str(&content).ok()
-        })
-        .collect();
-    servers.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(servers)
+    config::list::<Server>()
 }
 
 pub fn save(server: &Server) -> Result<()> {
-    let expected_id = slugify_id(&server.name)?;
-    if expected_id != server.id {
-        return Err(Error::config_invalid_value(
-            "server.id",
-            Some(server.id.clone()),
-            format!(
-                "Server id '{}' must match slug(name) '{}'. Use rename to change.",
-                server.id, expected_id
-            ),
-        ));
-    }
-
-    let path = paths::server(&server.id)?;
-    local_files::ensure_app_dirs()?;
-    let content = json::to_string_pretty(server)?;
-    local_files::local().write(&path, &content)?;
-    Ok(())
+    config::save(server)
 }
 
 /// Merge JSON into server config. Accepts JSON string, @file, or - for stdin.
 /// ID can be provided as argument or extracted from JSON body.
 pub fn merge_from_json(id: Option<&str>, json_spec: &str) -> Result<json::MergeResult> {
-    let raw = json::read_json_spec_to_string(json_spec)?;
-    let mut parsed: serde_json::Value = json::from_str(&raw)?;
-
-    // Extract ID from JSON if not provided as argument
-    let effective_id = id
-        .map(String::from)
-        .or_else(|| parsed.get("id").and_then(|v| v.as_str()).map(String::from))
-        .ok_or_else(|| {
-            Error::validation_invalid_argument(
-                "id",
-                "Provide server ID as argument or in JSON body",
-                None,
-                None,
-            )
-        })?;
-
-    // Strip id from JSON before merging to avoid setting it as a config field
-    if let Some(obj) = parsed.as_object_mut() {
-        obj.remove("id");
-    }
-
-    let mut server = load(&effective_id)?;
-    let result = json::merge_config(&mut server, parsed)?;
-    save(&server)?;
-
-    Ok(json::MergeResult {
-        id: effective_id,
-        updated_fields: result.updated_fields,
-    })
+    config::merge_from_json::<Server>(id, json_spec)
 }
 
 pub fn delete(id: &str) -> Result<()> {
-    let path = paths::server(id)?;
-    if !path.exists() {
-        return Err(Error::server_not_found(id.to_string()));
-    }
-    local_files::local().delete(&path)?;
-    Ok(())
+    config::delete::<Server>(id)
 }
 
 pub fn exists(id: &str) -> bool {
-    paths::server(id).map(|p| p.exists()).unwrap_or(false)
-}
-
-pub fn slugify_id(name: &str) -> Result<String> {
-    slugify::slugify_id(name, "name")
+    config::exists::<Server>(id)
 }
 
 pub fn key_path(id: &str) -> Result<std::path::PathBuf> {
@@ -156,14 +109,16 @@ pub struct UpdateResult {
 }
 
 pub fn create_from_cli(
-    name: Option<String>,
+    id: Option<String>,
     host: Option<String>,
     user: Option<String>,
     port: Option<u16>,
 ) -> Result<CreateResult> {
-    let name = name.ok_or_else(|| {
-        Error::validation_invalid_argument("name", "Missing required argument: name", None, None)
+    let id = id.ok_or_else(|| {
+        Error::validation_invalid_argument("id", "Missing required argument: id", None, None)
     })?;
+
+    slugify::validate_component_id(&id)?;
 
     let host = host.ok_or_else(|| {
         Error::validation_invalid_argument("host", "Missing required argument: host", None, None)
@@ -173,11 +128,9 @@ pub fn create_from_cli(
         Error::validation_invalid_argument("user", "Missing required argument: user", None, None)
     })?;
 
-    let id = slugify_id(&name)?;
-    let path = paths::server(&id)?;
-    if path.exists() {
+    if exists(&id) {
         return Err(Error::validation_invalid_argument(
-            "server.name",
+            "server.id",
             format!("Server '{}' already exists", id),
             Some(id),
             None,
@@ -186,7 +139,6 @@ pub fn create_from_cli(
 
     let server = Server {
         id: id.clone(),
-        name,
         host,
         user,
         port: port.unwrap_or(22),
@@ -200,30 +152,12 @@ pub fn create_from_cli(
 
 pub fn update(
     server_id: &str,
-    name: Option<String>,
     host: Option<String>,
     user: Option<String>,
     port: Option<u16>,
 ) -> Result<UpdateResult> {
     let mut server = load(server_id)?;
     let mut updated = Vec::new();
-
-    if let Some(new_name) = name {
-        let new_id = slugify_id(&new_name)?;
-        if new_id != server_id {
-            return Err(Error::validation_invalid_argument(
-                "name",
-                format!(
-                    "Changing name would change id from '{}' to '{}'. Use rename command instead.",
-                    server_id, new_id
-                ),
-                Some(new_name),
-                None,
-            ));
-        }
-        server.name = new_name;
-        updated.push("name".to_string());
-    }
 
     if let Some(new_host) = host {
         server.host = new_host;
@@ -249,33 +183,34 @@ pub fn update(
     })
 }
 
-pub fn rename(id: &str, new_name: &str) -> Result<CreateResult> {
+pub fn rename(id: &str, new_id: &str) -> Result<CreateResult> {
     let mut server = load(id)?;
-    let new_id = slugify_id(new_name)?;
+
+    slugify::validate_component_id(new_id)?;
 
     if new_id == id {
-        server.name = new_name.to_string();
-        save(&server)?;
-        return Ok(CreateResult { id: new_id, server });
+        return Ok(CreateResult {
+            id: new_id.to_string(),
+            server,
+        });
     }
 
     let old_path = paths::server(id)?;
-    let new_path = paths::server(&new_id)?;
+    let new_path = paths::server(new_id)?;
 
     if new_path.exists() {
         return Err(Error::validation_invalid_argument(
-            "server.name",
+            "server.id",
             format!(
                 "Cannot rename server '{}' to '{}': destination already exists",
                 id, new_id
             ),
-            Some(new_id),
+            Some(new_id.to_string()),
             None,
         ));
     }
 
-    server.id = new_id.clone();
-    server.name = new_name.to_string();
+    server.id = new_id.to_string();
 
     local_files::ensure_app_dirs()?;
     std::fs::rename(&old_path, &new_path)
@@ -286,7 +221,10 @@ pub fn rename(id: &str, new_name: &str) -> Result<CreateResult> {
         return Err(error);
     }
 
-    Ok(CreateResult { id: new_id, server })
+    Ok(CreateResult {
+        id: new_id.to_string(),
+        server,
+    })
 }
 
 pub fn delete_safe(id: &str) -> Result<()> {
@@ -296,7 +234,7 @@ pub fn delete_safe(id: &str) -> Result<()> {
 
     let projects = project::list().unwrap_or_default();
     for proj in projects {
-        if proj.config.server_id.as_deref() == Some(id) {
+        if proj.server_id.as_deref() == Some(id) {
             return Err(Error::validation_invalid_argument(
                 "server",
                 format!(
@@ -323,23 +261,8 @@ pub fn set_identity_file(id: &str, identity_file: Option<String>) -> Result<Serv
 // JSON Import
 // ============================================================================
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateSummary {
-    pub created: u32,
-    pub skipped: u32,
-    pub errors: u32,
-    pub items: Vec<CreateSummaryItem>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateSummaryItem {
-    pub id: String,
-    pub status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+pub use config::BatchResult as CreateSummary;
+pub use config::BatchResultItem as CreateSummaryItem;
 
 pub fn create_from_json(spec: &str, skip_existing: bool) -> Result<CreateSummary> {
     let value: serde_json::Value = json::from_str(spec)?;
@@ -350,86 +273,46 @@ pub fn create_from_json(spec: &str, skip_existing: bool) -> Result<CreateSummary
         vec![value]
     };
 
-    let mut summary = CreateSummary {
-        created: 0,
-        skipped: 0,
-        errors: 0,
-        items: Vec::new(),
-    };
+    let mut summary = CreateSummary::new();
 
     for item in items {
-        let server: Server = match serde_json::from_value(item.clone()) {
+        let id = match item.get("id").and_then(|v| v.as_str()) {
+            Some(id) => id.to_string(),
+            None => {
+                summary.record_error("unknown".to_string(), "Missing required field: id".to_string());
+                continue;
+            }
+        };
+
+        if let Err(e) = slugify::validate_component_id(&id) {
+            summary.record_error(id, e.message.clone());
+            continue;
+        }
+
+        let mut server: Server = match serde_json::from_value(item.clone()) {
             Ok(s) => s,
             Err(e) => {
-                let id = item
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .map(|n| slugify_id(n).unwrap_or_else(|_| "unknown".to_string()))
-                    .unwrap_or_else(|| "unknown".to_string());
-
-                summary.errors += 1;
-                summary.items.push(CreateSummaryItem {
-                    id,
-                    status: "error".to_string(),
-                    error: Some(format!("Parse error: {}", e)),
-                });
+                summary.record_error(id, format!("Parse error: {}", e));
                 continue;
             }
         };
-
-        let id = match slugify_id(&server.name) {
-            Ok(id) => id,
-            Err(e) => {
-                summary.errors += 1;
-                summary.items.push(CreateSummaryItem {
-                    id: "unknown".to_string(),
-                    status: "error".to_string(),
-                    error: Some(e.message.clone()),
-                });
-                continue;
-            }
-        };
+        server.id = id.clone();
 
         if exists(&id) {
             if skip_existing {
-                summary.skipped += 1;
-                summary.items.push(CreateSummaryItem {
-                    id,
-                    status: "skipped".to_string(),
-                    error: None,
-                });
+                summary.record_skipped(id);
             } else {
-                summary.errors += 1;
-                summary.items.push(CreateSummaryItem {
-                    id: id.clone(),
-                    status: "error".to_string(),
-                    error: Some(format!("Server '{}' already exists", id)),
-                });
+                summary.record_error(id.clone(), format!("Server '{}' already exists", id));
             }
             continue;
         }
 
-        let server_with_id = Server {
-            id: id.clone(),
-            ..server
-        };
-
-        if let Err(e) = save(&server_with_id) {
-            summary.errors += 1;
-            summary.items.push(CreateSummaryItem {
-                id,
-                status: "error".to_string(),
-                error: Some(e.message.clone()),
-            });
+        if let Err(e) = save(&server) {
+            summary.record_error(id, e.message.clone());
             continue;
         }
 
-        summary.created += 1;
-        summary.items.push(CreateSummaryItem {
-            id,
-            status: "created".to_string(),
-            error: None,
-        });
+        summary.record_created(id);
     }
 
     Ok(summary)

@@ -23,9 +23,7 @@ enum ComponentCommand {
         #[arg(long)]
         skip_existing: bool,
 
-        /// Display name (ID derived from name) - required in CLI mode
-        name: Option<String>,
-        /// Absolute path to local source directory
+        /// Absolute path to local source directory (ID derived from directory name)
         #[arg(long)]
         local_path: Option<String>,
         /// Remote path relative to project basePath
@@ -50,7 +48,7 @@ enum ComponentCommand {
         id: String,
     },
     /// Update component configuration fields
-    #[command(visible_alias = "edit")]
+    #[command(visible_aliases = ["edit", "merge"])]
     Set {
         /// Component ID (optional if provided in JSON body)
         id: Option<String>,
@@ -63,12 +61,12 @@ enum ComponentCommand {
         /// Component ID
         id: String,
     },
-    /// Rename a component (changes ID based on new name)
+    /// Rename a component (changes ID directly)
     Rename {
         /// Current component ID
         id: String,
-        /// New display name (ID will be derived from this)
-        new_name: String,
+        /// New component ID (should match repository directory name)
+        new_id: String,
     },
     /// List all available components
     List,
@@ -95,7 +93,6 @@ pub fn run(
         ComponentCommand::Create {
             json,
             skip_existing,
-            name,
             local_path,
             remote_path,
             build_artifact,
@@ -108,7 +105,6 @@ pub fn run(
             }
 
             let result = component::create_from_cli(
-                name,
                 local_path,
                 remote_path,
                 build_artifact,
@@ -133,7 +129,7 @@ pub fn run(
         ComponentCommand::Show { id } => show(&id),
         ComponentCommand::Set { id, json } => set(id.as_deref(), &json),
         ComponentCommand::Delete { id } => delete(&id),
-        ComponentCommand::Rename { id, new_name } => rename(&id, &new_name),
+        ComponentCommand::Rename { id, new_id } => rename(&id, &new_id),
         ComponentCommand::List => list(),
     }
 }
@@ -207,15 +203,15 @@ fn delete(id: &str) -> CmdResult<ComponentOutput> {
     ))
 }
 
-fn rename(id: &str, new_name: &str) -> CmdResult<ComponentOutput> {
-    let result = component::rename(id, new_name)?;
+fn rename(id: &str, new_id: &str) -> CmdResult<ComponentOutput> {
+    let result = component::rename(id, new_id)?;
 
     Ok((
         ComponentOutput {
             command: "component.rename".to_string(),
             component_id: Some(result.id.clone()),
             success: true,
-            updated_fields: vec!["id".to_string(), "name".to_string()],
+            updated_fields: vec!["id".to_string()],
             component: Some(result.component),
             components: vec![],
             import: None,

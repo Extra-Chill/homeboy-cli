@@ -1,5 +1,5 @@
 use clap::{Args, Subcommand};
-use homeboy::project::{Project, ProjectRecord};
+use homeboy::project::Project;
 use homeboy::server::{self, Server};
 use homeboy::ssh::SshClient;
 use serde::Serialize;
@@ -72,7 +72,7 @@ pub fn run(args: SshArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Ss
 
             run_with_loaders_and_executor(
                 args,
-                homeboy::project::load_record,
+                homeboy::project::load,
                 server::load,
                 execute_interactive,
             )
@@ -82,7 +82,7 @@ pub fn run(args: SshArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Ss
 
 fn run_with_loaders_and_executor(
     args: SshArgs,
-    project_loader: fn(&str) -> homeboy::Result<ProjectRecord>,
+    project_loader: fn(&str) -> homeboy::Result<Project>,
     server_loader: fn(&str) -> homeboy::Result<Server>,
     executor: fn(&Server, &str, Option<&str>) -> homeboy::Result<i32>,
 ) -> CmdResult<SshOutput> {
@@ -128,13 +128,13 @@ fn execute_interactive(
 
 fn resolve_context(
     args: &SshArgs,
-    project_loader: fn(&str) -> homeboy::Result<ProjectRecord>,
+    project_loader: fn(&str) -> homeboy::Result<Project>,
     server_loader: fn(&str) -> homeboy::Result<Server>,
 ) -> homeboy::Result<(String, Option<String>, String, Server)> {
     if let Some(project_id) = &args.project {
-        let record = project_loader(project_id)?;
-        let (server_id, server) = resolve_from_loaded_project(&record.config, server_loader)?;
-        return Ok(("project".to_string(), Some(record.id), server_id, server));
+        let project = project_loader(project_id)?;
+        let (server_id, server) = resolve_from_loaded_project(&project, server_loader)?;
+        return Ok(("project".to_string(), Some(project.id), server_id, server));
     }
 
     if let Some(server_id) = &args.server {
@@ -150,9 +150,9 @@ fn resolve_context(
         ])
     })?;
 
-    if let Ok(record) = project_loader(id) {
-        let (server_id, server) = resolve_from_loaded_project(&record.config, server_loader)?;
-        return Ok(("project".to_string(), Some(record.id), server_id, server));
+    if let Ok(project) = project_loader(id) {
+        let (server_id, server) = resolve_from_loaded_project(&project, server_loader)?;
+        return Ok(("project".to_string(), Some(project.id), server_id, server));
     }
 
     if let Ok(server) = server_loader(id) {
@@ -192,7 +192,6 @@ mod tests {
     fn server(id: &str) -> Server {
         Server {
             id: id.to_string(),
-            name: "Test".to_string(),
             host: "example.com".to_string(),
             user: "user".to_string(),
             port: 22,
@@ -200,27 +199,24 @@ mod tests {
         }
     }
 
-    fn project(id: &str, server_id: Option<&str>) -> ProjectRecord {
-        ProjectRecord {
+    fn project(id: &str, server_id: Option<&str>) -> Project {
+        Project {
             id: id.to_string(),
-            config: Project {
-                name: String::new(),
-                domain: String::new(),
-                scoped_modules: None,
-                server_id: server_id.map(|s| s.to_string()),
-                base_path: None,
-                table_prefix: None,
-                remote_files: homeboy::project::RemoteFileConfig::default(),
-                remote_logs: homeboy::project::RemoteLogConfig::default(),
-                database: homeboy::project::DatabaseConfig::default(),
-                tools: homeboy::project::ToolsConfig::default(),
-                api: homeboy::project::ApiConfig::default(),
-                changelog_next_section_label: None,
-                changelog_next_section_aliases: None,
-                sub_targets: vec![],
-                shared_tables: vec![],
-                component_ids: vec![],
-            },
+            domain: String::new(),
+            scoped_modules: None,
+            server_id: server_id.map(|s| s.to_string()),
+            base_path: None,
+            table_prefix: None,
+            remote_files: homeboy::project::RemoteFileConfig::default(),
+            remote_logs: homeboy::project::RemoteLogConfig::default(),
+            database: homeboy::project::DatabaseConfig::default(),
+            tools: homeboy::project::ToolsConfig::default(),
+            api: homeboy::project::ApiConfig::default(),
+            changelog_next_section_label: None,
+            changelog_next_section_aliases: None,
+            sub_targets: vec![],
+            shared_tables: vec![],
+            component_ids: vec![],
         }
     }
 

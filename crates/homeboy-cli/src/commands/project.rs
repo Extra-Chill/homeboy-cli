@@ -2,7 +2,7 @@ use clap::{Args, Subcommand, ValueEnum};
 use serde::Serialize;
 
 use homeboy::component::{self, Component};
-use homeboy::project::{self, Project, ProjectRecord};
+use homeboy::project::{self, Project};
 
 #[derive(Args)]
 pub struct ProjectArgs {
@@ -29,8 +29,8 @@ enum ProjectCommand {
         #[arg(long)]
         skip_existing: bool,
 
-        /// Project name (CLI mode)
-        name: Option<String>,
+        /// Project ID (CLI mode)
+        id: Option<String>,
         /// Public site domain (CLI mode)
         domain: Option<String>,
         /// Optional server ID
@@ -44,7 +44,7 @@ enum ProjectCommand {
         table_prefix: Option<String>,
     },
     /// Update project configuration fields
-    #[command(visible_alias = "edit")]
+    #[command(visible_aliases = ["edit", "merge"])]
     Set {
         /// Project ID (optional if provided in JSON body)
         project_id: Option<String>,
@@ -52,17 +52,12 @@ enum ProjectCommand {
         #[arg(long, value_name = "JSON")]
         json: String,
     },
-    /// Repair a project file whose name doesn't match the stored project name
-    Repair {
-        /// Project ID (file stem)
-        project_id: String,
-    },
-    /// Rename a project (changes ID based on new name)
+    /// Rename a project (changes ID)
     Rename {
         /// Current project ID
         project_id: String,
-        /// New display name (ID will be derived from this)
-        new_name: String,
+        /// New project ID
+        new_id: String,
     },
     /// Manage project components
     Components {
@@ -129,7 +124,6 @@ pub struct ProjectComponentsOutput {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectListItem {
     id: String,
-    name: String,
     domain: String,
 }
 
@@ -214,7 +208,7 @@ enum ProjectPinType {
 pub struct ProjectOutput {
     command: String,
     project_id: Option<String>,
-    project: Option<ProjectRecord>,
+    project: Option<Project>,
     projects: Option<Vec<ProjectListItem>>,
     components: Option<ProjectComponentsOutput>,
     pin: Option<ProjectPinOutput>,
@@ -236,7 +230,7 @@ pub fn run(
         ProjectCommand::Create {
             json,
             skip_existing,
-            name,
+            id,
             domain,
             server_id,
             base_path,
@@ -246,15 +240,10 @@ pub fn run(
                 return create_json(&spec, skip_existing);
             }
 
-            // Core validates name and domain
-            create(name, domain, server_id, base_path, table_prefix)
+            create(id, domain, server_id, base_path, table_prefix)
         }
         ProjectCommand::Set { project_id, json } => set(project_id.as_deref(), &json),
-        ProjectCommand::Repair { project_id } => repair(&project_id),
-        ProjectCommand::Rename {
-            project_id,
-            new_name,
-        } => rename(&project_id, &new_name),
+        ProjectCommand::Rename { project_id, new_id } => rename(&project_id, &new_id),
         ProjectCommand::Components { command } => components(command),
         ProjectCommand::Pin { command } => pin(command),
         ProjectCommand::Delete { project_id } => delete(&project_id),
@@ -266,10 +255,9 @@ fn list() -> homeboy::Result<(ProjectOutput, i32)> {
 
     let items: Vec<ProjectListItem> = projects
         .into_iter()
-        .map(|record| ProjectListItem {
-            id: record.id,
-            name: record.config.name,
-            domain: record.config.domain,
+        .map(|p| ProjectListItem {
+            id: p.id,
+            domain: p.domain,
         })
         .collect();
 
@@ -290,7 +278,7 @@ fn list() -> homeboy::Result<(ProjectOutput, i32)> {
 }
 
 fn show(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
-    let project = project::load_record(project_id)?;
+    let project = project::load(project_id)?;
 
     Ok((
         ProjectOutput {
@@ -329,17 +317,16 @@ fn create_json(spec: &str, skip_existing: bool) -> homeboy::Result<(ProjectOutpu
 }
 
 fn create(
-    name: Option<String>,
+    id: Option<String>,
     domain: Option<String>,
     server_id: Option<String>,
     base_path: Option<String>,
     table_prefix: Option<String>,
 ) -> homeboy::Result<(ProjectOutput, i32)> {
-    // Core validates name and domain
-    let result = project::create_from_cli(name, domain, server_id, base_path, table_prefix)?;
+    let result = project::create_from_cli(id, domain, server_id, base_path, table_prefix)?;
 
     let created_id = result.id;
-    let project = project::load_record(&created_id)?;
+    let project = project::load(&created_id)?;
 
     Ok((
         ProjectOutput {
@@ -363,7 +350,7 @@ fn set(project_id: Option<&str>, json: &str) -> homeboy::Result<(ProjectOutput, 
         ProjectOutput {
             command: "project.set".to_string(),
             project_id: Some(result.id.clone()),
-            project: Some(project::load_record(&result.id)?),
+            project: Some(project::load(&result.id)?),
             projects: None,
             components: None,
             pin: None,
@@ -375,43 +362,18 @@ fn set(project_id: Option<&str>, json: &str) -> homeboy::Result<(ProjectOutput, 
     ))
 }
 
-fn repair(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
-    let result = project::repair(project_id)?;
-
-    let updated = if result.new_id != result.old_id {
-        Some(vec!["id".to_string()])
-    } else {
-        None
-    };
-
-    Ok((
-        ProjectOutput {
-            command: "project.repair".to_string(),
-            project_id: Some(result.new_id.clone()),
-            project: Some(project::load_record(&result.new_id)?),
-            projects: None,
-            components: None,
-            pin: None,
-            updated,
-            deleted: None,
-            import: None,
-        },
-        0,
-    ))
-}
-
-fn rename(project_id: &str, new_name: &str) -> homeboy::Result<(ProjectOutput, i32)> {
-    let result = project::rename(project_id, new_name)?;
+fn rename(project_id: &str, new_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
+    let result = project::rename(project_id, new_id)?;
 
     Ok((
         ProjectOutput {
             command: "project.rename".to_string(),
             project_id: Some(result.new_id.clone()),
-            project: Some(project::load_record(&result.new_id)?),
+            project: Some(project::load(&result.new_id)?),
             projects: None,
             components: None,
             pin: None,
-            updated: Some(vec!["id".to_string(), "name".to_string()]),
+            updated: Some(vec!["id".to_string()]),
             deleted: None,
             import: None,
         },
@@ -536,7 +498,7 @@ fn write_project_components(
     action: &str,
     project: &Project,
 ) -> homeboy::Result<(ProjectOutput, i32)> {
-    project::save(project_id, project)?;
+    project::save(project)?;
 
     let mut components = Vec::new();
     for component_id in &project.component_ids {

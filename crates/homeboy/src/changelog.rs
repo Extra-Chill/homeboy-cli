@@ -447,35 +447,19 @@ pub struct AddItemsOutput {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct OpPayload<T> {
-    op: String,
-    data: T,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AddItemsData {
+struct AddItemsInput {
     component_id: String,
     messages: Vec<String>,
 }
 
-/// Add changelog items from a JSON spec with op/data payload.
-pub fn add_items_bulk(json_spec: &str, expected_op: &str) -> Result<AddItemsOutput> {
+/// Add changelog items from a JSON spec.
+pub fn add_items_bulk(json_spec: &str) -> Result<AddItemsOutput> {
     let raw = read_json_spec_to_string(json_spec)?;
 
-    let payload: OpPayload<AddItemsData> = serde_json::from_str(&raw)
-        .map_err(|e| Error::validation_invalid_json(e, Some("parse op payload".to_string())))?;
+    let input: AddItemsInput = serde_json::from_str(&raw)
+        .map_err(|e| Error::validation_invalid_json(e, Some("parse changelog add input".to_string())))?;
 
-    if payload.op != expected_op {
-        return Err(Error::validation_invalid_argument(
-            "op",
-            format!("Unexpected op '{}'", payload.op),
-            Some(expected_op.to_string()),
-            Some(vec![expected_op.to_string()]),
-        ));
-    }
-
-    add_items(&payload.data.component_id, &payload.data.messages)
+    add_items(&input.component_id, &input.messages)
 }
 
 /// Add changelog items to a component.

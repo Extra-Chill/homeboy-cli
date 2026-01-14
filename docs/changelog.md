@@ -6,6 +6,11 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## 0.7.1
+
+- Align homeboy init docs source with agent-instructions
+- Simplify changelog add --json format to match other bulk commands
+
 ## 0.7.0
 
 - Refactor CLI commands to delegate business logic to the core library

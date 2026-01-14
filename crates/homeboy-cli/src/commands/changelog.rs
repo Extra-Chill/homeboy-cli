@@ -97,7 +97,7 @@ pub fn run(
             }
 
             if let Some(spec) = json.as_deref() {
-                let output = changelog::add_items_bulk(spec, "changelog.add")?;
+                let output = changelog::add_items_bulk(spec)?;
                 return Ok((ChangelogOutput::Add(output), 0));
             }
 

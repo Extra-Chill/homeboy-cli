@@ -1,3 +1,4 @@
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
@@ -160,6 +161,82 @@ pub fn get_latest_tag(path: &str) -> Result<Option<String>> {
     }
 }
 
+const DEFAULT_COMMIT_LIMIT: usize = 10;
+
+/// Find the most recent commit containing a version number in its message.
+/// Matches strict patterns: v1.0.0, bump to X, release X, version X
+/// Returns the commit hash if found, None otherwise.
+pub fn find_version_commit(path: &str) -> Result<Option<String>> {
+    let output = Command::new("git")
+        .args(["log", "-200", "--format=%h|%s"])
+        .current_dir(path)
+        .output()
+        .map_err(|e| Error::other(format!("Failed to run git log: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(Error::other(format!("git log failed: {}", stderr)));
+    }
+
+    let version_pattern =
+        Regex::new(r"(?i)(?:^v|bump\s+(?:to\s+)?|release\s+v?|version\s+)(\d+\.\d+(?:\.\d+)?)")
+            .expect("Invalid regex pattern");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = line.splitn(2, '|').collect();
+        if parts.len() == 2 {
+            let hash = parts[0];
+            let subject = parts[1];
+            if version_pattern.is_match(subject) {
+                return Ok(Some(hash.to_string()));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+/// Get the last N commits from the repository.
+pub fn get_last_n_commits(path: &str, n: usize) -> Result<Vec<CommitInfo>> {
+    let output = Command::new("git")
+        .args(["log", &format!("-{}", n), "--format=%h|%s"])
+        .current_dir(path)
+        .output()
+        .map_err(|e| Error::other(format!("Failed to run git log: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(Error::other(format!("git log failed: {}", stderr)));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let commits = stdout
+        .lines()
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.splitn(2, '|').collect();
+            if parts.len() == 2 {
+                let hash = parts[0].to_string();
+                let subject = parts[1].to_string();
+                let category = parse_conventional_commit(&subject);
+                Some(CommitInfo {
+                    hash,
+                    subject,
+                    category,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(commits)
+}
+
 /// Get commits since a given tag (or all commits if tag is None).
 /// Returns commits in reverse chronological order (newest first).
 pub fn get_commits_since_tag(path: &str, tag: Option<&str>) -> Result<Vec<CommitInfo>> {
@@ -267,6 +344,14 @@ pub struct BulkSummary {
 // === Changes Output Types ===
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BaselineSource {
+    Tag,
+    VersionCommit,
+    LastNCommits,
+}
+
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UncommittedChanges {
     pub has_changes: bool,
@@ -282,10 +367,16 @@ pub struct ChangesOutput {
     pub path: String,
     pub success: bool,
     pub latest_tag: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub baseline_source: Option<BaselineSource>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub baseline_ref: Option<String>,
     pub commits: Vec<CommitInfo>,
     pub uncommitted: UncommittedChanges,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diff: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -709,14 +800,48 @@ pub fn changes(
 ) -> Result<ChangesOutput> {
     let path = get_component_path(component_id)?;
 
-    // Get latest tag if not specified
-    let latest_tag = match since_tag {
-        Some(t) => Some(t.to_string()),
-        None => get_latest_tag(&path)?,
+    // Determine baseline using fallback chain: tag -> version commit -> last N commits
+    let (latest_tag, baseline_source, baseline_ref, warning) = match since_tag {
+        Some(t) => (
+            Some(t.to_string()),
+            Some(BaselineSource::Tag),
+            Some(t.to_string()),
+            None,
+        ),
+        None => {
+            if let Some(tag) = get_latest_tag(&path)? {
+                (
+                    Some(tag.clone()),
+                    Some(BaselineSource::Tag),
+                    Some(tag),
+                    None,
+                )
+            } else if let Some(version_hash) = find_version_commit(&path)? {
+                (
+                    None,
+                    Some(BaselineSource::VersionCommit),
+                    Some(version_hash),
+                    Some("No tags found. Using most recent version commit as baseline.".to_string()),
+                )
+            } else {
+                (
+                    None,
+                    Some(BaselineSource::LastNCommits),
+                    None,
+                    Some(format!(
+                        "No tags or version commits found. Showing last {} commits.",
+                        DEFAULT_COMMIT_LIMIT
+                    )),
+                )
+            }
+        }
     };
 
-    // Get commits since tag
-    let commits = get_commits_since_tag(&path, latest_tag.as_deref())?;
+    // Get commits based on baseline source
+    let commits = match baseline_source {
+        Some(BaselineSource::LastNCommits) => get_last_n_commits(&path, DEFAULT_COMMIT_LIMIT)?,
+        _ => get_commits_since_tag(&path, baseline_ref.as_deref())?,
+    };
 
     // Get uncommitted changes
     let uncommitted = get_uncommitted_changes(&path)?;
@@ -733,9 +858,12 @@ pub fn changes(
         path,
         success: true,
         latest_tag,
+        baseline_source,
+        baseline_ref,
         commits,
         uncommitted,
         diff,
+        warning,
         error: None,
     })
 }
@@ -766,6 +894,8 @@ fn build_bulk_changes_output(component_ids: &[String], include_diff: bool) -> Bu
                     path: String::new(),
                     success: false,
                     latest_tag: None,
+                    baseline_source: None,
+                    baseline_ref: None,
                     commits: Vec::new(),
                     uncommitted: UncommittedChanges {
                         has_changes: false,
@@ -774,6 +904,7 @@ fn build_bulk_changes_output(component_ids: &[String], include_diff: bool) -> Bu
                         untracked: Vec::new(),
                     },
                     diff: None,
+                    warning: None,
                     error: Some(e.to_string()),
                 });
             }
@@ -818,8 +949,40 @@ pub fn changes_cwd(include_diff: bool) -> Result<ChangesOutput> {
         .to_string_lossy()
         .to_string();
 
-    let latest_tag = get_latest_tag(&path)?;
-    let commits = get_commits_since_tag(&path, latest_tag.as_deref())?;
+    // Determine baseline using fallback chain: tag -> version commit -> last N commits
+    let (latest_tag, baseline_source, baseline_ref, warning) =
+        if let Some(tag) = get_latest_tag(&path)? {
+            (
+                Some(tag.clone()),
+                Some(BaselineSource::Tag),
+                Some(tag),
+                None,
+            )
+        } else if let Some(version_hash) = find_version_commit(&path)? {
+            (
+                None,
+                Some(BaselineSource::VersionCommit),
+                Some(version_hash),
+                Some("No tags found. Using most recent version commit as baseline.".to_string()),
+            )
+        } else {
+            (
+                None,
+                Some(BaselineSource::LastNCommits),
+                None,
+                Some(format!(
+                    "No tags or version commits found. Showing last {} commits.",
+                    DEFAULT_COMMIT_LIMIT
+                )),
+            )
+        };
+
+    // Get commits based on baseline source
+    let commits = match baseline_source {
+        Some(BaselineSource::LastNCommits) => get_last_n_commits(&path, DEFAULT_COMMIT_LIMIT)?,
+        _ => get_commits_since_tag(&path, baseline_ref.as_deref())?,
+    };
+
     let uncommitted = get_uncommitted_changes(&path)?;
     let diff = if include_diff {
         Some(get_diff(&path)?)
@@ -832,9 +995,12 @@ pub fn changes_cwd(include_diff: bool) -> Result<ChangesOutput> {
         path,
         success: true,
         latest_tag,
+        baseline_source,
+        baseline_ref,
         commits,
         uncommitted,
         diff,
+        warning,
         error: None,
     })
 }

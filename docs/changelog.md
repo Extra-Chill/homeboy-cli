@@ -6,6 +6,10 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## 0.7.2
+
+- Add tiered fallback for changes command when no tags exist (version commits → last 10 commits)
+
 ## 0.7.1
 
 - Align homeboy init docs source with agent-instructions

@@ -30,11 +30,32 @@ Then read workspace documentation:
 ## Phase 2 — Analyze and Derive
 
 ### If `managed: true`
-This repo is already configured. Verify the configuration:
-1. `homeboy component show <matchedComponentId>` for each matched component
-2. Report status and suggest repairs if needed
+This repo is already configured. The `context` output includes component details and detected gaps.
 
-### If `managed: false`
+1. **Review context data** - `matchedComponents` and `components` arrays contain configuration details
+2. **Check for gaps** - `components[].gaps` shows missing optional fields with remediation commands
+3. **Run gap commands** - Execute suggested commands to complete configuration
+4. **Report status** and suggest next steps
+
+### If monorepo root (`managed: false` but `containedComponents` exists)
+Components are already registered but the root itself isn't managed.
+
+1. **Review context output** - `components[].gaps` shows detected configuration gaps
+2. **Run suggested commands** - Each gap includes the exact remediation command
+3. **Skip creation** - Focus on completing existing component configuration
+
+### Component Gaps (Automated Detection)
+
+The `homeboy context` command automatically detects missing optional fields:
+
+| Detected File | Missing Field | Why It Matters |
+|--------------|---------------|----------------|
+| `build.sh` | `buildCommand` | Required for `homeboy build` |
+| `CHANGELOG.md` | `changelogTargets` | Required for `homeboy version-bump` |
+
+Each gap includes the exact command to resolve it.
+
+### If `managed: false` (no containedComponents)
 Determine what to create based on gathered context:
 
 **Project indicators** (from workspace docs):

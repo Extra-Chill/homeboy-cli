@@ -11,12 +11,22 @@ use crate::ssh::SshClient;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ComponentGap {
+    pub field: String,
+    pub reason: String,
+    pub command: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ContainedComponentInfo {
     pub id: String,
     pub build_artifact: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build_command: Option<String>,
     pub remote_path: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub gaps: Vec<ComponentGap>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -182,11 +192,39 @@ fn find_project_for_components(component_ids: &[String]) -> Option<project::Proj
 }
 
 fn build_component_info(component: &component::Component) -> ContainedComponentInfo {
+    let mut gaps = Vec::new();
+    let local_path = PathBuf::from(&component.local_path);
+
+    // Check for build script without buildCommand
+    if component.build_command.is_none() && local_path.join("build.sh").exists() {
+        gaps.push(ComponentGap {
+            field: "buildCommand".to_string(),
+            reason: "build.sh exists".to_string(),
+            command: format!(
+                "homeboy component set {} --build-command \"./build.sh\"",
+                component.id
+            ),
+        });
+    }
+
+    // Check for CHANGELOG.md without changelogTargets
+    if component.changelog_targets.is_none() && local_path.join("CHANGELOG.md").exists() {
+        gaps.push(ComponentGap {
+            field: "changelogTargets".to_string(),
+            reason: "CHANGELOG.md exists".to_string(),
+            command: format!(
+                "homeboy component set {} --changelog-target \"CHANGELOG.md\"",
+                component.id
+            ),
+        });
+    }
+
     ContainedComponentInfo {
         id: component.id.clone(),
         build_artifact: component.build_artifact.clone(),
         build_command: component.build_command.clone(),
         remote_path: component.remote_path.clone(),
+        gaps,
     }
 }
 

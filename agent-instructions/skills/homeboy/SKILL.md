@@ -17,6 +17,7 @@ CLI for project development and deployment. Provides terminal access to project 
 | `project` | Manage project configurations (create, set, list, show, repair, components, pin) |
 | `component` | Manage standalone component configurations |
 | `server` | Manage server configurations (create, show, set, delete, list, key) |
+| `changes` | View uncommitted/unreleased changes for components or projects |
 | `git` | Component-scoped git operations (status, commit, push, pull, tag) |
 | `version` | Component-scoped version management (show, bump) |
 | `build` | Component-scoped builds |
@@ -29,7 +30,6 @@ CLI for project development and deployment. Provides terminal access to project 
 ## Commands and help
 
 ```bash
-homeboy project list           # List all projects
 homeboy project list           # List all projects
 homeboy docs                   # Embedded docs index
 homeboy docs <topic...>        # Embedded docs for a topic
@@ -79,6 +79,23 @@ homeboy deploy <project> --dry-run --all    # Preview all deployments
 homeboy deploy <project> --outdated         # Deploy changed components only
 homeboy deploy <project> <component-id>     # Deploy specific component
 ```
+
+### Changes (View Uncommitted/Unreleased)
+View changes since last tag or version commit:
+```bash
+homeboy changes <component>                 # Show changes for single component
+homeboy changes --project <project>         # Show changes for all project components
+homeboy changes --cwd                       # Show changes for current directory
+homeboy changes <component> --include-diff  # Include full diff output
+homeboy changes --project <project> --include-diff  # Bulk with diffs
+```
+
+Output includes:
+- `latestTag` - Most recent git tag (or null)
+- `baselineSource` - How baseline was determined: `tag`, `version_commit`, or `last_n_commits`
+- `commits` - Commits since baseline
+- `uncommitted` - Staged, unstaged, and untracked files
+- `warning` - Alert if no tags found (showing fallback baseline)
 
 ### Git Operations (Component-Scoped)
 No more `cd` to directories - operate on components by name:

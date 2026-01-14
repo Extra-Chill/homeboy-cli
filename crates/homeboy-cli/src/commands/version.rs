@@ -4,7 +4,7 @@ use serde::Serialize;
 use homeboy::component;
 use homeboy::version::{
     bump_component_version, bump_version_cwd, read_component_version, read_version_cwd,
-    VersionTargetInfo,
+    set_component_version, VersionTargetInfo,
 };
 
 use crate::output::{CliWarning, CmdResult};
@@ -37,6 +37,14 @@ enum VersionCommand {
 
         /// Version bump type
         bump_type: BumpType,
+    },
+    /// Set version directly (without incrementing or changelog finalization)
+    Set {
+        /// Component ID
+        component_id: Option<String>,
+
+        /// New version (e.g., 1.2.3)
+        new_version: String,
     },
 }
 
@@ -77,6 +85,16 @@ pub struct VersionBumpOutput {
     changelog_path: String,
     changelog_finalized: bool,
     changelog_changed: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionSetOutput {
+    command: String,
+    component_id: String,
+    old_version: String,
+    new_version: String,
+    targets: Vec<VersionTargetInfo>,
 }
 
 pub fn run(args: VersionArgs, global: &crate::commands::GlobalArgs) -> CmdResult {
@@ -128,6 +146,20 @@ pub fn run(args: VersionArgs, global: &crate::commands::GlobalArgs) -> CmdResult
                 )
             })?;
             bump(&id, bump_type, global.dry_run)
+        }
+        VersionCommand::Set {
+            component_id,
+            new_version,
+        } => {
+            let id = component_id.ok_or_else(|| {
+                homeboy::Error::validation_invalid_argument(
+                    "componentId",
+                    "Missing componentId",
+                    None,
+                    None,
+                )
+            })?;
+            set(&id, &new_version, global.dry_run)
         }
     }
 }
@@ -204,6 +236,36 @@ fn bump_cwd(bump_type: BumpType, dry_run: bool) -> CmdResult {
         changelog_path: result.changelog_path,
         changelog_finalized: result.changelog_finalized,
         changelog_changed: result.changelog_changed,
+    };
+
+    let json = serde_json::to_value(out)
+        .map_err(|e| homeboy::Error::internal_json(e.to_string(), None))?;
+
+    Ok((json, warnings, 0))
+}
+
+fn set(component_id: &str, new_version: &str, dry_run: bool) -> CmdResult {
+    let mut warnings: Vec<CliWarning> = Vec::new();
+
+    if dry_run {
+        warnings.push(CliWarning {
+            code: "mode.dry_run".to_string(),
+            message: "Dry-run: no files were written".to_string(),
+            details: serde_json::Value::Object(serde_json::Map::new()),
+            hints: None,
+            retryable: None,
+        });
+    }
+
+    let component = component::load(component_id)?;
+    let result = set_component_version(&component, new_version, dry_run)?;
+
+    let out = VersionSetOutput {
+        command: "version.set".to_string(),
+        component_id: component_id.to_string(),
+        old_version: result.old_version,
+        new_version: result.new_version,
+        targets: result.targets,
     };
 
     let json = serde_json::to_value(out)

@@ -30,7 +30,6 @@ pub enum ChangelogCommand {
         component_id: Option<String>,
 
         /// Changelog item content (non-JSON mode)
-        #[arg(short, long)]
         message: Option<String>,
     },
 }
@@ -87,7 +86,7 @@ pub fn run(
                 let msg = message.ok_or_else(|| {
                     homeboy::Error::validation_invalid_argument(
                         "message",
-                        "Missing message (use -m or --message)",
+                        "Missing message",
                         None,
                         None,
                     )
@@ -113,7 +112,7 @@ pub fn run(
             let msg = message.ok_or_else(|| {
                 homeboy::Error::validation_invalid_argument(
                     "message",
-                    "Missing message (use -m or --message)",
+                    "Missing message",
                     None,
                     None,
                 )

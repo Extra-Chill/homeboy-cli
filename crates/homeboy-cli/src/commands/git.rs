@@ -44,7 +44,6 @@ enum GitCommand {
         component_id: Option<String>,
 
         /// Commit message
-        #[arg(short, long)]
         message: Option<String>,
     },
     /// Push local commits to remote
@@ -149,7 +148,7 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
                 let msg = message.ok_or_else(|| {
                     homeboy::Error::validation_invalid_argument(
                         "message",
-                        "Missing message (use -m or --message)",
+                        "Missing commit message",
                         None,
                         None,
                     )
@@ -176,7 +175,7 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             let msg = message.ok_or_else(|| {
                 homeboy::Error::validation_invalid_argument(
                     "message",
-                    "Missing message (use -m or --message)",
+                    "Missing commit message",
                     None,
                     None,
                 )

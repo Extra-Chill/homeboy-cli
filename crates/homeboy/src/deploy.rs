@@ -264,6 +264,22 @@ pub struct DeployConfig {
     pub dry_run: bool,
 }
 
+/// Reason why a component was selected for deployment.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeployReason {
+    /// Component was explicitly specified by ID
+    ExplicitlySelected,
+    /// --all flag was used
+    AllSelected,
+    /// Local and remote versions differ
+    VersionMismatch,
+    /// Could not determine local version
+    UnknownLocalVersion,
+    /// Could not determine remote version (not deployed or no version file)
+    UnknownRemoteVersion,
+}
+
 /// Result for a single component deployment.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -271,6 +287,8 @@ pub struct ComponentDeployResult {
     pub id: String,
     pub name: String,
     pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deploy_reason: Option<DeployReason>,
     pub local_version: Option<String>,
     pub remote_version: Option<String>,
     pub error: Option<String>,
@@ -287,6 +305,7 @@ impl ComponentDeployResult {
             id: component.id.clone(),
             name: component.name.clone(),
             status: String::new(),
+            deploy_reason: None,
             local_version: None,
             remote_version: None,
             error: None,
@@ -300,6 +319,11 @@ impl ComponentDeployResult {
 
     fn with_status(mut self, status: &str) -> Self {
         self.status = status.to_string();
+        self
+    }
+
+    fn with_deploy_reason(mut self, reason: DeployReason) -> Self {
+        self.deploy_reason = Some(reason);
         self
     }
 
@@ -403,12 +427,32 @@ pub fn deploy_components(
         let results: Vec<ComponentDeployResult> = components_to_deploy
             .iter()
             .map(|component| {
+                let local_version = local_versions.get(&component.id).cloned();
+                let remote_version = remote_versions.get(&component.id).cloned();
+
+                // Determine why this component would be deployed
+                let reason = if config.all {
+                    DeployReason::AllSelected
+                } else if !config.component_ids.is_empty() {
+                    DeployReason::ExplicitlySelected
+                } else if config.outdated {
+                    // Outdated logic: check version status
+                    match (&local_version, &remote_version) {
+                        (None, _) => DeployReason::UnknownLocalVersion,
+                        (_, None) => DeployReason::UnknownRemoteVersion,
+                        (Some(local), Some(remote)) if local != remote => {
+                            DeployReason::VersionMismatch
+                        }
+                        _ => DeployReason::VersionMismatch,
+                    }
+                } else {
+                    DeployReason::ExplicitlySelected
+                };
+
                 ComponentDeployResult::new(component, base_path)
                     .with_status("would_deploy")
-                    .with_versions(
-                        local_versions.get(&component.id).cloned(),
-                        remote_versions.get(&component.id).cloned(),
-                    )
+                    .with_deploy_reason(reason)
+                    .with_versions(local_version, remote_version)
             })
             .collect();
 

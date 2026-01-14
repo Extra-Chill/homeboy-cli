@@ -43,6 +43,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Manage project configuration
+    #[command(visible_alias = "projects")]
     Project(project::ProjectArgs),
     /// SSH into a project server or configured server
     Ssh(ssh::SshArgs),

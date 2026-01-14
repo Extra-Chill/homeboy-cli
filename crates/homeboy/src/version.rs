@@ -353,6 +353,144 @@ pub fn read_component_version(component: &Component) -> Result<ComponentVersionI
     })
 }
 
+/// Result of directly setting a component's version
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetResult {
+    pub old_version: String,
+    pub new_version: String,
+    pub targets: Vec<VersionTargetInfo>,
+}
+
+/// Set a component's version directly (without incrementing).
+pub fn set_component_version(
+    component: &Component,
+    new_version: &str,
+    dry_run: bool,
+) -> Result<SetResult> {
+    let targets = component
+        .version_targets
+        .as_ref()
+        .ok_or_else(|| Error::config_missing_key("versionTargets", Some(component.id.clone())))?;
+
+    if targets.is_empty() {
+        return Err(Error::config_invalid_value(
+            "versionTargets",
+            None,
+            format!("Component '{}' has empty versionTargets", component.id),
+        ));
+    }
+
+    // Read current version from primary target
+    let primary = &targets[0];
+    let primary_pattern = resolve_target_pattern(primary, &component.modules)?;
+    let primary_full_path = resolve_version_file_path(&component.local_path, &primary.file);
+
+    let primary_content = local_files::local().read(Path::new(&primary_full_path))?;
+    let primary_versions = parse_versions(&primary_content, &primary_pattern).ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "versionPattern",
+            format!("Invalid version regex pattern '{}'", primary_pattern),
+            None,
+            Some(vec![primary_pattern.clone()]),
+        )
+    })?;
+
+    if primary_versions.is_empty() {
+        return Err(build_version_parse_error(
+            &primary.file,
+            &primary_pattern,
+            &primary_content,
+        ));
+    }
+
+    let unique_primary: BTreeSet<String> = primary_versions.iter().cloned().collect();
+    if unique_primary.len() != 1 {
+        return Err(Error::internal_unexpected(format!(
+            "Multiple different versions found in {}: {}",
+            primary.file,
+            unique_primary.into_iter().collect::<Vec<_>>().join(", ")
+        )));
+    }
+
+    let old_version = primary_versions[0].clone();
+
+    // Update all version targets
+    let mut target_infos = Vec::new();
+
+    for target in targets {
+        let version_pattern = resolve_target_pattern(target, &component.modules)?;
+        let full_path = resolve_version_file_path(&component.local_path, &target.file);
+        let content = local_files::local().read(Path::new(&full_path))?;
+
+        let versions = parse_versions(&content, &version_pattern).ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "versionPattern",
+                format!("Invalid version regex pattern '{}'", version_pattern),
+                None,
+                Some(vec![version_pattern.clone()]),
+            )
+        })?;
+
+        if versions.is_empty() {
+            return Err(Error::internal_unexpected(format!(
+                "Could not find version in {}",
+                target.file
+            )));
+        }
+
+        // Validate all versions match expected
+        let unique: BTreeSet<String> = versions.iter().cloned().collect();
+        if unique.len() != 1 {
+            return Err(Error::internal_unexpected(format!(
+                "Multiple different versions found in {}: {}",
+                target.file,
+                unique.into_iter().collect::<Vec<_>>().join(", ")
+            )));
+        }
+
+        let found = &versions[0];
+        if found != &old_version {
+            return Err(Error::internal_unexpected(format!(
+                "Version mismatch in {}: found {}, expected {}",
+                target.file, found, old_version
+            )));
+        }
+
+        let match_count = versions.len();
+
+        if !dry_run {
+            let replaced_count = update_version_in_file(
+                &full_path,
+                &version_pattern,
+                &old_version,
+                new_version,
+                &component.modules,
+            )?;
+
+            if replaced_count != match_count {
+                return Err(Error::internal_unexpected(format!(
+                    "Unexpected replacement count in {}",
+                    target.file
+                )));
+            }
+        }
+
+        target_infos.push(VersionTargetInfo {
+            file: target.file.clone(),
+            pattern: version_pattern,
+            full_path,
+            match_count,
+        });
+    }
+
+    Ok(SetResult {
+        old_version,
+        new_version: new_version.to_string(),
+        targets: target_infos,
+    })
+}
+
 /// Bump a component's version and finalize changelog.
 /// bump_type: "patch", "minor", or "major"
 pub fn bump_component_version(

@@ -365,6 +365,38 @@ pub struct RenameResult {
     pub project: Project,
 }
 
+/// Unified create output - can be single or bulk
+#[derive(Debug)]
+pub enum CreateOutput {
+    Single(CreateResult),
+    Bulk(CreateSummary),
+}
+
+/// Unified create - auto-detects JSON in spec_or_id
+pub fn create(
+    spec_or_id: Option<&str>,
+    domain: Option<&str>,
+    server_id: Option<&str>,
+    base_path: Option<&str>,
+    table_prefix: Option<&str>,
+    skip_existing: bool,
+) -> Result<CreateOutput> {
+    // Auto-detect JSON
+    if let Some(input) = spec_or_id {
+        if json::is_json_input(input) {
+            return Ok(CreateOutput::Bulk(create_from_json(input, skip_existing)?));
+        }
+    }
+    // Fall through to CLI mode
+    Ok(CreateOutput::Single(create_from_cli(
+        spec_or_id.map(String::from),
+        domain.map(String::from),
+        server_id.map(String::from),
+        base_path.map(String::from),
+        table_prefix.map(String::from),
+    )?))
+}
+
 pub fn create_from_cli(
     id: Option<String>,
     domain: Option<String>,

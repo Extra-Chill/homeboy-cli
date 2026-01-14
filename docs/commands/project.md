@@ -6,6 +6,21 @@
 homeboy project [OPTIONS] <COMMAND>
 ```
 
+## Common Workflows
+
+### Linking Components to a Project
+
+After creating components, link them to a project:
+
+```sh
+# Add components to existing project
+homeboy project components add my-project component-1 component-2
+
+# Or set all components at once (replaces existing)
+homeboy project components set my-project component-1 component-2
+```
+
+Components must exist (created via `homeboy component create`) before linking.
 
 ## Subcommands
 

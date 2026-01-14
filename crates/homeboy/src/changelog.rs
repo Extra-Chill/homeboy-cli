@@ -462,8 +462,15 @@ pub fn add_items_bulk(json_spec: &str) -> Result<AddItemsOutput> {
     add_items(Some(&input.component_id), &input.messages)
 }
 
-/// Add changelog items to a component.
+/// Add changelog items to a component. Auto-detects JSON in component_id.
 pub fn add_items(component_id: Option<&str>, messages: &[String]) -> Result<AddItemsOutput> {
+    // Auto-detect JSON in component_id
+    if let Some(input) = component_id {
+        if crate::json::is_json_input(input) {
+            return add_items_bulk(input);
+        }
+    }
+
     let id = component_id.ok_or_else(|| {
         Error::validation_invalid_argument(
             "componentId",

@@ -260,6 +260,7 @@ pub(crate) fn merge_from_json<T: ConfigEntity>(
 
     let mut entity = load::<T>(&effective_id)?;
     let result = json::merge_config(&mut entity, parsed)?;
+    entity.set_id(effective_id.clone());
     save(&entity)?;
 
     Ok(json::MergeResult {

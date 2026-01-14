@@ -17,18 +17,15 @@ pub fn run(
     args: BuildArgs,
     _global: &crate::commands::GlobalArgs,
 ) -> CmdResult<build::BuildResult> {
-    let input = match (&args.json, &args.component_id) {
-        (Some(json), _) => json.as_str(),
-        (None, Some(id)) => id.as_str(),
-        (None, None) => {
-            return Err(homeboy::Error::validation_invalid_argument(
-                "input",
-                "Provide component ID or --json spec",
-                None,
-                None,
-            ))
-        }
-    };
+    // --json takes precedence, otherwise use component_id (auto-detected by core)
+    let input = args.json.or(args.component_id).ok_or_else(|| {
+        homeboy::Error::validation_invalid_argument(
+            "input",
+            "Provide component ID or JSON spec",
+            None,
+            None,
+        )
+    })?;
 
-    build::run(input)
+    build::run(&input)
 }

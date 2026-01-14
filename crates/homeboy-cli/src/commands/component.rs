@@ -2,6 +2,7 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 
 use homeboy::component::{self, Component, CreateSummary};
+use homeboy::project::{self, Project};
 
 use super::CmdResult;
 
@@ -52,9 +53,11 @@ enum ComponentCommand {
     Set {
         /// Component ID (optional if provided in JSON body)
         id: Option<String>,
-        /// JSON object to merge into config (supports @file and - for stdin)
+        /// JSON spec (positional, supports @file and - for stdin)
+        spec: Option<String>,
+        /// Explicit JSON spec (takes precedence over positional)
         #[arg(long, value_name = "JSON")]
-        json: String,
+        json: Option<String>,
     },
     /// Delete a component configuration
     Delete {
@@ -70,6 +73,11 @@ enum ComponentCommand {
     },
     /// List all available components
     List,
+    /// List projects using this component
+    Projects {
+        /// Component ID
+        id: String,
+    },
 }
 
 #[derive(Serialize)]
@@ -83,6 +91,10 @@ pub struct ComponentOutput {
     pub components: Vec<Component>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub import: Option<CreateSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub projects: Option<Vec<Project>>,
 }
 
 pub fn run(
@@ -122,15 +134,28 @@ pub fn run(
                     component: Some(result.component),
                     components: vec![],
                     import: None,
+                    project_ids: None,
+                    projects: None,
                 },
                 0,
             ))
         }
         ComponentCommand::Show { id } => show(&id),
-        ComponentCommand::Set { id, json } => set(id.as_deref(), &json),
+        ComponentCommand::Set { id, spec, json } => {
+            let json_spec = json.or(spec).ok_or_else(|| {
+                homeboy::Error::validation_invalid_argument(
+                    "spec",
+                    "Provide JSON spec or use --json flag",
+                    None,
+                    None,
+                )
+            })?;
+            set(id.as_deref(), &json_spec)
+        }
         ComponentCommand::Delete { id } => delete(&id),
         ComponentCommand::Rename { id, new_id } => rename(&id, &new_id),
         ComponentCommand::List => list(),
+        ComponentCommand::Projects { id } => projects(&id),
     }
 }
 
@@ -147,6 +172,8 @@ fn create_json(spec: &str, skip_existing: bool) -> CmdResult<ComponentOutput> {
             component: None,
             components: vec![],
             import: Some(summary),
+            project_ids: None,
+            projects: None,
         },
         exit_code,
     ))
@@ -164,6 +191,8 @@ fn show(id: &str) -> CmdResult<ComponentOutput> {
             component: Some(component),
             components: vec![],
             import: None,
+            project_ids: None,
+            projects: None,
         },
         0,
     ))
@@ -181,6 +210,8 @@ fn set(id: Option<&str>, json: &str) -> CmdResult<ComponentOutput> {
             component: Some(component),
             components: vec![],
             import: None,
+            project_ids: None,
+            projects: None,
         },
         0,
     ))
@@ -198,6 +229,8 @@ fn delete(id: &str) -> CmdResult<ComponentOutput> {
             component: None,
             components: vec![],
             import: None,
+            project_ids: None,
+            projects: None,
         },
         0,
     ))
@@ -215,6 +248,8 @@ fn rename(id: &str, new_id: &str) -> CmdResult<ComponentOutput> {
             component: Some(result.component),
             components: vec![],
             import: None,
+            project_ids: None,
+            projects: None,
         },
         0,
     ))
@@ -232,6 +267,34 @@ fn list() -> CmdResult<ComponentOutput> {
             component: None,
             components,
             import: None,
+            project_ids: None,
+            projects: None,
+        },
+        0,
+    ))
+}
+
+fn projects(id: &str) -> CmdResult<ComponentOutput> {
+    let project_ids = component::projects_using(id)?;
+
+    let mut projects_list = Vec::new();
+    for pid in &project_ids {
+        if let Ok(p) = project::load(pid) {
+            projects_list.push(p);
+        }
+    }
+
+    Ok((
+        ComponentOutput {
+            command: "component.projects".to_string(),
+            component_id: Some(id.to_string()),
+            success: true,
+            updated_fields: vec![],
+            component: None,
+            components: vec![],
+            import: None,
+            project_ids: Some(project_ids),
+            projects: Some(projects_list),
         },
         0,
     ))

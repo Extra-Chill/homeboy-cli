@@ -67,9 +67,11 @@ enum ServerCommand {
     Set {
         /// Server ID (optional if provided in JSON body)
         server_id: Option<String>,
-        /// JSON object to merge into config (supports @file and - for stdin)
+        /// JSON spec (positional, supports @file and - for stdin)
+        spec: Option<String>,
+        /// Explicit JSON spec (takes precedence over positional)
         #[arg(long, value_name = "JSON")]
-        json: String,
+        json: Option<String>,
     },
     /// Remove a server configuration
     Delete {
@@ -134,28 +136,61 @@ pub fn run(
             user,
             port,
         } => {
-            if let Some(spec) = json {
-                return create_json(&spec, skip_existing);
+            // Pass all args to unified core function - it handles auto-detection
+            match server::create(
+                json.as_deref().or(id.as_deref()),
+                host.as_deref(),
+                user.as_deref(),
+                port,
+                skip_existing,
+            )? {
+                server::CreateOutput::Single(result) => Ok((
+                    ServerOutput {
+                        command: "server.create".to_string(),
+                        server_id: Some(result.id),
+                        server: Some(result.server),
+                        servers: None,
+                        updated: Some(vec!["created".to_string()]),
+                        deleted: None,
+                        key: None,
+                        import: None,
+                    },
+                    0,
+                )),
+                server::CreateOutput::Bulk(summary) => {
+                    let exit_code = if summary.errors > 0 { 1 } else { 0 };
+                    Ok((
+                        ServerOutput {
+                            command: "server.create".to_string(),
+                            server_id: None,
+                            server: None,
+                            servers: None,
+                            updated: None,
+                            deleted: None,
+                            key: None,
+                            import: Some(summary),
+                        },
+                        exit_code,
+                    ))
+                }
             }
-
-            let result = server::create_from_cli(id, host, user, port)?;
-
-            Ok((
-                ServerOutput {
-                    command: "server.create".to_string(),
-                    server_id: Some(result.id),
-                    server: Some(result.server),
-                    servers: None,
-                    updated: Some(vec!["created".to_string()]),
-                    deleted: None,
-                    key: None,
-                    import: None,
-                },
-                0,
-            ))
         }
         ServerCommand::Show { server_id } => show(&server_id),
-        ServerCommand::Set { server_id, json } => set(server_id.as_deref(), &json),
+        ServerCommand::Set {
+            server_id,
+            spec,
+            json,
+        } => {
+            let json_spec = json.or(spec).ok_or_else(|| {
+                homeboy::Error::validation_invalid_argument(
+                    "spec",
+                    "Provide JSON spec or use --json flag",
+                    None,
+                    None,
+                )
+            })?;
+            set(server_id.as_deref(), &json_spec)
+        }
         ServerCommand::Delete { server_id } => delete(&server_id),
         ServerCommand::List => list(),
         ServerCommand::Key(key_args) => run_key(key_args),
@@ -176,25 +211,6 @@ fn run_key(args: KeyArgs) -> homeboy::Result<(ServerOutput, i32)> {
         } => key_use(&server_id, &private_key_path),
         KeyCommand::Unset { server_id } => key_unset(&server_id),
     }
-}
-
-fn create_json(spec: &str, skip_existing: bool) -> homeboy::Result<(ServerOutput, i32)> {
-    let summary = server::create_from_json(spec, skip_existing)?;
-    let exit_code = if summary.errors > 0 { 1 } else { 0 };
-
-    Ok((
-        ServerOutput {
-            command: "server.create".to_string(),
-            server_id: None,
-            server: None,
-            servers: None,
-            updated: None,
-            deleted: None,
-            key: None,
-            import: Some(summary),
-        },
-        exit_code,
-    ))
 }
 
 fn show(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {

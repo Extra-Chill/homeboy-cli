@@ -32,7 +32,7 @@ pub struct ScopedModuleConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Component {
-    #[serde(skip)]
+    #[serde(skip_deserializing)]
     pub id: String,
     pub local_path: String,
     pub remote_path: String,
@@ -123,7 +123,20 @@ pub fn save(component: &Component) -> Result<()> {
 
 /// Merge JSON into component config. Accepts JSON string, @file, or - for stdin.
 /// ID can be provided as argument or extracted from JSON body.
+/// If JSON contains an `id` field that differs from the target, automatically renames the component.
 pub fn merge_from_json(id: Option<&str>, json_spec: &str) -> Result<json::MergeResult> {
+    let raw = json::read_json_spec_to_string(json_spec)?;
+    let parsed: serde_json::Value = json::from_str(&raw)?;
+
+    if let Some(json_id) = parsed.get("id").and_then(|v| v.as_str()) {
+        if let Some(current_id) = id {
+            if json_id != current_id {
+                rename(current_id, json_id)?;
+                return config::merge_from_json::<Component>(Some(json_id), json_spec);
+            }
+        }
+    }
+
     config::merge_from_json::<Component>(id, json_spec)
 }
 
@@ -329,18 +342,23 @@ fn update_project_references(old_id: &str, new_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Returns list of project IDs that reference the given component.
+pub fn projects_using(component_id: &str) -> Result<Vec<String>> {
+    let projects = project::list().unwrap_or_default();
+    Ok(projects
+        .iter()
+        .filter(|p| p.component_ids.contains(&component_id.to_string()))
+        .map(|p| p.id.clone())
+        .collect())
+}
+
 pub fn delete_safe(id: &str) -> Result<()> {
     if !exists(id) {
         let suggestions = config::find_similar_ids::<Component>(id);
         return Err(Component::not_found_error(id.to_string(), suggestions));
     }
 
-    let projects = project::list().unwrap_or_default();
-    let using: Vec<String> = projects
-        .iter()
-        .filter(|p| p.component_ids.contains(&id.to_string()))
-        .map(|p| p.id.clone())
-        .collect();
+    let using = projects_using(id)?;
 
     if !using.is_empty() {
         return Err(Error::validation_invalid_argument(

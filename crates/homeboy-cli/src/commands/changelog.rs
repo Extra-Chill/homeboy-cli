@@ -81,7 +81,7 @@ pub fn run(
             component_id,
             message,
         }) => {
-            // Priority: --cwd > --json > component_id
+            // Priority: --cwd > --json > component_id (auto-detects JSON)
             let messages: Vec<String> = message.into_iter().collect();
 
             if cwd {
@@ -89,12 +89,13 @@ pub fn run(
                 return Ok((ChangelogOutput::Add(output), 0));
             }
 
+            // Explicit --json takes precedence
             if let Some(spec) = json.as_deref() {
                 let output = changelog::add_items_bulk(spec)?;
                 return Ok((ChangelogOutput::Add(output), 0));
             }
 
-            // Core validates componentId and messages
+            // Core handles auto-detection of JSON in component_id
             let output = changelog::add_items(component_id.as_deref(), &messages)?;
             Ok((ChangelogOutput::Add(output), 0))
         }

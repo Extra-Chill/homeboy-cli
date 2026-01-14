@@ -51,6 +51,7 @@ Options:
 Notes:
 
 - `set` no longer supports individual field flags; use `--json` and provide the fields you want to update.
+- If the JSON contains an `id` field that differs from `<id>`, the component is automatically renamed first (equivalent to calling `rename`), then the remaining fields are merged. Project references are updated automatically.
 
 ### `delete`
 
@@ -88,6 +89,14 @@ homeboy component rename extra-chill-api extrachill-api
 homeboy component list
 ```
 
+### `projects`
+
+```sh
+homeboy component projects <id>
+```
+
+Lists all projects that reference the given component. Returns both project IDs and full project objects.
+
 ## JSON output
 
 > Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). The object below is the `data` payload.
@@ -96,13 +105,15 @@ homeboy component list
 
 ```json
 {
-  "command": "component.create|component.show|component.set|component.delete|component.rename|component.list",
+  "command": "component.create|component.show|component.set|component.delete|component.rename|component.list|component.projects",
   "componentId": "<id>|null",
   "success": true,
   "updatedFields": ["localPath", "remotePath"],
   "component": {},
   "components": [],
-  "import": null
+  "import": null,
+  "projectIds": ["project-1", "project-2"],
+  "projects": []
 }
 ```
 
@@ -111,6 +122,7 @@ Notes:
 - In JSON import mode (`homeboy component create --json ...`), `command` is still `component.create` and `import` is populated.
 - `updatedFields` is empty for all actions except `set`/`rename`.
 - `rename` does not include the old ID; capture it from your input if needed.
+- `projectIds` and `projects` are only populated for `component.projects`.
 
 
 ## Related

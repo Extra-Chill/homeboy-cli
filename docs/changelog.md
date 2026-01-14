@@ -6,6 +6,14 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## 0.9.0
+
+- Add remote find and grep commands for server file search
+- Add helpful hints to not-found error messages
+- Refactor git module for cleaner baseline detection
+- Add slugify module
+- Documentation updates across commands
+
 ## 0.8.0
 
 - Refactor JSON output envelope (remove warnings payload; simplify command JSON mapping)

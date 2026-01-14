@@ -286,18 +286,22 @@ impl Error {
 
     pub fn project_not_found(id: impl Into<String>) -> Self {
         Self::not_found(ErrorCode::ProjectNotFound, "Project not found", id)
+            .with_hint("Run 'homeboy project list' to see available projects")
     }
 
     pub fn server_not_found(id: impl Into<String>) -> Self {
         Self::not_found(ErrorCode::ServerNotFound, "Server not found", id)
+            .with_hint("Run 'homeboy server list' to see available servers")
     }
 
     pub fn component_not_found(id: impl Into<String>) -> Self {
         Self::not_found(ErrorCode::ComponentNotFound, "Component not found", id)
+            .with_hint("Run 'homeboy component list' to see available components")
     }
 
     pub fn module_not_found(id: impl Into<String>) -> Self {
         Self::not_found(ErrorCode::ModuleNotFound, "Module not found", id)
+            .with_hint("Run 'homeboy module list' to see available modules")
     }
 
     fn not_found(code: ErrorCode, message: &str, id: impl Into<String>) -> Self {
@@ -444,5 +448,12 @@ impl Error {
 
     pub fn config(message: impl Into<String>) -> Self {
         Self::config_invalid_value("config", None, message)
+    }
+
+    pub fn with_hint(mut self, message: impl Into<String>) -> Self {
+        self.hints.push(Hint {
+            message: message.into(),
+        });
+        self
     }
 }

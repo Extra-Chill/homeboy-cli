@@ -82,16 +82,10 @@ pub fn run(
             message,
         }) => {
             // Priority: --cwd > --json > component_id
+            let messages: Vec<String> = message.into_iter().collect();
+
             if cwd {
-                let msg = message.ok_or_else(|| {
-                    homeboy::Error::validation_invalid_argument(
-                        "message",
-                        "Missing message",
-                        None,
-                        None,
-                    )
-                })?;
-                let output = changelog::add_items_cwd(&[msg])?;
+                let output = changelog::add_items_cwd(&messages)?;
                 return Ok((ChangelogOutput::Add(output), 0));
             }
 
@@ -100,25 +94,8 @@ pub fn run(
                 return Ok((ChangelogOutput::Add(output), 0));
             }
 
-            let component_id = component_id.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "componentId",
-                    "Missing componentId (or use --cwd)",
-                    None,
-                    None,
-                )
-            })?;
-
-            let msg = message.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "message",
-                    "Missing message",
-                    None,
-                    None,
-                )
-            })?;
-
-            let output = changelog::add_items(&component_id, &[msg])?;
+            // Core validates componentId and messages
+            let output = changelog::add_items(component_id.as_deref(), &messages)?;
             Ok((ChangelogOutput::Add(output), 0))
         }
     }

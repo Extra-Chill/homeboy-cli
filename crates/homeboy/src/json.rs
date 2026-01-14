@@ -267,10 +267,16 @@ pub fn parse_bulk_ids(json_spec: &str) -> Result<BulkIdsInput> {
 
 // === Config Merge Operations ===
 
-/// Result of a config merge operation
+/// Result of a config merge operation (public API)
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MergeResult {
+    pub id: String,
+    pub updated_fields: Vec<String>,
+}
+
+/// Internal result from merge_config (no ID, caller adds it)
+pub(crate) struct MergeFields {
     pub updated_fields: Vec<String>,
 }
 
@@ -278,7 +284,7 @@ pub struct MergeResult {
 pub(crate) fn merge_config<T: Serialize + DeserializeOwned>(
     existing: &mut T,
     patch: Value,
-) -> Result<MergeResult> {
+) -> Result<MergeFields> {
     let patch_obj = match &patch {
         Value::Object(obj) => obj,
         _ => {
@@ -310,7 +316,7 @@ pub(crate) fn merge_config<T: Serialize + DeserializeOwned>(
     *existing = serde_json::from_value(base)
         .map_err(|e| Error::validation_invalid_json(e, Some("merge config".to_string())))?;
 
-    Ok(MergeResult { updated_fields })
+    Ok(MergeFields { updated_fields })
 }
 
 fn deep_merge(base: &mut Value, patch: Value) {

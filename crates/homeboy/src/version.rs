@@ -1,5 +1,5 @@
 use crate::changelog;
-use crate::component::{Component, VersionTarget};
+use crate::component::{self, Component, VersionTarget};
 use crate::error::{Error, Result};
 use crate::json::{self, set_json_pointer};
 use crate::local_files::{self, FileSystem};
@@ -346,6 +346,20 @@ pub fn read_component_version(component: &Component) -> Result<ComponentVersionI
     })
 }
 
+/// Read version by component ID.
+pub fn read_version(component_id: Option<&str>) -> Result<ComponentVersionInfo> {
+    let id = component_id.ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "componentId",
+            "Missing componentId (or use --cwd)",
+            None,
+            None,
+        )
+    })?;
+    let component = component::load(id)?;
+    read_component_version(&component)
+}
+
 /// Result of directly setting a component's version
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -481,6 +495,19 @@ pub fn set_component_version(
         new_version: new_version.to_string(),
         targets: target_infos,
     })
+}
+
+/// Set version by component ID.
+pub fn set_version(
+    component_id: Option<&str>,
+    new_version: &str,
+    dry_run: bool,
+) -> Result<SetResult> {
+    let id = component_id.ok_or_else(|| {
+        Error::validation_invalid_argument("componentId", "Missing componentId", None, None)
+    })?;
+    let component = component::load(id)?;
+    set_component_version(&component, new_version, dry_run)
 }
 
 /// Bump a component's version and finalize changelog.
@@ -665,6 +692,24 @@ pub fn bump_component_version(
         changelog_finalized: true,
         changelog_changed,
     })
+}
+
+/// Bump version by component ID.
+pub fn bump_version(
+    component_id: Option<&str>,
+    bump_type: &str,
+    dry_run: bool,
+) -> Result<BumpResult> {
+    let id = component_id.ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "componentId",
+            "Missing componentId (or use --cwd)",
+            None,
+            None,
+        )
+    })?;
+    let component = component::load(id)?;
+    bump_component_version(&component, bump_type, dry_run)
 }
 
 // === CWD Version Operations ===

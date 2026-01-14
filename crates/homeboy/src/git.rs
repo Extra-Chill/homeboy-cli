@@ -325,6 +325,19 @@ pub struct GitOutput {
     pub stderr: String,
 }
 
+impl GitOutput {
+    fn from_output(id: String, path: String, action: &str, output: std::process::Output) -> Self {
+        Self {
+            component_id: id,
+            path,
+            action: action.to_string(),
+            success: output.status.success(),
+            exit_code: output.status.code().unwrap_or(1),
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        }
+    }
+}
 
 // === Changes Output Types ===
 
@@ -359,6 +372,8 @@ pub struct ChangesOutput {
     pub commits: Vec<CommitInfo>,
     pub uncommitted: UncommittedChanges,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub uncommitted_diff: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub diff: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,
@@ -366,6 +381,51 @@ pub struct ChangesOutput {
     pub error: Option<String>,
 }
 
+struct BaselineInfo {
+    latest_tag: Option<String>,
+    source: Option<BaselineSource>,
+    reference: Option<String>,
+    warning: Option<String>,
+}
+
+fn detect_baseline(path: &str, since_tag: Option<&str>) -> Result<BaselineInfo> {
+    if let Some(t) = since_tag {
+        return Ok(BaselineInfo {
+            latest_tag: Some(t.to_string()),
+            source: Some(BaselineSource::Tag),
+            reference: Some(t.to_string()),
+            warning: None,
+        });
+    }
+
+    if let Some(tag) = get_latest_tag(path)? {
+        return Ok(BaselineInfo {
+            latest_tag: Some(tag.clone()),
+            source: Some(BaselineSource::Tag),
+            reference: Some(tag),
+            warning: None,
+        });
+    }
+
+    if let Some(hash) = find_version_commit(path)? {
+        return Ok(BaselineInfo {
+            latest_tag: None,
+            source: Some(BaselineSource::VersionCommit),
+            reference: Some(hash),
+            warning: Some("No tags found. Using most recent version commit as baseline.".to_string()),
+        });
+    }
+
+    Ok(BaselineInfo {
+        latest_tag: None,
+        source: Some(BaselineSource::LastNCommits),
+        reference: None,
+        warning: Some(format!(
+            "No tags or version commits found. Showing last {} commits.",
+            DEFAULT_COMMIT_LIMIT
+        )),
+    })
+}
 
 // Input types for JSON parsing
 #[derive(Debug, Deserialize)]
@@ -398,26 +458,53 @@ fn execute_git(path: &str, args: &[&str]) -> std::io::Result<std::process::Outpu
     Command::new("git").args(args).current_dir(path).output()
 }
 
-fn to_exit_code(status: std::process::ExitStatus) -> i32 {
-    status.code().unwrap_or(1)
+fn get_cwd_path() -> Result<String> {
+    std::env::current_dir()
+        .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))
+        .map(|p| p.to_string_lossy().to_string())
 }
 
-/// Get git status for a component.
-pub fn status(component_id: &str) -> Result<GitOutput> {
-    let path = get_component_path(component_id)?;
+fn resolve_target(component_id: Option<&str>) -> Result<(String, String)> {
+    match component_id {
+        Some(id) => Ok((id.to_string(), get_component_path(id)?)),
+        None => Ok(("cwd".to_string(), get_cwd_path()?)),
+    }
+}
 
+/// Get git status for a component or current working directory.
+pub fn status(component_id: Option<&str>) -> Result<GitOutput> {
+    let (id, path) = resolve_target(component_id)?;
     let output = execute_git(&path, &["status", "--porcelain=v1"])
         .map_err(|e| Error::other(e.to_string()))?;
+    Ok(GitOutput::from_output(id, path, "status", output))
+}
 
-    Ok(GitOutput {
-        component_id: component_id.to_string(),
-        path,
-        action: "status".to_string(),
-        success: output.status.success(),
-        exit_code: to_exit_code(output.status),
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
+fn run_bulk_ids<F>(ids: &[String], action: &str, op: F) -> BulkResult<GitOutput>
+where
+    F: Fn(&str) -> Result<GitOutput>,
+{
+    let mut results = Vec::new();
+    let mut succeeded = 0usize;
+    let mut failed = 0usize;
+
+    for id in ids {
+        match op(id) {
+            Ok(output) => {
+                if output.success { succeeded += 1; } else { failed += 1; }
+                results.push(ItemOutcome { id: id.clone(), result: Some(output), error: None });
+            }
+            Err(e) => {
+                failed += 1;
+                results.push(ItemOutcome { id: id.clone(), result: None, error: Some(e.to_string()) });
+            }
+        }
+    }
+
+    BulkResult {
+        action: action.to_string(),
+        results,
+        summary: BulkSummary { total: succeeded + failed, succeeded, failed },
+    }
 }
 
 /// Get git status for multiple components from JSON spec.
@@ -426,59 +513,22 @@ pub fn status_bulk(json_spec: &str) -> Result<BulkResult<GitOutput>> {
     let input: BulkIdsInput = serde_json::from_str(&raw).map_err(|e| {
         Error::validation_invalid_json(e, Some("parse bulk status input".to_string()))
     })?;
-
-    let mut results = Vec::new();
-    let mut succeeded = 0usize;
-    let mut failed = 0usize;
-
-    for id in &input.component_ids {
-        match status(id) {
-            Ok(output) => {
-                if output.success {
-                    succeeded += 1;
-                } else {
-                    failed += 1;
-                }
-                results.push(ItemOutcome {
-                    id: id.clone(),
-                    result: Some(output),
-                    error: None,
-                });
-            }
-            Err(e) => {
-                failed += 1;
-                results.push(ItemOutcome {
-                    id: id.clone(),
-                    result: None,
-                    error: Some(e.to_string()),
-                });
-            }
-        }
-    }
-
-    Ok(BulkResult {
-        action: "status".to_string(),
-        results,
-        summary: BulkSummary {
-            total: succeeded + failed,
-            succeeded,
-            failed,
-        },
-    })
+    Ok(run_bulk_ids(&input.component_ids, "status", |id| status(Some(id))))
 }
 
-/// Stage all changes and commit for a component.
-pub fn commit(component_id: &str, message: &str) -> Result<GitOutput> {
-    let path = get_component_path(component_id)?;
+/// Stage all changes and commit for a component or current working directory.
+pub fn commit(component_id: Option<&str>, message: Option<&str>) -> Result<GitOutput> {
+    let msg = message.ok_or_else(|| {
+        Error::validation_invalid_argument("message", "Missing commit message", None, None)
+    })?;
+    let (id, path) = resolve_target(component_id)?;
 
     let status_output = execute_git(&path, &["status", "--porcelain=v1"])
         .map_err(|e| Error::other(e.to_string()))?;
 
-    let status_stdout = String::from_utf8_lossy(&status_output.stdout).to_string();
-
-    if status_stdout.trim().is_empty() {
+    if String::from_utf8_lossy(&status_output.stdout).trim().is_empty() {
         return Ok(GitOutput {
-            component_id: component_id.to_string(),
+            component_id: id,
             path,
             action: "commit".to_string(),
             success: true,
@@ -489,34 +539,13 @@ pub fn commit(component_id: &str, message: &str) -> Result<GitOutput> {
     }
 
     let add_output = execute_git(&path, &["add", "."]).map_err(|e| Error::other(e.to_string()))?;
-
     if !add_output.status.success() {
-        let exit_code = to_exit_code(add_output.status);
-        return Ok(GitOutput {
-            component_id: component_id.to_string(),
-            path,
-            action: "commit".to_string(),
-            success: false,
-            exit_code,
-            stdout: String::from_utf8_lossy(&add_output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&add_output.stderr).to_string(),
-        });
+        return Ok(GitOutput::from_output(id, path, "commit", add_output));
     }
 
-    let commit_output =
-        execute_git(&path, &["commit", "-m", message]).map_err(|e| Error::other(e.to_string()))?;
-
-    let exit_code = to_exit_code(commit_output.status);
-
-    Ok(GitOutput {
-        component_id: component_id.to_string(),
-        path,
-        action: "commit".to_string(),
-        success: commit_output.status.success(),
-        exit_code,
-        stdout: String::from_utf8_lossy(&commit_output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&commit_output.stderr).to_string(),
-    })
+    let output = execute_git(&path, &["commit", "-m", msg])
+        .map_err(|e| Error::other(e.to_string()))?;
+    Ok(GitOutput::from_output(id, path, "commit", output))
 }
 
 /// Commit multiple components from JSON spec.
@@ -531,7 +560,7 @@ pub fn commit_bulk(json_spec: &str) -> Result<BulkResult<GitOutput>> {
     let mut failed = 0usize;
 
     for spec in &input.components {
-        match commit(&spec.id, &spec.message) {
+        match commit(Some(&spec.id), Some(&spec.message)) {
             Ok(output) => {
                 if output.success {
                     succeeded += 1;
@@ -566,28 +595,12 @@ pub fn commit_bulk(json_spec: &str) -> Result<BulkResult<GitOutput>> {
     })
 }
 
-/// Push local commits for a component.
-pub fn push(component_id: &str, tags: bool) -> Result<GitOutput> {
-    let path = get_component_path(component_id)?;
-
-    let push_args: Vec<&str> = if tags {
-        vec!["push", "--tags"]
-    } else {
-        vec!["push"]
-    };
-
-    let output = execute_git(&path, &push_args).map_err(|e| Error::other(e.to_string()))?;
-    let exit_code = to_exit_code(output.status);
-
-    Ok(GitOutput {
-        component_id: component_id.to_string(),
-        path,
-        action: "push".to_string(),
-        success: output.status.success(),
-        exit_code,
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
+/// Push local commits for a component or current working directory.
+pub fn push(component_id: Option<&str>, tags: bool) -> Result<GitOutput> {
+    let (id, path) = resolve_target(component_id)?;
+    let args: Vec<&str> = if tags { vec!["push", "--tags"] } else { vec!["push"] };
+    let output = execute_git(&path, &args).map_err(|e| Error::other(e.to_string()))?;
+    Ok(GitOutput::from_output(id, path, "push", output))
 }
 
 /// Push multiple components from JSON spec.
@@ -596,64 +609,15 @@ pub fn push_bulk(json_spec: &str) -> Result<BulkResult<GitOutput>> {
     let input: BulkIdsInput = serde_json::from_str(&raw).map_err(|e| {
         Error::validation_invalid_json(e, Some("parse bulk push input".to_string()))
     })?;
-
-    let mut results = Vec::new();
-    let mut succeeded = 0usize;
-    let mut failed = 0usize;
     let push_tags = input.tags;
-
-    for id in &input.component_ids {
-        match push(id, push_tags) {
-            Ok(output) => {
-                if output.success {
-                    succeeded += 1;
-                } else {
-                    failed += 1;
-                }
-                results.push(ItemOutcome {
-                    id: id.clone(),
-                    result: Some(output),
-                    error: None,
-                });
-            }
-            Err(e) => {
-                failed += 1;
-                results.push(ItemOutcome {
-                    id: id.clone(),
-                    result: None,
-                    error: Some(e.to_string()),
-                });
-            }
-        }
-    }
-
-    Ok(BulkResult {
-        action: "push".to_string(),
-        results,
-        summary: BulkSummary {
-            total: succeeded + failed,
-            succeeded,
-            failed,
-        },
-    })
+    Ok(run_bulk_ids(&input.component_ids, "push", |id| push(Some(id), push_tags)))
 }
 
-/// Pull remote changes for a component.
-pub fn pull(component_id: &str) -> Result<GitOutput> {
-    let path = get_component_path(component_id)?;
-
+/// Pull remote changes for a component or current working directory.
+pub fn pull(component_id: Option<&str>) -> Result<GitOutput> {
+    let (id, path) = resolve_target(component_id)?;
     let output = execute_git(&path, &["pull"]).map_err(|e| Error::other(e.to_string()))?;
-    let exit_code = to_exit_code(output.status);
-
-    Ok(GitOutput {
-        component_id: component_id.to_string(),
-        path,
-        action: "pull".to_string(),
-        success: output.status.success(),
-        exit_code,
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
+    Ok(GitOutput::from_output(id, path, "pull", output))
 }
 
 /// Pull multiple components from JSON spec.
@@ -662,68 +626,21 @@ pub fn pull_bulk(json_spec: &str) -> Result<BulkResult<GitOutput>> {
     let input: BulkIdsInput = serde_json::from_str(&raw).map_err(|e| {
         Error::validation_invalid_json(e, Some("parse bulk pull input".to_string()))
     })?;
-
-    let mut results = Vec::new();
-    let mut succeeded = 0usize;
-    let mut failed = 0usize;
-
-    for id in &input.component_ids {
-        match pull(id) {
-            Ok(output) => {
-                if output.success {
-                    succeeded += 1;
-                } else {
-                    failed += 1;
-                }
-                results.push(ItemOutcome {
-                    id: id.clone(),
-                    result: Some(output),
-                    error: None,
-                });
-            }
-            Err(e) => {
-                failed += 1;
-                results.push(ItemOutcome {
-                    id: id.clone(),
-                    result: None,
-                    error: Some(e.to_string()),
-                });
-            }
-        }
-    }
-
-    Ok(BulkResult {
-        action: "pull".to_string(),
-        results,
-        summary: BulkSummary {
-            total: succeeded + failed,
-            succeeded,
-            failed,
-        },
-    })
+    Ok(run_bulk_ids(&input.component_ids, "pull", |id| pull(Some(id))))
 }
 
-/// Create a git tag for a component.
-pub fn tag(component_id: &str, tag_name: &str, message: Option<&str>) -> Result<GitOutput> {
-    let path = get_component_path(component_id)?;
-
-    let tag_args: Vec<&str> = match message {
-        Some(msg) => vec!["tag", "-a", tag_name, "-m", msg],
-        None => vec!["tag", tag_name],
+/// Create a git tag for a component or current working directory.
+pub fn tag(component_id: Option<&str>, tag_name: Option<&str>, message: Option<&str>) -> Result<GitOutput> {
+    let name = tag_name.ok_or_else(|| {
+        Error::validation_invalid_argument("tagName", "Missing tag name", None, None)
+    })?;
+    let (id, path) = resolve_target(component_id)?;
+    let args: Vec<&str> = match message {
+        Some(msg) => vec!["tag", "-a", name, "-m", msg],
+        None => vec!["tag", name],
     };
-
-    let output = execute_git(&path, &tag_args).map_err(|e| Error::other(e.to_string()))?;
-    let exit_code = to_exit_code(output.status);
-
-    Ok(GitOutput {
-        component_id: component_id.to_string(),
-        path,
-        action: "tag".to_string(),
-        success: output.status.success(),
-        exit_code,
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
+    let output = execute_git(&path, &args).map_err(|e| Error::other(e.to_string()))?;
+    Ok(GitOutput::from_output(id, path, "tag", output))
 }
 
 // === Changes Operations ===
@@ -800,78 +717,60 @@ pub fn get_diff(path: &str) -> Result<String> {
     Ok(result)
 }
 
-/// Get all changes for a component since its latest tag.
+/// Get diff between baseline ref and HEAD (commit range diff).
+pub fn get_range_diff(path: &str, baseline_ref: &str) -> Result<String> {
+    let output = execute_git(path, &["diff", &format!("{}..HEAD", baseline_ref), "--", "."])
+        .map_err(|e| Error::other(e.to_string()))?;
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Get all changes for a component or current working directory.
 pub fn changes(
-    component_id: &str,
+    component_id: Option<&str>,
     since_tag: Option<&str>,
     include_diff: bool,
 ) -> Result<ChangesOutput> {
-    let path = get_component_path(component_id)?;
-
-    // Determine baseline using fallback chain: tag -> version commit -> last N commits
-    let (latest_tag, baseline_source, baseline_ref, warning) = match since_tag {
-        Some(t) => (
-            Some(t.to_string()),
-            Some(BaselineSource::Tag),
-            Some(t.to_string()),
-            None,
-        ),
+    let (id, path) = match component_id {
+        Some(cid) => (cid.to_string(), get_component_path(cid)?),
         None => {
-            if let Some(tag) = get_latest_tag(&path)? {
-                (
-                    Some(tag.clone()),
-                    Some(BaselineSource::Tag),
-                    Some(tag),
-                    None,
-                )
-            } else if let Some(version_hash) = find_version_commit(&path)? {
-                (
-                    None,
-                    Some(BaselineSource::VersionCommit),
-                    Some(version_hash),
-                    Some("No tags found. Using most recent version commit as baseline.".to_string()),
-                )
-            } else {
-                (
-                    None,
-                    Some(BaselineSource::LastNCommits),
-                    None,
-                    Some(format!(
-                        "No tags or version commits found. Showing last {} commits.",
-                        DEFAULT_COMMIT_LIMIT
-                    )),
-                )
+            let p = get_cwd_path()?;
+            if !is_git_repo(&p) {
+                return Err(Error::git_command_failed("Not a git repository")
+                    .with_hint("Run 'homeboy context' to detect your environment")
+                    .with_hint("Run 'homeboy context --discover' to find git repos in subdirectories"));
             }
+            ("cwd".to_string(), p)
         }
     };
 
-    // Get commits based on baseline source
-    let commits = match baseline_source {
+    let baseline = detect_baseline(&path, since_tag)?;
+
+    let commits = match baseline.source {
         Some(BaselineSource::LastNCommits) => get_last_n_commits(&path, DEFAULT_COMMIT_LIMIT)?,
-        _ => get_commits_since_tag(&path, baseline_ref.as_deref())?,
+        _ => get_commits_since_tag(&path, baseline.reference.as_deref())?,
     };
 
-    // Get uncommitted changes
     let uncommitted = get_uncommitted_changes(&path)?;
-
-    // Get diff if requested
+    let uncommitted_diff = if uncommitted.has_changes { Some(get_diff(&path)?) } else { None };
     let diff = if include_diff {
-        Some(get_diff(&path)?)
+        baseline.reference.as_ref().map(|r| get_range_diff(&path, r)).transpose()?
     } else {
         None
     };
 
     Ok(ChangesOutput {
-        component_id: component_id.to_string(),
+        component_id: id,
         path,
         success: true,
-        latest_tag,
-        baseline_source,
-        baseline_ref,
+        latest_tag: baseline.latest_tag,
+        baseline_source: baseline.source,
+        baseline_ref: baseline.reference,
         commits,
         uncommitted,
+        uncommitted_diff,
         diff,
-        warning,
+        warning: baseline.warning,
         error: None,
     })
 }
@@ -882,7 +781,7 @@ fn build_bulk_changes_output(component_ids: &[String], include_diff: bool) -> Bu
     let mut failed = 0usize;
 
     for id in component_ids {
-        match changes(id, None, include_diff) {
+        match changes(Some(id), None, include_diff) {
             Ok(output) => {
                 if output.success {
                     succeeded += 1;
@@ -967,210 +866,12 @@ pub fn changes_project_filtered(
     Ok(build_bulk_changes_output(&filtered, include_diff))
 }
 
-/// Get changes for the current working directory (ad-hoc mode).
-pub fn changes_cwd(include_diff: bool) -> Result<ChangesOutput> {
-    let path = std::env::current_dir()
-        .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))?
-        .to_string_lossy()
-        .to_string();
-
-    // Determine baseline using fallback chain: tag -> version commit -> last N commits
-    let (latest_tag, baseline_source, baseline_ref, warning) =
-        if let Some(tag) = get_latest_tag(&path)? {
-            (
-                Some(tag.clone()),
-                Some(BaselineSource::Tag),
-                Some(tag),
-                None,
-            )
-        } else if let Some(version_hash) = find_version_commit(&path)? {
-            (
-                None,
-                Some(BaselineSource::VersionCommit),
-                Some(version_hash),
-                Some("No tags found. Using most recent version commit as baseline.".to_string()),
-            )
-        } else {
-            (
-                None,
-                Some(BaselineSource::LastNCommits),
-                None,
-                Some(format!(
-                    "No tags or version commits found. Showing last {} commits.",
-                    DEFAULT_COMMIT_LIMIT
-                )),
-            )
-        };
-
-    // Get commits based on baseline source
-    let commits = match baseline_source {
-        Some(BaselineSource::LastNCommits) => get_last_n_commits(&path, DEFAULT_COMMIT_LIMIT)?,
-        _ => get_commits_since_tag(&path, baseline_ref.as_deref())?,
-    };
-
-    let uncommitted = get_uncommitted_changes(&path)?;
-    let diff = if include_diff {
-        Some(get_diff(&path)?)
-    } else {
-        None
-    };
-
-    Ok(ChangesOutput {
-        component_id: "cwd".to_string(),
-        path,
-        success: true,
-        latest_tag,
-        baseline_source,
-        baseline_ref,
-        commits,
-        uncommitted,
-        diff,
-        warning,
-        error: None,
-    })
-}
-
-// === CWD Git Operations ===
-
-fn get_cwd_path() -> Result<String> {
-    std::env::current_dir()
-        .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))
-        .map(|p| p.to_string_lossy().to_string())
-}
-
-/// Get git status for the current working directory.
-pub fn status_cwd() -> Result<GitOutput> {
-    let path = get_cwd_path()?;
-
-    let output = execute_git(&path, &["status", "--porcelain=v1"])
-        .map_err(|e| Error::other(e.to_string()))?;
-
-    Ok(GitOutput {
-        component_id: "cwd".to_string(),
-        path,
-        action: "status".to_string(),
-        success: output.status.success(),
-        exit_code: to_exit_code(output.status),
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
-}
-
-/// Stage all changes and commit in the current working directory.
-pub fn commit_cwd(message: &str) -> Result<GitOutput> {
-    let path = get_cwd_path()?;
-
-    let status_output = execute_git(&path, &["status", "--porcelain=v1"])
-        .map_err(|e| Error::other(e.to_string()))?;
-
-    let status_stdout = String::from_utf8_lossy(&status_output.stdout).to_string();
-
-    if status_stdout.trim().is_empty() {
-        return Ok(GitOutput {
-            component_id: "cwd".to_string(),
-            path,
-            action: "commit".to_string(),
-            success: true,
-            exit_code: 0,
-            stdout: "Nothing to commit, working tree clean".to_string(),
-            stderr: String::new(),
-        });
-    }
-
-    let add_output = execute_git(&path, &["add", "."]).map_err(|e| Error::other(e.to_string()))?;
-
-    if !add_output.status.success() {
-        let exit_code = to_exit_code(add_output.status);
-        return Ok(GitOutput {
-            component_id: "cwd".to_string(),
-            path,
-            action: "commit".to_string(),
-            success: false,
-            exit_code,
-            stdout: String::from_utf8_lossy(&add_output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&add_output.stderr).to_string(),
-        });
-    }
-
-    let commit_output =
-        execute_git(&path, &["commit", "-m", message]).map_err(|e| Error::other(e.to_string()))?;
-
-    let exit_code = to_exit_code(commit_output.status);
-
-    Ok(GitOutput {
-        component_id: "cwd".to_string(),
-        path,
-        action: "commit".to_string(),
-        success: commit_output.status.success(),
-        exit_code,
-        stdout: String::from_utf8_lossy(&commit_output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&commit_output.stderr).to_string(),
-    })
-}
-
-/// Push local commits in the current working directory.
-pub fn push_cwd(tags: bool) -> Result<GitOutput> {
-    let path = get_cwd_path()?;
-
-    let push_args: Vec<&str> = if tags {
-        vec!["push", "--tags"]
-    } else {
-        vec!["push"]
-    };
-
-    let output = execute_git(&path, &push_args).map_err(|e| Error::other(e.to_string()))?;
-    let exit_code = to_exit_code(output.status);
-
-    Ok(GitOutput {
-        component_id: "cwd".to_string(),
-        path,
-        action: "push".to_string(),
-        success: output.status.success(),
-        exit_code,
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
-}
-
-/// Pull remote changes in the current working directory.
-pub fn pull_cwd() -> Result<GitOutput> {
-    let path = get_cwd_path()?;
-
-    let output = execute_git(&path, &["pull"]).map_err(|e| Error::other(e.to_string()))?;
-    let exit_code = to_exit_code(output.status);
-
-    Ok(GitOutput {
-        component_id: "cwd".to_string(),
-        path,
-        action: "pull".to_string(),
-        success: output.status.success(),
-        exit_code,
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
-}
-
-/// Create a git tag in the current working directory.
-pub fn tag_cwd(tag_name: &str, message: Option<&str>) -> Result<GitOutput> {
-    let path = get_cwd_path()?;
-
-    let tag_args: Vec<&str> = match message {
-        Some(msg) => vec!["tag", "-a", tag_name, "-m", msg],
-        None => vec!["tag", tag_name],
-    };
-
-    let output = execute_git(&path, &tag_args).map_err(|e| Error::other(e.to_string()))?;
-    let exit_code = to_exit_code(output.status);
-
-    Ok(GitOutput {
-        component_id: "cwd".to_string(),
-        path,
-        action: "tag".to_string(),
-        success: output.status.success(),
-        exit_code,
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-    })
+fn is_git_repo(path: &str) -> bool {
+    std::process::Command::new("git")
+        .args(["-C", path, "rev-parse", "--git-dir"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

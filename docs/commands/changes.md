@@ -3,10 +3,10 @@
 ## Synopsis
 
 ```sh
-homeboy changes <componentId> [--since <tag>] [--include-diff]
-homeboy changes --cwd [--include-diff]
-homeboy changes --json <spec> [--include-diff]
-homeboy changes --project <projectId> [--include-diff]
+homeboy changes <componentId> [--since <tag>] [--git-diffs]
+homeboy changes --cwd [--git-diffs]
+homeboy changes --json <spec> [--git-diffs]
+homeboy changes --project <projectId> [--git-diffs]
 ```
 
 ## Description
@@ -16,14 +16,14 @@ Show changes since the latest git tag for one component, multiple components (bu
 This command reports:
 
 - commits since the last tag (or a user-provided tag via `--since`)
-- uncommitted changes in the working tree
-- optionally, unified diffs for uncommitted changes
+- uncommitted changes in the working tree (including `uncommittedDiff`)
+- optionally, a commit-range diff for commits since the baseline (via `--git-diffs`)
 
 ## Options
 
 - `--cwd`: use current working directory (ad-hoc mode, no component registration required)
 - `--since <tag>`: tag name to compare against (single-component mode)
-- `--include-diff`: include a unified diff of uncommitted changes
+- `--git-diffs`: include commit-range diff content in output
 - `--json <spec>`: bulk mode input
   - `<spec>` supports `-` (stdin), `@file.json`, or an inline JSON string
 - `--project <projectId>`: show changes for all components attached to a project
@@ -36,10 +36,12 @@ This command reports:
 
 ```json
 {
-  "action": "changes",
   "componentId": "<componentId>",
   "path": "<local path>",
-  "since": "<tag>|null",
+  "success": true,
+  "latestTag": "<tag>|null",
+  "baselineSource": "tag|version_commit|last_n_commits",
+  "baselineRef": "<ref>|null",
   "commits": [
     {
       "hash": "<sha>",
@@ -54,7 +56,16 @@ This command reports:
     "unstaged": ["..."],
     "untracked": ["..."]
   },
-  "diff": "<diff>|null"
+  "uncommittedDiff": "<diff>",
+  "diff": "<diff>"
+}
+```
+
+Notes:
+
+- `uncommittedDiff` is present when the working tree has changes.
+- `diff` is included only when `--git-diffs` is used.
+- Optional fields like `warning` / `error` may be omitted when unset.
 }
 ```
 
@@ -62,8 +73,7 @@ This command reports:
 
 ```json
 {
-  "action": "changes",
-  "results": [ { "componentId": "..." } ],
+  "results": [ { "id": "<componentId>", "result": { ... }, "error": "<string>|null" } ],
   "summary": {
     "total": 2,
     "withCommits": 1,
@@ -78,9 +88,10 @@ This command reports:
 
 ## Exit code
 
-- `0` when the command runs successfully.
+- `0` when the command succeeds and `summary.failed == 0`.
+- `1` in bulk/project modes when `summary.failed > 0`.
 
-> Note: the per-component outputs include `success` plus optional `warning`/`error` fields. Bulk/project modes return a summary but do not currently change the process exit code when some components fail.
+> Note: single-target modes (`<componentId>` and `--cwd`) always return exit code `0` on success, even when the underlying git operations report `success: false` in the output.
 
 ## Related
 

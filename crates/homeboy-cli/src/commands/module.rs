@@ -1,10 +1,8 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
-use homeboy::git;
 use homeboy::module::{
-    is_module_compatible, is_module_linked, is_module_ready, load_all_modules, load_module,
-    module_path, run_setup,
+    self, is_module_compatible, is_module_linked, is_module_ready, load_all_modules, run_setup,
 };
 use homeboy::project::{self, Project};
 
@@ -255,46 +253,14 @@ fn install_module(source: &str, id: Option<String>) -> CmdResult<ModuleOutput> {
 }
 
 fn update_module(module_id: &str) -> CmdResult<ModuleOutput> {
-    let module_dir = module_path(module_id);
-    if !module_dir.exists() {
-        return Err(homeboy::Error::module_not_found(module_id));
-    }
-
-    // Check if module is linked (symlink) - linked modules are managed externally
-    if is_module_linked(module_id) {
-        return Err(homeboy::Error::config_invalid_value(
-            "module.linked",
-            Some(module_id.to_string()),
-            "Module is linked. Update the source directory directly.",
-        ));
-    }
-
-    // Load module to get sourceUrl from manifest
-    let module =
-        load_module(module_id).ok_or_else(|| homeboy::Error::module_not_found(module_id))?;
-
-    let source_url = module.source_url.ok_or_else(|| {
-        homeboy::Error::config_missing_key("sourceUrl", Some(format!("module:{}", module_id)))
-    })?;
-
-    git::pull_ff_only_interactive(&module_dir)?;
-
-    // Auto-run setup if module defines a setup_command
-    if let Some(module) = load_module(module_id) {
-        if module
-            .runtime
-            .as_ref()
-            .is_some_and(|r| r.setup_command.is_some())
-        {
-            let _ = setup_module(module_id)?;
-        }
-    }
+    // Core handles all validation: module existence, linked check, sourceUrl requirement
+    let result = module::update(module_id, false)?;
 
     Ok((
         ModuleOutput::Update {
-            module_id: module_id.to_string(),
-            url: source_url,
-            path: module_dir.to_string_lossy().to_string(),
+            module_id: result.module_id,
+            url: result.url,
+            path: result.path.to_string_lossy().to_string(),
         },
         0,
     ))

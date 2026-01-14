@@ -30,9 +30,9 @@ pub struct ChangesArgs {
     #[arg(long)]
     pub since: Option<String>,
 
-    /// Include full diff content in output
+    /// Include commit range diff in output (uncommitted diff is always included)
     #[arg(long)]
-    pub include_diff: bool,
+    pub git_diffs: bool,
 }
 
 #[derive(Serialize)]
@@ -48,12 +48,12 @@ pub fn run(
 ) -> CmdResult<ChangesCommandOutput> {
     // Priority: --cwd > --json > --project flag > positional args
     if args.cwd {
-        let output = git::changes_cwd(args.include_diff)?;
+        let output = git::changes(None, None, args.git_diffs)?;
         return Ok((ChangesCommandOutput::Single(output), 0));
     }
 
     if let Some(json) = &args.json {
-        let output = git::changes_bulk(json, args.include_diff)?;
+        let output = git::changes_bulk(json, args.git_diffs)?;
         let exit_code = if output.summary.failed > 0 { 1 } else { 0 };
         return Ok((ChangesCommandOutput::Bulk(output), exit_code));
     }
@@ -61,12 +61,12 @@ pub fn run(
     // --project flag mode (with optional component filter from positional args)
     if let Some(project_id) = &args.project {
         if args.component_ids.is_empty() {
-            let output = git::changes_project(project_id, args.include_diff)?;
+            let output = git::changes_project(project_id, args.git_diffs)?;
             let exit_code = if output.summary.failed > 0 { 1 } else { 0 };
             return Ok((ChangesCommandOutput::Bulk(output), exit_code));
         } else {
             let output =
-                git::changes_project_filtered(project_id, &args.component_ids, args.include_diff)?;
+                git::changes_project_filtered(project_id, &args.component_ids, args.git_diffs)?;
             let exit_code = if output.summary.failed > 0 { 1 } else { 0 };
             return Ok((ChangesCommandOutput::Bulk(output), exit_code));
         }
@@ -77,13 +77,13 @@ pub fn run(
         // If additional component_ids provided, treat target_id as project_id
         if !args.component_ids.is_empty() {
             let output =
-                git::changes_project_filtered(target_id, &args.component_ids, args.include_diff)?;
+                git::changes_project_filtered(target_id, &args.component_ids, args.git_diffs)?;
             let exit_code = if output.summary.failed > 0 { 1 } else { 0 };
             return Ok((ChangesCommandOutput::Bulk(output), exit_code));
         }
 
         // Single target_id: try as component first
-        let output = git::changes(target_id, args.since.as_deref(), args.include_diff)?;
+        let output = git::changes(Some(target_id), args.since.as_deref(), args.git_diffs)?;
         return Ok((ChangesCommandOutput::Single(output), 0));
     }
 

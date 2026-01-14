@@ -3,6 +3,7 @@ use crate::json;
 use crate::local_files::{self, FileSystem};
 use crate::paths;
 use crate::project;
+use crate::slugify;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -146,13 +147,37 @@ pub fn save(component: &Component) -> Result<()> {
 }
 
 /// Merge JSON into component config. Accepts JSON string, @file, or - for stdin.
-pub fn merge_from_json(id: &str, json_spec: &str) -> Result<json::MergeResult> {
-    let mut component = load(id)?;
+/// ID can be provided as argument or extracted from JSON body.
+pub fn merge_from_json(id: Option<&str>, json_spec: &str) -> Result<json::MergeResult> {
     let raw = json::read_json_spec_to_string(json_spec)?;
-    let patch = json::from_str(&raw)?;
-    let result = json::merge_config(&mut component, patch)?;
+    let mut parsed: serde_json::Value = json::from_str(&raw)?;
+
+    // Extract ID from JSON if not provided as argument
+    let effective_id = id
+        .map(String::from)
+        .or_else(|| parsed.get("id").and_then(|v| v.as_str()).map(String::from))
+        .ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "id",
+                "Provide component ID as argument or in JSON body",
+                None,
+                None,
+            )
+        })?;
+
+    // Strip id from JSON before merging to avoid setting it as a config field
+    if let Some(obj) = parsed.as_object_mut() {
+        obj.remove("id");
+    }
+
+    let mut component = load(&effective_id)?;
+    let result = json::merge_config(&mut component, parsed)?;
     save(&component)?;
-    Ok(result)
+
+    Ok(json::MergeResult {
+        id: effective_id,
+        updated_fields: result.updated_fields,
+    })
 }
 
 pub fn delete(id: &str) -> Result<()> {
@@ -194,55 +219,7 @@ pub fn parse_version_targets(targets: &[String]) -> Result<Vec<VersionTarget>> {
 }
 
 pub fn slugify_id(name: &str) -> Result<String> {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return Err(Error::validation_invalid_argument(
-            "name",
-            "Name cannot be empty",
-            None,
-            None,
-        ));
-    }
-
-    let mut out = String::new();
-    let mut prev_was_dash = false;
-
-    for ch in trimmed.chars() {
-        let normalized = match ch {
-            'a'..='z' | '0'..='9' => Some(ch),
-            'A'..='Z' => Some(ch.to_ascii_lowercase()),
-            _ if ch.is_whitespace() || ch == '_' || ch == '-' => Some('-'),
-            _ => None,
-        };
-
-        if let Some(c) = normalized {
-            if c == '-' {
-                if out.is_empty() || prev_was_dash {
-                    continue;
-                }
-                out.push('-');
-                prev_was_dash = true;
-            } else {
-                out.push(c);
-                prev_was_dash = false;
-            }
-        }
-    }
-
-    while out.ends_with('-') {
-        out.pop();
-    }
-
-    if out.is_empty() {
-        return Err(Error::validation_invalid_argument(
-            "name",
-            "Name must contain at least one letter or number",
-            None,
-            None,
-        ));
-    }
-
-    Ok(out)
+    slugify::slugify_id(name, "name")
 }
 
 // ============================================================================

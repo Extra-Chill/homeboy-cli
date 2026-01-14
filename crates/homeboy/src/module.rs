@@ -1,6 +1,7 @@
 use crate::json;
 use crate::local_files::{self, FileSystem};
 use crate::paths;
+use crate::slugify;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -948,39 +949,8 @@ pub struct UpdateResult {
     pub path: PathBuf,
 }
 
-/// Slugify a string into a valid module ID.
 pub fn slugify_id(value: &str) -> Result<String> {
-    let mut output = String::new();
-    let mut last_was_dash = false;
-
-    for ch in value.chars() {
-        let lower = ch.to_ascii_lowercase();
-        if lower.is_ascii_alphanumeric() {
-            output.push(lower);
-            last_was_dash = false;
-            continue;
-        }
-
-        if !last_was_dash && !output.is_empty() {
-            output.push('-');
-            last_was_dash = true;
-        }
-    }
-
-    while output.ends_with('-') {
-        output.pop();
-    }
-
-    if output.is_empty() {
-        return Err(Error::validation_invalid_argument(
-            "module_id",
-            "Unable to derive module id",
-            None,
-            None,
-        ));
-    }
-
-    Ok(output)
+    slugify::slugify_id(value, "module_id")
 }
 
 /// Derive a module ID from a git URL.

@@ -37,6 +37,28 @@ enum DbCommand {
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
     },
+    /// Search table by column value
+    Search {
+        /// Project ID
+        project_id: String,
+        /// Table name
+        table: String,
+        /// Column to search
+        #[arg(long)]
+        column: String,
+        /// Search pattern
+        #[arg(long)]
+        pattern: String,
+        /// Use exact match instead of LIKE
+        #[arg(long, default_value_t = false)]
+        exact: bool,
+        /// Maximum rows to return
+        #[arg(long)]
+        limit: Option<u32>,
+        /// Optional subtarget
+        #[arg(long)]
+        subtarget: Option<String>,
+    },
     /// Delete a row from a table
     DeleteRow {
         /// Project ID
@@ -86,6 +108,15 @@ pub fn run(
         DbCommand::Tables { project_id, args } => tables(&project_id, &args),
         DbCommand::Describe { project_id, args } => describe(&project_id, &args),
         DbCommand::Query { project_id, args } => query(&project_id, &args),
+        DbCommand::Search {
+            project_id,
+            table,
+            column,
+            pattern,
+            exact,
+            limit,
+            subtarget,
+        } => search(&project_id, &table, &column, &pattern, exact, limit, subtarget.as_deref()),
         DbCommand::DeleteRow { project_id, args } => delete_row(&project_id, &args),
         DbCommand::DropTable { project_id, args } => drop_table(&project_id, &args),
         DbCommand::Tunnel {
@@ -134,10 +165,8 @@ fn tables(project_id: &str, args: &[String]) -> homeboy::Result<(DbOutput, i32)>
 fn describe(project_id: &str, args: &[String]) -> homeboy::Result<(DbOutput, i32)> {
     let (subtarget, remaining) = parse_subtarget(project_id, args)?;
 
-    let table_name = remaining
-        .first()
-        .ok_or_else(|| homeboy::Error::config("Table name required".to_string()))?;
-
+    // Core validates table_name
+    let table_name = remaining.first().map(|s| s.as_str());
     let result = db::describe_table(project_id, table_name, subtarget.as_deref())?;
     let exit_code = result.exit_code;
 
@@ -166,20 +195,33 @@ fn query(project_id: &str, args: &[String]) -> homeboy::Result<(DbOutput, i32)> 
     ))
 }
 
+fn search(
+    project_id: &str,
+    table: &str,
+    column: &str,
+    pattern: &str,
+    exact: bool,
+    limit: Option<u32>,
+    subtarget: Option<&str>,
+) -> homeboy::Result<(DbOutput, i32)> {
+    let result = db::search(project_id, table, column, pattern, exact, limit, subtarget)?;
+    let exit_code = result.exit_code;
+
+    Ok((
+        DbOutput {
+            command: "db.search".to_string(),
+            result: DbResultVariant::Query(result),
+        },
+        exit_code,
+    ))
+}
+
 fn delete_row(project_id: &str, args: &[String]) -> homeboy::Result<(DbOutput, i32)> {
     let (subtarget, remaining) = parse_subtarget(project_id, args)?;
 
-    if remaining.len() < 2 {
-        return Err(homeboy::Error::config(
-            "Table name and row ID required".to_string(),
-        ));
-    }
-
-    let table_name = &remaining[0];
-    let row_id: i64 = remaining[1]
-        .parse()
-        .map_err(|_| homeboy::Error::config("Row ID must be numeric".to_string()))?;
-
+    // Core validates table_name and row_id
+    let table_name = remaining.first().map(|s| s.as_str());
+    let row_id = remaining.get(1).map(|s| s.as_str());
     let result = db::delete_row(project_id, table_name, row_id, subtarget.as_deref())?;
     let exit_code = result.exit_code;
 
@@ -195,10 +237,8 @@ fn delete_row(project_id: &str, args: &[String]) -> homeboy::Result<(DbOutput, i
 fn drop_table(project_id: &str, args: &[String]) -> homeboy::Result<(DbOutput, i32)> {
     let (subtarget, remaining) = parse_subtarget(project_id, args)?;
 
-    let table_name = remaining
-        .first()
-        .ok_or_else(|| homeboy::Error::config("Table name required".to_string()))?;
-
+    // Core validates table_name
+    let table_name = remaining.first().map(|s| s.as_str());
     let result = db::drop_table(project_id, table_name, subtarget.as_deref())?;
     let exit_code = result.exit_code;
 

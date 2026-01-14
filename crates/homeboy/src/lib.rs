@@ -28,6 +28,7 @@ pub(crate) mod shell;
 pub(crate) mod template;
 
 pub(crate) mod base_path;
+pub(crate) mod slugify;
 
 // Re-exports for convenient access
 pub use error::{Error, ErrorCode, Result};

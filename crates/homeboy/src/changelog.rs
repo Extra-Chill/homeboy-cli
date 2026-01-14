@@ -459,19 +459,37 @@ pub fn add_items_bulk(json_spec: &str) -> Result<AddItemsOutput> {
     let input: AddItemsInput = serde_json::from_str(&raw)
         .map_err(|e| Error::validation_invalid_json(e, Some("parse changelog add input".to_string())))?;
 
-    add_items(&input.component_id, &input.messages)
+    add_items(Some(&input.component_id), &input.messages)
 }
 
 /// Add changelog items to a component.
-pub fn add_items(component_id: &str, messages: &[String]) -> Result<AddItemsOutput> {
-    let component = component::load(component_id)?;
+pub fn add_items(component_id: Option<&str>, messages: &[String]) -> Result<AddItemsOutput> {
+    let id = component_id.ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "componentId",
+            "Missing componentId (or use --cwd)",
+            None,
+            None,
+        )
+    })?;
+
+    if messages.is_empty() {
+        return Err(Error::validation_invalid_argument(
+            "message",
+            "Missing message",
+            None,
+            None,
+        ));
+    }
+
+    let component = component::load(id)?;
     let settings = resolve_effective_settings(Some(&component));
 
     let (path, changed, items_added) =
         read_and_add_next_section_items(&component, &settings, messages)?;
 
     Ok(AddItemsOutput {
-        component_id: component_id.to_string(),
+        component_id: id.to_string(),
         changelog_path: path.to_string_lossy().to_string(),
         next_section_label: settings.next_section_label,
         messages: messages.to_vec(),
@@ -508,6 +526,15 @@ pub fn detect_changelog_path(base_path: &str) -> Option<PathBuf> {
 
 /// Add changelog items in the current working directory.
 pub fn add_items_cwd(messages: &[String]) -> Result<AddItemsOutput> {
+    if messages.is_empty() {
+        return Err(Error::validation_invalid_argument(
+            "message",
+            "Missing message",
+            None,
+            None,
+        ));
+    }
+
     let cwd = std::env::current_dir()
         .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))?;
     let cwd_str = cwd.to_string_lossy().to_string();

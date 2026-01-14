@@ -50,9 +50,10 @@ enum ComponentCommand {
         id: String,
     },
     /// Update component configuration fields
+    #[command(visible_alias = "edit")]
     Set {
-        /// Component ID
-        id: String,
+        /// Component ID (optional if provided in JSON body)
+        id: Option<String>,
         /// JSON object to merge into config (supports @file and - for stdin)
         #[arg(long, value_name = "JSON")]
         json: String,
@@ -76,7 +77,7 @@ enum ComponentCommand {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComponentOutput {
-    pub action: String,
+    pub command: String,
     pub component_id: Option<String>,
     pub success: bool,
     pub updated_fields: Vec<String>,
@@ -118,7 +119,7 @@ pub fn run(
 
             Ok((
                 ComponentOutput {
-                    action: "create".to_string(),
+                    command: "component.create".to_string(),
                     component_id: Some(result.id),
                     success: true,
                     updated_fields: vec![],
@@ -130,7 +131,7 @@ pub fn run(
             ))
         }
         ComponentCommand::Show { id } => show(&id),
-        ComponentCommand::Set { id, json } => set(&id, &json),
+        ComponentCommand::Set { id, json } => set(id.as_deref(), &json),
         ComponentCommand::Delete { id } => delete(&id),
         ComponentCommand::Rename { id, new_name } => rename(&id, &new_name),
         ComponentCommand::List => list(),
@@ -143,7 +144,7 @@ fn create_json(spec: &str, skip_existing: bool) -> CmdResult<ComponentOutput> {
 
     Ok((
         ComponentOutput {
-            action: "component.create".to_string(),
+            command: "component.create".to_string(),
             component_id: None,
             success: summary.errors == 0,
             updated_fields: vec![],
@@ -160,7 +161,7 @@ fn show(id: &str) -> CmdResult<ComponentOutput> {
 
     Ok((
         ComponentOutput {
-            action: "show".to_string(),
+            command: "component.show".to_string(),
             component_id: Some(id.to_string()),
             success: true,
             updated_fields: vec![],
@@ -172,13 +173,13 @@ fn show(id: &str) -> CmdResult<ComponentOutput> {
     ))
 }
 
-fn set(id: &str, json: &str) -> CmdResult<ComponentOutput> {
+fn set(id: Option<&str>, json: &str) -> CmdResult<ComponentOutput> {
     let result = component::merge_from_json(id, json)?;
-    let component = component::load(id)?;
+    let component = component::load(&result.id)?;
     Ok((
         ComponentOutput {
-            action: "set".to_string(),
-            component_id: Some(id.to_string()),
+            command: "component.set".to_string(),
+            component_id: Some(result.id),
             success: true,
             updated_fields: result.updated_fields,
             component: Some(component),
@@ -194,7 +195,7 @@ fn delete(id: &str) -> CmdResult<ComponentOutput> {
 
     Ok((
         ComponentOutput {
-            action: "delete".to_string(),
+            command: "component.delete".to_string(),
             component_id: Some(id.to_string()),
             success: true,
             updated_fields: vec![],
@@ -211,7 +212,7 @@ fn rename(id: &str, new_name: &str) -> CmdResult<ComponentOutput> {
 
     Ok((
         ComponentOutput {
-            action: "rename".to_string(),
+            command: "component.rename".to_string(),
             component_id: Some(result.id.clone()),
             success: true,
             updated_fields: vec!["id".to_string(), "name".to_string()],
@@ -228,7 +229,7 @@ fn list() -> CmdResult<ComponentOutput> {
 
     Ok((
         ComponentOutput {
-            action: "list".to_string(),
+            command: "component.list".to_string(),
             component_id: None,
             success: true,
             updated_fields: vec![],

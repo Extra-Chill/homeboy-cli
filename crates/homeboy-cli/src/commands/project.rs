@@ -44,9 +44,10 @@ enum ProjectCommand {
         table_prefix: Option<String>,
     },
     /// Update project configuration fields
+    #[command(visible_alias = "edit")]
     Set {
-        /// Project ID
-        project_id: String,
+        /// Project ID (optional if provided in JSON body)
+        project_id: Option<String>,
         /// JSON object to merge into config (supports @file and - for stdin)
         #[arg(long, value_name = "JSON")]
         json: String,
@@ -72,6 +73,11 @@ enum ProjectCommand {
     Pin {
         #[command(subcommand)]
         command: ProjectPinCommand,
+    },
+    /// Delete a project configuration
+    Delete {
+        /// Project ID
+        project_id: String,
     },
 }
 
@@ -215,6 +221,8 @@ pub struct ProjectOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     updated: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    deleted: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     import: Option<project::CreateSummary>,
 }
 
@@ -238,26 +246,10 @@ pub fn run(
                 return create_json(&spec, skip_existing);
             }
 
-            let name = name.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "name",
-                    "Missing required argument: name (or use --json)",
-                    None,
-                    None,
-                )
-            })?;
-            let domain = domain.ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "domain",
-                    "Missing required argument: domain (or use --json)",
-                    None,
-                    None,
-                )
-            })?;
-
-            create(&name, &domain, server_id, base_path, table_prefix)
+            // Core validates name and domain
+            create(name, domain, server_id, base_path, table_prefix)
         }
-        ProjectCommand::Set { project_id, json } => set(&project_id, &json),
+        ProjectCommand::Set { project_id, json } => set(project_id.as_deref(), &json),
         ProjectCommand::Repair { project_id } => repair(&project_id),
         ProjectCommand::Rename {
             project_id,
@@ -265,6 +257,7 @@ pub fn run(
         } => rename(&project_id, &new_name),
         ProjectCommand::Components { command } => components(command),
         ProjectCommand::Pin { command } => pin(command),
+        ProjectCommand::Delete { project_id } => delete(&project_id),
     }
 }
 
@@ -289,6 +282,7 @@ fn list() -> homeboy::Result<(ProjectOutput, i32)> {
             components: None,
             pin: None,
             updated: None,
+            deleted: None,
             import: None,
         },
         0,
@@ -307,6 +301,7 @@ fn show(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
             components: None,
             pin: None,
             updated: None,
+            deleted: None,
             import: None,
         },
         0,
@@ -326,6 +321,7 @@ fn create_json(spec: &str, skip_existing: bool) -> homeboy::Result<(ProjectOutpu
             components: None,
             pin: None,
             updated: None,
+            deleted: None,
             import: Some(summary),
         },
         exit_code,
@@ -333,19 +329,14 @@ fn create_json(spec: &str, skip_existing: bool) -> homeboy::Result<(ProjectOutpu
 }
 
 fn create(
-    name: &str,
-    domain: &str,
+    name: Option<String>,
+    domain: Option<String>,
     server_id: Option<String>,
     base_path: Option<String>,
     table_prefix: Option<String>,
 ) -> homeboy::Result<(ProjectOutput, i32)> {
-    let result = project::create_from_cli(
-        Some(name.to_string()),
-        Some(domain.to_string()),
-        server_id,
-        base_path,
-        table_prefix,
-    )?;
+    // Core validates name and domain
+    let result = project::create_from_cli(name, domain, server_id, base_path, table_prefix)?;
 
     let created_id = result.id;
     let project = project::load_record(&created_id)?;
@@ -359,23 +350,25 @@ fn create(
             components: None,
             pin: None,
             updated: None,
+            deleted: None,
             import: None,
         },
         0,
     ))
 }
 
-fn set(project_id: &str, json: &str) -> homeboy::Result<(ProjectOutput, i32)> {
+fn set(project_id: Option<&str>, json: &str) -> homeboy::Result<(ProjectOutput, i32)> {
     let result = project::merge_from_json(project_id, json)?;
     Ok((
         ProjectOutput {
             command: "project.set".to_string(),
-            project_id: Some(project_id.to_string()),
-            project: Some(project::load_record(project_id)?),
+            project_id: Some(result.id.clone()),
+            project: Some(project::load_record(&result.id)?),
             projects: None,
             components: None,
             pin: None,
             updated: Some(result.updated_fields),
+            deleted: None,
             import: None,
         },
         0,
@@ -400,6 +393,7 @@ fn repair(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
             components: None,
             pin: None,
             updated,
+            deleted: None,
             import: None,
         },
         0,
@@ -418,6 +412,26 @@ fn rename(project_id: &str, new_name: &str) -> homeboy::Result<(ProjectOutput, i
             components: None,
             pin: None,
             updated: Some(vec!["id".to_string(), "name".to_string()]),
+            deleted: None,
+            import: None,
+        },
+        0,
+    ))
+}
+
+fn delete(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
+    project::delete(project_id)?;
+
+    Ok((
+        ProjectOutput {
+            command: "project.delete".to_string(),
+            project_id: Some(project_id.to_string()),
+            project: None,
+            projects: None,
+            components: None,
+            pin: None,
+            updated: None,
+            deleted: Some(vec![project_id.to_string()]),
             import: None,
         },
         0,
@@ -466,6 +480,7 @@ fn components_list(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
             }),
             pin: None,
             updated: None,
+            deleted: None,
             import: None,
         },
         0,
@@ -543,6 +558,7 @@ fn write_project_components(
             }),
             pin: None,
             updated: Some(vec!["componentIds".to_string()]),
+            deleted: None,
             import: None,
         },
         0,
@@ -617,6 +633,7 @@ fn pin_list(project_id: &str, pin_type: ProjectPinType) -> homeboy::Result<(Proj
                 removed: None,
             }),
             updated: None,
+            deleted: None,
             import: None,
         },
         0,
@@ -660,6 +677,7 @@ fn pin_add(
                 removed: None,
             }),
             updated: None,
+            deleted: None,
             import: None,
         },
         0,
@@ -701,6 +719,7 @@ fn pin_remove(
                 }),
             }),
             updated: None,
+            deleted: None,
             import: None,
         },
         0,

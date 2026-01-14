@@ -89,7 +89,7 @@ homeboy changes <project> <component_ids...>      # Show changes for specific co
 homeboy changes --project <project>               # Show changes for all project components
 homeboy changes --project <project> <components>  # Alternative filter syntax
 homeboy changes --cwd                             # Show changes for current directory
-homeboy changes <component> --include-diff        # Include full diff output
+homeboy changes <component> --git-diffs           # Include full diff output
 ```
 
 Output includes:

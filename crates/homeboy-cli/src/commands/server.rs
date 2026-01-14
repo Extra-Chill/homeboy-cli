@@ -63,9 +63,10 @@ enum ServerCommand {
         server_id: String,
     },
     /// Modify server settings
+    #[command(visible_alias = "edit")]
     Set {
-        /// Server ID
-        server_id: String,
+        /// Server ID (optional if provided in JSON body)
+        server_id: Option<String>,
         /// JSON object to merge into config (supports @file and - for stdin)
         #[arg(long, value_name = "JSON")]
         json: String,
@@ -154,7 +155,7 @@ pub fn run(
             ))
         }
         ServerCommand::Show { server_id } => show(&server_id),
-        ServerCommand::Set { server_id, json } => set(&server_id, &json),
+        ServerCommand::Set { server_id, json } => set(server_id.as_deref(), &json),
         ServerCommand::Delete { server_id } => delete(&server_id),
         ServerCommand::List => list(),
         ServerCommand::Key(key_args) => run_key(key_args),
@@ -214,13 +215,13 @@ fn show(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
     ))
 }
 
-fn set(server_id: &str, json: &str) -> homeboy::Result<(ServerOutput, i32)> {
+fn set(server_id: Option<&str>, json: &str) -> homeboy::Result<(ServerOutput, i32)> {
     let result = server::merge_from_json(server_id, json)?;
-    let server = server::load(server_id)?;
+    let server = server::load(&result.id)?;
     Ok((
         ServerOutput {
             command: "server.set".to_string(),
-            server_id: Some(server_id.to_string()),
+            server_id: Some(result.id),
             server: Some(server),
             servers: None,
             updated: Some(result.updated_fields),

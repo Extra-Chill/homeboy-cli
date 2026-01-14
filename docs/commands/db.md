@@ -33,6 +33,30 @@ homeboy db query <projectId> [<subtarget>] <sql...>
 
 Note: `query` is intended for SELECT-only operations. Non-SELECT statements are rejected.
 
+### `search`
+
+```sh
+homeboy db search <projectId> <table> --column <column> --pattern <pattern> [options]
+```
+
+Options:
+
+- `--column <name>` (required): Column to search
+- `--pattern <value>` (required): Search pattern (LIKE match by default)
+- `--exact`: Use exact match (`=`) instead of LIKE
+- `--limit <n>`: Maximum rows to return (default: 100)
+- `--subtarget <name>`: Optional subtarget
+
+Examples:
+
+```sh
+# Find users with email containing "gmail"
+homeboy db search mysite wp_users --column user_email --pattern gmail
+
+# Find posts with exact status
+homeboy db search mysite wp_posts --column post_status --exact --pattern publish
+```
+
 ### `delete-row`
 
 ```sh
@@ -61,7 +85,7 @@ homeboy db tunnel <projectId> [--local-port <port>]
 
 Common fields:
 
-- `command`: `db.tables` | `db.describe` | `db.query` | `db.deleteRow` | `db.dropTable` | `db.tunnel`
+- `command`: `db.tables` | `db.describe` | `db.query` | `db.search` | `db.deleteRow` | `db.dropTable` | `db.tunnel`
 - `projectId`
 - `exitCode`, `success`
 - `stdout`, `stderr` (for remote command execution)

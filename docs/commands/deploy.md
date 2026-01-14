@@ -58,9 +58,6 @@ Notes:
 - `deployReason` is omitted when not applicable.
 - `artifactPath` is the component build artifact path as configured; it may be relative.
 
-}
-```
-
 Note: `buildExitCode`/`deployExitCode` are numbers when present (not strings).
 
 Exit code is `0` when `summary.failed == 0`, otherwise `1`.

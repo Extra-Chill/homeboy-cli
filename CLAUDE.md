@@ -10,3 +10,10 @@ Key references:
 - Command output is machine-oriented and wrapped in a stable JSON envelope: [docs/json-output/json-output-contract.md](docs/json-output/json-output-contract.md).
 
 When updating documentation, keep it concise and aligned with current implementation.
+
+## Rust Testing (Release)
+
+When validating changes in this workspace, always run tests using the **release target**:
+
+- `cargo test --release`
+- When running the CLI for validation, prefer `cargo run --release -p homeboy-cli -- <args>`.

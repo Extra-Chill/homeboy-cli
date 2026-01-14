@@ -142,7 +142,12 @@ pub fn list_tables(project_id: &str, subtarget: Option<&str>) -> Result<DbResult
     })
 }
 
-pub fn describe_table(project_id: &str, table: &str, subtarget: Option<&str>) -> Result<DbResult> {
+pub fn describe_table(
+    project_id: &str,
+    table: Option<&str>,
+    subtarget: Option<&str>,
+) -> Result<DbResult> {
+    let table = table.ok_or_else(|| Error::config("Table name required".to_string()))?;
     let ctx = build_context(project_id, subtarget)?;
 
     let mut vars = HashMap::new();
@@ -219,12 +224,80 @@ pub fn query(project_id: &str, sql: &str, subtarget: Option<&str>) -> Result<DbR
     })
 }
 
-pub fn delete_row(
+const DEFAULT_SEARCH_LIMIT: u32 = 100;
+
+pub fn search(
     project_id: &str,
     table: &str,
-    row_id: i64,
+    column: &str,
+    pattern: &str,
+    exact: bool,
+    limit: Option<u32>,
     subtarget: Option<&str>,
 ) -> Result<DbResult> {
+    let ctx = build_context(project_id, subtarget)?;
+
+    if table.trim().is_empty() {
+        return Err(Error::config("Table name required".to_string()));
+    }
+    if column.trim().is_empty() {
+        return Err(Error::config("Column name required".to_string()));
+    }
+    if pattern.trim().is_empty() {
+        return Err(Error::config("Search pattern required".to_string()));
+    }
+
+    let escaped_pattern = pattern.replace('\'', "''");
+    let row_limit = limit.unwrap_or(DEFAULT_SEARCH_LIMIT);
+
+    let search_sql = if exact {
+        format!(
+            "SELECT * FROM {} WHERE {} = '{}' LIMIT {}",
+            table, column, escaped_pattern, row_limit
+        )
+    } else {
+        format!(
+            "SELECT * FROM {} WHERE {} LIKE '%{}%' LIMIT {}",
+            table, column, escaped_pattern, row_limit
+        )
+    };
+
+    let mut vars = HashMap::new();
+    vars.insert(TemplateVars::SITE_PATH.to_string(), ctx.base_path.clone());
+    vars.insert(TemplateVars::CLI_PATH.to_string(), ctx.cli_path.clone());
+    vars.insert(TemplateVars::QUERY.to_string(), search_sql.clone());
+    vars.insert(TemplateVars::FORMAT.to_string(), "json".to_string());
+    vars.insert(TemplateVars::DOMAIN.to_string(), ctx.domain.clone());
+    let command = render_map(&ctx.db_cli.query_command, &vars);
+
+    let output = ctx.client.execute(&command);
+
+    Ok(DbResult {
+        project_id: ctx.project_id,
+        base_path: Some(ctx.base_path),
+        domain: Some(ctx.domain),
+        cli_path: Some(ctx.cli_path),
+        stdout: Some(output.stdout),
+        stderr: Some(output.stderr),
+        exit_code: output.exit_code,
+        success: output.success,
+        tables: None,
+        table: Some(table.to_string()),
+        sql: Some(search_sql),
+    })
+}
+
+pub fn delete_row(
+    project_id: &str,
+    table: Option<&str>,
+    row_id: Option<&str>,
+    subtarget: Option<&str>,
+) -> Result<DbResult> {
+    let table = table.ok_or_else(|| Error::config("Table name required".to_string()))?;
+    let row_id: i64 = row_id
+        .ok_or_else(|| Error::config("Row ID required".to_string()))?
+        .parse()
+        .map_err(|_| Error::config("Row ID must be numeric".to_string()))?;
     let ctx = build_context(project_id, subtarget)?;
 
     let delete_sql = format!("DELETE FROM {} WHERE ID = {} LIMIT 1", table, row_id);
@@ -254,7 +327,12 @@ pub fn delete_row(
     })
 }
 
-pub fn drop_table(project_id: &str, table: &str, subtarget: Option<&str>) -> Result<DbResult> {
+pub fn drop_table(
+    project_id: &str,
+    table: Option<&str>,
+    subtarget: Option<&str>,
+) -> Result<DbResult> {
+    let table = table.ok_or_else(|| Error::config("Table name required".to_string()))?;
     let ctx = build_context(project_id, subtarget)?;
 
     let drop_sql = format!("DROP TABLE {}", table);

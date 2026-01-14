@@ -49,6 +49,13 @@ This command:
 
 Changelog entries must be added *before* running this command (recommended: `homeboy changelog add --json ...`).
 
+Recommended release workflow (non-enforced):
+
+- Land work as scoped feature/fix commits first.
+- Use `homeboy changes <componentId>` to review everything since the last tag.
+- Add changelog items as user-facing release notes that capture anything impacting user or developer experience (not a copy of commit subjects).
+- Run `homeboy version bump ...` when the only remaining local changes are release metadata (changelog + version).
+
 In this version of Homeboy, the `--json` flag is on `changelog add` (not on `changelog`).
 
 Arguments:

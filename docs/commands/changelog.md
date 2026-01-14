@@ -32,6 +32,7 @@ homeboy changelog add --json <spec>
 Notes:
 
 - Use `-m` or `--message` to provide the changelog entry.
+- Changelog messages are intended to be user-facing release notes (capture anything impacting user or developer experience), not a 1:1 copy of commit subjects.
 - When `--cwd` is used, Homeboy auto-detects the changelog file (see CWD Mode below).
 - When `--json` is provided, other args are ignored and the payload's `messages` array is applied in order.
 

@@ -19,6 +19,11 @@ This command reports:
 - uncommitted changes in the working tree (including `uncommittedDiff`)
 - optionally, a commit-range diff for commits since the baseline (via `--git-diffs`)
 
+Release workflow note:
+
+- `commits[]` is intended as input to help you author complete release notes.
+- `uncommitted`/`uncommittedDiff` is a reminder that you have local edits; if they are intended for the release, commit them as scoped changes before version bumping. If they are not intended for the release, resolve them before version bumping.
+
 ## Options
 
 - `--cwd`: use current working directory (ad-hoc mode, no component registration required)

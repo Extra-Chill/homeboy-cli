@@ -209,7 +209,7 @@ pub fn resolve_project_server(project_id: &str) -> Result<ProjectServerContext> 
     })?;
 
     let server =
-        server::load(&server_id).map_err(|_| Error::server_not_found(server_id.clone()))?;
+        server::load(&server_id).map_err(|_| Error::server_not_found(server_id.clone(), vec![]))?;
 
     Ok(ProjectServerContext {
         project,
@@ -239,7 +239,7 @@ pub fn resolve_project_or_server_id(id: &str) -> Result<ResolvedTarget> {
         return Ok(ResolvedTarget::Project(Box::new(ctx)));
     }
 
-    let server = server::load(id).map_err(|_| Error::server_not_found(id.to_string()))?;
+    let server = server::load(id).map_err(|_| Error::server_not_found(id.to_string(), vec![]))?;
 
     Ok(ResolvedTarget::Server {
         server_id: id.to_string(),

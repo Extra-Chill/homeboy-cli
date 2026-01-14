@@ -1,6 +1,14 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+fn format_suggestions(suggestions: &[String]) -> String {
+    if suggestions.len() == 1 {
+        format!("Did you mean: {}?", suggestions[0])
+    } else {
+        format!("Did you mean: {}?", suggestions.join(", "))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorCode {
     ConfigMissingKey,
@@ -265,24 +273,36 @@ impl Error {
         Self::new(ErrorCode::ValidationInvalidJson, "Invalid JSON", details)
     }
 
-    pub fn project_not_found(id: impl Into<String>) -> Self {
-        Self::not_found(ErrorCode::ProjectNotFound, "Project not found", id)
-            .with_hint("Run 'homeboy project list' to see available projects")
+    pub fn project_not_found(id: impl Into<String>, suggestions: Vec<String>) -> Self {
+        let mut err = Self::not_found(ErrorCode::ProjectNotFound, "Project not found", id);
+        if !suggestions.is_empty() {
+            err = err.with_hint(format_suggestions(&suggestions));
+        }
+        err.with_hint("Run 'homeboy project list' to see available projects")
     }
 
-    pub fn server_not_found(id: impl Into<String>) -> Self {
-        Self::not_found(ErrorCode::ServerNotFound, "Server not found", id)
-            .with_hint("Run 'homeboy server list' to see available servers")
+    pub fn server_not_found(id: impl Into<String>, suggestions: Vec<String>) -> Self {
+        let mut err = Self::not_found(ErrorCode::ServerNotFound, "Server not found", id);
+        if !suggestions.is_empty() {
+            err = err.with_hint(format_suggestions(&suggestions));
+        }
+        err.with_hint("Run 'homeboy server list' to see available servers")
     }
 
-    pub fn component_not_found(id: impl Into<String>) -> Self {
-        Self::not_found(ErrorCode::ComponentNotFound, "Component not found", id)
-            .with_hint("Run 'homeboy component list' to see available components")
+    pub fn component_not_found(id: impl Into<String>, suggestions: Vec<String>) -> Self {
+        let mut err = Self::not_found(ErrorCode::ComponentNotFound, "Component not found", id);
+        if !suggestions.is_empty() {
+            err = err.with_hint(format_suggestions(&suggestions));
+        }
+        err.with_hint("Run 'homeboy component list' to see available components")
     }
 
-    pub fn module_not_found(id: impl Into<String>) -> Self {
-        Self::not_found(ErrorCode::ModuleNotFound, "Module not found", id)
-            .with_hint("Run 'homeboy module list' to see available modules")
+    pub fn module_not_found(id: impl Into<String>, suggestions: Vec<String>) -> Self {
+        let mut err = Self::not_found(ErrorCode::ModuleNotFound, "Module not found", id);
+        if !suggestions.is_empty() {
+            err = err.with_hint(format_suggestions(&suggestions));
+        }
+        err.with_hint("Run 'homeboy module list' to see available modules")
     }
 
     fn not_found(code: ErrorCode, message: &str, id: impl Into<String>) -> Self {

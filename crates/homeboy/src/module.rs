@@ -101,8 +101,8 @@ impl ConfigEntity for ModuleManifest {
     fn config_dir() -> Result<PathBuf> {
         paths::modules()
     }
-    fn not_found_error(id: String) -> Error {
-        Error::module_not_found(id)
+    fn not_found_error(id: String, suggestions: Vec<String>) -> Error {
+        Error::module_not_found(id, suggestions)
     }
     fn entity_type() -> &'static str {
         "module"
@@ -1215,7 +1215,7 @@ fn install_from_path(source_path: &str, id_override: Option<&str>) -> Result<Ins
 pub fn update(module_id: &str, force: bool) -> Result<UpdateResult> {
     let module_dir = paths::module(module_id)?;
     if !module_dir.exists() {
-        return Err(Error::module_not_found(module_id.to_string()));
+        return Err(Error::module_not_found(module_id.to_string(), vec![]));
     }
 
     // Linked modules are managed externally
@@ -1241,7 +1241,7 @@ pub fn update(module_id: &str, force: bool) -> Result<UpdateResult> {
     }
 
     let module =
-        load_module(module_id).ok_or_else(|| Error::module_not_found(module_id.to_string()))?;
+        load_module(module_id).ok_or_else(|| Error::module_not_found(module_id.to_string(), vec![]))?;
 
     let source_url = module.source_url.ok_or_else(|| {
         Error::validation_invalid_argument(
@@ -1281,7 +1281,7 @@ pub fn update(module_id: &str, force: bool) -> Result<UpdateResult> {
 pub fn uninstall(module_id: &str) -> Result<PathBuf> {
     let module_dir = paths::module(module_id)?;
     if !module_dir.exists() {
-        return Err(Error::module_not_found(module_id.to_string()));
+        return Err(Error::module_not_found(module_id.to_string(), vec![]));
     }
 
     if module_dir.is_symlink() {

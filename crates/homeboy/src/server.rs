@@ -53,8 +53,8 @@ impl ConfigEntity for Server {
     fn config_dir() -> Result<PathBuf> {
         paths::servers()
     }
-    fn not_found_error(id: String) -> Error {
-        Error::server_not_found(id)
+    fn not_found_error(id: String, suggestions: Vec<String>) -> Error {
+        Error::server_not_found(id, suggestions)
     }
     fn entity_type() -> &'static str {
         "server"
@@ -77,6 +77,12 @@ pub fn save(server: &Server) -> Result<()> {
 /// ID can be provided as argument or extracted from JSON body.
 pub fn merge_from_json(id: Option<&str>, json_spec: &str) -> Result<json::MergeResult> {
     config::merge_from_json::<Server>(id, json_spec)
+}
+
+/// Remove items from server config arrays. Accepts JSON string, @file, or - for stdin.
+/// ID can be provided as argument or extracted from JSON body.
+pub fn remove_from_json(id: Option<&str>, json_spec: &str) -> Result<json::RemoveResult> {
+    config::remove_from_json::<Server>(id, json_spec)
 }
 
 pub fn delete(id: &str) -> Result<()> {
@@ -192,7 +198,8 @@ pub fn rename(id: &str, new_id: &str) -> Result<CreateResult> {
 
 pub fn delete_safe(id: &str) -> Result<()> {
     if !exists(id) {
-        return Err(Error::server_not_found(id.to_string()));
+        let suggestions = config::find_similar_ids::<Server>(id);
+        return Err(Error::server_not_found(id.to_string(), suggestions));
     }
 
     let projects = project::list().unwrap_or_default();

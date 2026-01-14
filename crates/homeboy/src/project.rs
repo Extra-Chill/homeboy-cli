@@ -6,7 +6,6 @@ use crate::slugify;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -84,8 +83,8 @@ impl ConfigEntity for Project {
     fn config_dir() -> Result<PathBuf> {
         paths::projects()
     }
-    fn not_found_error(id: String) -> Error {
-        Error::project_not_found(id)
+    fn not_found_error(id: String, suggestions: Vec<String>) -> Error {
+        Error::project_not_found(id, suggestions)
     }
     fn entity_type() -> &'static str {
         "project"
@@ -106,10 +105,9 @@ pub struct RemoteFileConfig {
     pub pinned_files: Vec<PinnedRemoteFile>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PinnedRemoteFile {
-    pub id: Uuid,
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
@@ -130,10 +128,9 @@ pub struct RemoteLogConfig {
     pub pinned_logs: Vec<PinnedRemoteLog>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PinnedRemoteLog {
-    pub id: Uuid,
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
@@ -332,6 +329,12 @@ pub fn exists(id: &str) -> bool {
 /// ID can be provided as argument or extracted from JSON body.
 pub fn merge_from_json(id: Option<&str>, json_spec: &str) -> Result<json::MergeResult> {
     config::merge_from_json::<Project>(id, json_spec)
+}
+
+/// Remove items from project config arrays. Accepts JSON string, @file, or - for stdin.
+/// ID can be provided as argument or extracted from JSON body.
+pub fn remove_from_json(id: Option<&str>, json_spec: &str) -> Result<json::RemoveResult> {
+    config::remove_from_json::<Project>(id, json_spec)
 }
 
 pub fn slugify_id(name: &str) -> Result<String> {
@@ -606,7 +609,6 @@ pub fn pin(project_id: &str, pin_type: PinType, path: &str, options: PinOptions)
                 ));
             }
             project.remote_files.pinned_files.push(PinnedRemoteFile {
-                id: Uuid::new_v4(),
                 path: path.to_string(),
                 label: options.label,
             });
@@ -621,7 +623,6 @@ pub fn pin(project_id: &str, pin_type: PinType, path: &str, options: PinOptions)
                 ));
             }
             project.remote_logs.pinned_logs.push(PinnedRemoteLog {
-                id: Uuid::new_v4(),
                 path: path.to_string(),
                 label: options.label,
                 tail_lines: options.tail_lines,

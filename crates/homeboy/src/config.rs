@@ -12,14 +12,15 @@ pub(crate) trait ConfigEntity: Serialize + DeserializeOwned {
     fn set_id(&mut self, id: String);
     fn config_path(id: &str) -> Result<PathBuf>;
     fn config_dir() -> Result<PathBuf>;
-    fn not_found_error(id: String) -> Error;
+    fn not_found_error(id: String, suggestions: Vec<String>) -> Error;
     fn entity_type() -> &'static str;
 }
 
 pub(crate) fn load<T: ConfigEntity>(id: &str) -> Result<T> {
     let path = T::config_path(id)?;
     if !path.exists() {
-        return Err(T::not_found_error(id.to_string()));
+        let suggestions = find_similar_ids::<T>(id);
+        return Err(T::not_found_error(id.to_string(), suggestions));
     }
     let content = local_files::local().read(&path)?;
     let mut entity: T = json::from_str(&content)?;
@@ -81,7 +82,8 @@ pub(crate) fn save<T: ConfigEntity>(entity: &T) -> Result<()> {
 pub(crate) fn delete<T: ConfigEntity>(id: &str) -> Result<()> {
     let path = T::config_path(id)?;
     if !path.exists() {
-        return Err(T::not_found_error(id.to_string()));
+        let suggestions = find_similar_ids::<T>(id);
+        return Err(T::not_found_error(id.to_string(), suggestions));
     }
     local_files::local().delete(&path)?;
     Ok(())
@@ -266,6 +268,39 @@ pub(crate) fn merge_from_json<T: ConfigEntity>(
     })
 }
 
+pub(crate) fn remove_from_json<T: ConfigEntity>(
+    id: Option<&str>,
+    json_spec: &str,
+) -> Result<json::RemoveResult> {
+    let raw = json::read_json_spec_to_string(json_spec)?;
+    let mut parsed: serde_json::Value = json::from_str(&raw)?;
+
+    let effective_id = id
+        .map(String::from)
+        .or_else(|| parsed.get("id").and_then(|v| v.as_str()).map(String::from))
+        .ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "id",
+                &format!("Provide {} ID as argument or in JSON body", T::entity_type()),
+                None,
+                None,
+            )
+        })?;
+
+    if let Some(obj) = parsed.as_object_mut() {
+        obj.remove("id");
+    }
+
+    let mut entity = load::<T>(&effective_id)?;
+    let result = json::remove_config(&mut entity, parsed)?;
+    save(&entity)?;
+
+    Ok(json::RemoveResult {
+        id: effective_id,
+        removed_from: result.removed_from,
+    })
+}
+
 pub(crate) fn rename<T: ConfigEntity>(id: &str, new_id: &str) -> Result<()> {
     let new_id = new_id.to_lowercase();
     slugify::validate_component_id(&new_id)?;
@@ -304,4 +339,64 @@ pub(crate) fn rename<T: ConfigEntity>(id: &str, new_id: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+// ============================================================================
+// Fuzzy Matching
+// ============================================================================
+
+/// Levenshtein edit distance between two strings.
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let a_len = a_chars.len();
+    let b_len = b_chars.len();
+
+    if a_len == 0 {
+        return b_len;
+    }
+    if b_len == 0 {
+        return a_len;
+    }
+
+    let mut prev_row: Vec<usize> = (0..=b_len).collect();
+    let mut curr_row: Vec<usize> = vec![0; b_len + 1];
+
+    for (i, a_char) in a_chars.iter().enumerate() {
+        curr_row[0] = i + 1;
+        for (j, b_char) in b_chars.iter().enumerate() {
+            let cost = if a_char == b_char { 0 } else { 1 };
+            curr_row[j + 1] = (prev_row[j + 1] + 1)
+                .min(curr_row[j] + 1)
+                .min(prev_row[j] + cost);
+        }
+        std::mem::swap(&mut prev_row, &mut curr_row);
+    }
+
+    prev_row[b_len]
+}
+
+/// Find entity IDs similar to the given target using edit distance.
+/// Returns up to 3 matches with distance <= 3.
+pub(crate) fn find_similar_ids<T: ConfigEntity>(target: &str) -> Vec<String> {
+    let existing = match list_ids::<T>() {
+        Ok(ids) => ids,
+        Err(_) => return vec![],
+    };
+
+    let target_lower = target.to_lowercase();
+    let mut matches: Vec<(String, usize)> = existing
+        .into_iter()
+        .filter_map(|id| {
+            let dist = levenshtein(&target_lower, &id.to_lowercase());
+            if dist <= 3 && dist > 0 {
+                Some((id, dist))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    matches.sort_by_key(|(_, dist)| *dist);
+    matches.into_iter().take(3).map(|(id, _)| id).collect()
 }

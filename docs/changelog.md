@@ -148,7 +148,7 @@ All notable changes to Homeboy CLI are documented in this file.
 
 - Rename plugin terminology to module across CLI/docs
 - Remove active project concept; require explicit --project where needed
-- Update module manifest filename to `<moduleId>.json`
+- Update module manifest filename to `<module_id>.json`
 
 ## 0.4.0
 
@@ -256,7 +256,7 @@ All notable changes to Homeboy CLI are documented in this file.
 - **Module scoping**: Add `ModuleScope::{effective_settings, validate_project_compatibility, resolve_component_scope}` to merge settings across app/project/component and validate `ModuleManifest.requires` (for example: `components`).
 - **Module execution**: Tighten `homeboy module run` to require an installed/configured entry and resolve project/component context when CLI templates reference project variables.
 - **Command context**: Refactor SSH/base-path resolution to shared context helpers (used by `db`/`deploy`) for more consistent configuration errors.
-- **Docs**: Normalize docs placeholders (`<projectId>`, `<serverId>`, `<componentId>`) across embedded CLI documentation.
+- **Docs**: Normalize docs placeholders (`<project_id>`, `<server_id>`, `<component_id>`) across embedded CLI documentation.
 
 ## 0.1.13
 
@@ -269,7 +269,7 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ### Improvements
 - **Changelog**: Promote `homeboy changelog` from a shortcut to a subcommand group with `show` and `add`.
-- **Changelog**: Add `homeboy changelog add <componentId> <message>` to append items to the “next” section (defaults to `Unreleased`).
+- **Changelog**: Add `homeboy changelog add <component_id> <message>` to append items to the “next” section (defaults to `Unreleased`).
 - **Changelog**: Auto-detect changelog path (`CHANGELOG.md` or `docs/changelog.md`) when `changelogTargets` is not configured.
 - **Config**: Support `changelogTargets` + `changelogNextSectionLabel`/`changelogNextSectionAliases` at component/project/app levels.
 - **Version**: Write JSON version bumps via the `version` key (pretty-printed) when using the default JSON version pattern.

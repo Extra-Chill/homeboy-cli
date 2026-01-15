@@ -3,7 +3,7 @@
 ## Synopsis
 
 ```sh
-homeboy build <componentId>
+homeboy build <component_id>
 homeboy build --json '<spec>'
 ```
 
@@ -22,7 +22,7 @@ Requires `build_command` to be configured on the component. If not set, the comm
 ```json
 {
   "command": "build.run",
-  "component_id": "<componentId>",
+  "component_id": "<component_id>",
   "build_command": "<command string>",
   "stdout": "<stdout>",
   "stderr": "<stderr>",
@@ -37,10 +37,10 @@ Requires `build_command` to be configured on the component. If not set, the comm
   "action": "build",
   "results": [
     {
-      "id": "<componentId>",
+      "id": "<component_id>",
       "result": {
         "command": "build.run",
-        "component_id": "<componentId>",
+        "component_id": "<component_id>",
         "build_command": "<command string>",
         "stdout": "<stdout>",
         "stderr": "<stderr>",
@@ -53,10 +53,10 @@ Requires `build_command` to be configured on the component. If not set, the comm
 }
 ```
 
-Bulk JSON input uses `componentIds`:
+Bulk JSON input uses `component_ids`:
 
 ```json
-{ "componentIds": ["component-a", "component-b"] }
+{ "component_ids": ["component-a", "component-b"] }
 ```
 
 ## Exit code

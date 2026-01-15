@@ -18,20 +18,20 @@ homeboy server create [--json <spec>] [--skip-existing] <id> --host <host> --use
 - `id` is the server ID (not a display name); it should match what you’ll reference from projects.
 ```
 
-`serverId` is the `<id>` you provide (CLI mode) or the `id` field in the JSON body (JSON mode).
+`server_id` is the `<id>` you provide (CLI mode) or the `id` field in the JSON body (JSON mode).
 
 ### `show`
 
 ```sh
-homeboy server show <serverId>
+homeboy server show <server_id>
 ```
 
 ### `set`
 
 ```sh
-homeboy server set <serverId> --json <JSON>
-homeboy server set <serverId> '<JSON>'
-homeboy server set --json <JSON>   # serverId may be provided in JSON body
+homeboy server set <server_id> --json <JSON>
+homeboy server set <server_id> '<JSON>'
+homeboy server set --json <JSON>   # server_id may be provided in JSON body
 ```
 
 Updates a server by merging a JSON object into `servers/<id>.json`.
@@ -43,7 +43,7 @@ Options:
 ### `delete`
 
 ```sh
-homeboy server delete <serverId>
+homeboy server delete <server_id>
 ```
 
 Deletion is safety-checked:
@@ -64,11 +64,11 @@ homeboy server key <COMMAND>
 
 Key subcommands:
 
-- `generate <serverId>`
-- `show <serverId>`
-- `import <serverId> <private_key_path>`
-- `use <serverId> <private_key_path>`
-- `unset <serverId>`
+- `generate <server_id>`
+- `show <server_id>`
+- `import <server_id> <private_key_path>`
+- `use <server_id> <private_key_path>`
+- `unset <server_id>`
 
 ## JSON output
 

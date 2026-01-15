@@ -14,7 +14,7 @@ homeboy docs list
 This command renders documentation topics from two sources:
 
 1) Embedded core docs in the CLI binary
-2) Installed module docs under `<config dir>/homeboy/modules/<moduleId>/docs/`
+2) Installed module docs under `<config dir>/homeboy/modules/<module_id>/docs/`
 
 Topic arguments are treated as a free-form trailing list.
 

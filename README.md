@@ -46,13 +46,13 @@ homeboy project list
 homeboy component list
 homeboy module list
 
-homeboy pm2 <projectId> status
-homeboy wp <projectId> plugin list
+homeboy pm2 <project_id> status
+homeboy wp <project_id> plugin list
 
-homeboy changes <componentId>
+homeboy changes <component_id>
 
-homeboy ssh <projectId>                 # interactive passthrough
-homeboy logs show <projectId> <path> --follow   # interactive passthrough
+homeboy ssh <project_id>                 # interactive passthrough
+homeboy logs show <project_id> <path> --follow   # interactive passthrough
 ```
 
 ## Docs
@@ -74,7 +74,7 @@ Common defaults:
 Common paths:
 
 - `projects/<id>.json`, `servers/<id>.json`, and `components/<id>.json` under the Homeboy config root
-- `modules/<moduleId>/<moduleId>.json` (module manifest; used by the module system)
+- `modules/<module_id>/<module_id>.json` (module manifest; used by the module system)
 
 Notes:
 

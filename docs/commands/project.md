@@ -33,12 +33,12 @@ homeboy project list
 ### `show`
 
 ```sh
-homeboy project show <projectId>
+homeboy project show <project_id>
 ```
 
 Arguments:
 
-- `<projectId>`: project ID
+- `<project_id>`: project ID
 
 ### `create`
 
@@ -55,7 +55,7 @@ Options:
 
 - `--json <spec>`: JSON input spec for create/update (single object or bulk; see below)
 - `--skip-existing`: skip items that already exist (JSON mode only)
-- `--server-id <serverId>`: optional server ID
+- `--server-id <server_id>`: optional server ID
 - `--base-path <path>`: optional base path (local or remote depending on server configuration)
 - `--table-prefix <prefix>`: optional table prefix (only used by modules that care about table naming)
 
@@ -93,7 +93,7 @@ CLI mode:
 ```json
 {
   "command": "project.create",
-  "project_id": "<projectId>",
+  "project_id": "<project_id>",
   "project": { }
 }
 ```
@@ -104,7 +104,7 @@ JSON mode:
 {
   "command": "project.create",
   "import": {
-    "results": [{ "id": "<projectId>", "action": "created|updated|skipped|error" }],
+    "results": [{ "id": "<project_id>", "action": "created|updated|skipped|error" }],
     "created": 1,
     "updated": 0,
     "skipped": 0,
@@ -151,9 +151,9 @@ Only these commands require `server_id`:
 ### `set`
 
 ```sh
-homeboy project set <projectId> --json <JSON>
-homeboy project set <projectId> '<JSON>'
-homeboy project set --json <JSON>   # projectId may be provided in JSON body
+homeboy project set <project_id> --json <JSON>
+homeboy project set <project_id> '<JSON>'
+homeboy project set --json <JSON>   # project_id may be provided in JSON body
 ```
 
 Updates a project by merging a JSON object into `projects/<id>.json`.
@@ -173,7 +173,7 @@ JSON output:
 ```json
 {
   "command": "project.set",
-  "project_id": "<projectId>",
+  "project_id": "<project_id>",
   "project": { },
   "updated": ["domain", "server_id"],
   "import": null
@@ -189,7 +189,7 @@ JSON output (`list`):
   "command": "project.list",
   "projects": [
     {
-      "id": "<projectId>",
+      "id": "<project_id>",
       "domain": "<domain>"
     }
   ]
@@ -203,7 +203,7 @@ JSON output (`show`):
 ```json
 {
   "command": "project.show",
-  "project_id": "<projectId>",
+  "project_id": "<project_id>",
   "project": { },
   "import": null
 }
@@ -222,7 +222,7 @@ Manage the list of components associated with a project.
 #### `components list`
 
 ```sh
-homeboy project components list <projectId>
+homeboy project components list <project_id>
 ```
 
 Lists component IDs and the resolved component configs.
@@ -232,11 +232,11 @@ JSON output:
 ```json
 {
   "command": "project.components.list",
-  "project_id": "<projectId>",
+  "project_id": "<project_id>",
   "components": {
     "action": "list",
-    "project_id": "<projectId>",
-    "component_ids": ["<componentId>", "<componentId>"],
+    "project_id": "<project_id>",
+    "component_ids": ["<component_id>", "<component_id>"],
     "components": [ { } ]
   }
 }
@@ -245,7 +245,7 @@ JSON output:
 #### `components add`
 
 ```sh
-homeboy project components add <projectId> <componentId> [<componentId>...]
+homeboy project components add <project_id> <component_id> [<component_id>...]
 ```
 
 Adds components to the project if they are not already present.
@@ -253,7 +253,7 @@ Adds components to the project if they are not already present.
 #### `components remove`
 
 ```sh
-homeboy project components remove <projectId> <componentId> [<componentId>...]
+homeboy project components remove <project_id> <component_id> [<component_id>...]
 ```
 
 Removes components from the project. Errors if any provided component ID is not currently attached.
@@ -261,7 +261,7 @@ Removes components from the project. Errors if any provided component ID is not 
 #### `components clear`
 
 ```sh
-homeboy project components clear <projectId>
+homeboy project components clear <project_id>
 ```
 
 Removes all components from the project.
@@ -269,7 +269,7 @@ Removes all components from the project.
 #### `components set`
 
 ```sh
-homeboy project components set <projectId> <componentId> [<componentId>...]
+homeboy project components set <project_id> <component_id> [<component_id>...]
 ```
 
 Replaces the full `component_ids` list on the project (deduped, order-preserving). Component IDs must exist in `homeboy component list`.
@@ -277,7 +277,7 @@ Replaces the full `component_ids` list on the project (deduped, order-preserving
 You can also do this via `project set` by merging `component_ids`:
 
 ```sh
-homeboy project set <projectId> --json '{"component_ids":["chubes-theme","chubes-blocks"]}'
+homeboy project set <project_id> --json '{"component_ids":["chubes-theme","chubes-blocks"]}'
 ```
 
 Example:
@@ -291,11 +291,11 @@ JSON output:
 ```json
 {
   "command": "project.components.set",
-  "project_id": "<projectId>",
+  "project_id": "<project_id>",
   "components": {
     "action": "set",
-    "project_id": "<projectId>",
-    "component_ids": ["<componentId>", "<componentId>"],
+    "project_id": "<project_id>",
+    "component_ids": ["<component_id>", "<component_id>"],
     "components": [ { } ]
   },
   "updated": ["component_ids"]
@@ -311,7 +311,7 @@ homeboy project pin <COMMAND>
 #### `pin list`
 
 ```sh
-homeboy project pin list <projectId> --type <file|log>
+homeboy project pin list <project_id> --type <file|log>
 ```
 
 JSON output:
@@ -319,10 +319,10 @@ JSON output:
 ```json
 {
   "command": "project.pin.list",
-  "project_id": "<projectId>",
+  "project_id": "<project_id>",
   "pin": {
     "action": "list",
-    "project_id": "<projectId>",
+    "project_id": "<project_id>",
     "type": "file|log",
     "items": [
       {
@@ -339,7 +339,7 @@ JSON output:
 #### `pin add`
 
 ```sh
-homeboy project pin add <projectId> <path> --type <file|log> [--label <label>] [--tail <lines>]
+homeboy project pin add <project_id> <path> --type <file|log> [--label <label>] [--tail <lines>]
 ```
 
 JSON output:
@@ -347,10 +347,10 @@ JSON output:
 ```json
 {
   "command": "project.pin.add",
-  "project_id": "<projectId>",
+  "project_id": "<project_id>",
   "pin": {
     "action": "add",
-    "project_id": "<projectId>",
+    "project_id": "<project_id>",
     "type": "file|log",
     "added": { "path": "<path>", "type": "file|log" }
   }
@@ -360,7 +360,7 @@ JSON output:
 #### `pin remove`
 
 ```sh
-homeboy project pin remove <projectId> <path> --type <file|log>
+homeboy project pin remove <project_id> <path> --type <file|log>
 ```
 
 JSON output:
@@ -368,10 +368,10 @@ JSON output:
 ```json
 {
   "command": "project.pin.remove",
-  "project_id": "<projectId>",
+  "project_id": "<project_id>",
   "pin": {
     "action": "remove",
-    "project_id": "<projectId>",
+    "project_id": "<project_id>",
     "type": "file|log",
     "removed": { "path": "<path>", "type": "file|log" }
   }

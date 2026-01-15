@@ -14,12 +14,12 @@ Note: some subcommands accept a `--json` flag for bulk operations.
 
 ### Single Component Mode
 
-- `status <componentId>`
-- `commit <componentId> [message-or-spec] [--json <spec>] [-m <message>] [--staged-only] [--files <paths>...]`
-- `push <componentId> [--tags]`
-- `pull <componentId>`
-- `tag <componentId> [tagName] [-m <message>]`
-  - If `tagName` is omitted, Homeboy tags `v<component version>` (from `homeboy version show`).
+- `status <component_id>`
+- `commit <component_id> [message-or-spec] [--json <spec>] [-m <message>] [--staged-only] [--files <paths>...]`
+- `push <component_id> [--tags]`
+- `pull <component_id>`
+- `tag <component_id> [tag_name] [-m <message>]`
+  - If `tag_name` is omitted, Homeboy tags `v<component version>` (from `homeboy version show`).
 
 ### Commit Options
 
@@ -35,10 +35,10 @@ All subcommands support `--cwd` for ad-hoc operations in any git directory witho
 
 - `status --cwd`
 - `commit --cwd [message] [-m <message>] [--staged-only] [--files <paths>...] [--json <spec>]`
-- `push --cwd [--tags]` (or omit `--cwd` and omit `<componentId>`)
-- `pull --cwd` (or omit `--cwd` and omit `<componentId>`)
-- `tag --cwd <tagName> [-m <message>]`
-  - Tag name is **required** when using `--cwd` (or when omitting `<componentId>`), since there is no component version to derive from.
+- `push --cwd [--tags]` (or omit `--cwd` and omit `<component_id>`)
+- `pull --cwd` (or omit `--cwd` and omit `<component_id>`)
+- `tag --cwd <tag_name> [-m <message>]`
+  - Tag name is **required** when using `--cwd` (or when omitting `<component_id>`), since there is no component version to derive from.
 
 **CWD commit examples:**
 
@@ -57,9 +57,9 @@ homeboy git commit --cwd --json '{"message":"Fix bug","staged_only":true}'
 
 `homeboy git commit` accepts a **JSON spec** for single or bulk commits.
 
-- You can pass the spec positionally: `homeboy git commit <componentId> '<json>'` (auto-detected as JSON)
-- Or pass a plain message positionally: `homeboy git commit <componentId> 'Update docs'`
-- Or explicitly: `homeboy git commit <componentId> --json '<json>'` (forces JSON mode)
+- You can pass the spec positionally: `homeboy git commit <component_id> '<json>'` (auto-detected as JSON)
+- Or pass a plain message positionally: `homeboy git commit <component_id> 'Update docs'`
+- Or explicitly: `homeboy git commit <component_id> --json '<json>'` (forces JSON mode)
 - The JSON spec value supports:
   - an inline JSON string
   - `-` to read from stdin
@@ -71,10 +71,10 @@ Homeboy auto-detects **single vs bulk** by checking for a top-level `components`
 
 All subcommands except `tag` support a `--json` flag for bulk operations across multiple components.
 
-- `status --json '<BulkIdsInput>'`
-- `commit --json '<BulkCommitInput>'` (or positional spec)
-- `push --json '<BulkIdsInput>'`
-- `pull --json '<BulkIdsInput>'`
+- `status --json '<bulk_ids_input>'`
+- `commit --json '<bulk_commit_input>'` (or positional spec)
+- `push --json '<bulk_ids_input>'`
+- `pull --json '<bulk_ids_input>'`
 
 `BulkIdsInput` uses `component_ids` (snake_case).
 
@@ -93,7 +93,7 @@ All subcommands except `tag` support a `--json` flag for bulk operations across 
 
 Notes:
 
-- `id` is optional when you also provide a `<componentId>` positional argument (or use `--cwd`).
+- `id` is optional when you also provide a `<component_id>` positional argument (or use `--cwd`).
 - `staged_only` defaults to `false`.
 - `files` is optional; when present, Homeboy runs `git add -- <files...>` instead of `git add .`.
 
@@ -128,7 +128,7 @@ Notes:
 
 ```json
 {
-  "component_id": "<componentId>",
+  "component_id": "<component_id>",
   "path": "<local path>",
   "action": "status|commit|push|pull|tag",
   "success": true,

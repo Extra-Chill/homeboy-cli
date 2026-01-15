@@ -8,15 +8,15 @@ homeboy logs <COMMAND>
 
 ## Subcommands
 
-- `list <projectId>`
-- `show <projectId> <path> [-n|--lines <lines>] [-f|--follow]`
-- `clear <projectId> <path>`
-- `search <projectId> <path> <pattern> [options]`
+- `list <project_id>`
+- `show <project_id> <path> [-n|--lines <lines>] [-f|--follow]`
+- `clear <project_id> <path>`
+- `search <project_id> <path> <pattern> [options]`
 
 ### `search`
 
 ```sh
-homeboy logs search <projectId> <path> <pattern> [options]
+homeboy logs search <project_id> <path> <pattern> [options]
 ```
 
 Options:

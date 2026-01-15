@@ -64,7 +64,7 @@ homeboy module list
 Run a module-provided tool via the module system:
 
 ```bash
-homeboy module run <moduleId> --project <projectId>
+homeboy module run <module_id> --project <project_id>
 ```
 
 ### Database Queries (Read-Only)
@@ -93,8 +93,8 @@ homeboy changes <component> --git-diffs           # Include full diff output
 ```
 
 Output includes:
-- `latestTag` - Most recent git tag (or null)
-- `baselineSource` - How baseline was determined: `tag`, `version_commit`, or `last_n_commits`
+- `latest_tag` - Most recent git tag (or null)
+- `baseline_source` - How baseline was determined: `tag`, `version_commit`, or `last_n_commits`
 - `commits` - Commits since baseline
 - `uncommitted` - Staged, unstaged, and untracked files
 - `warning` - Alert if no tags found (showing fallback baseline)
@@ -118,13 +118,13 @@ Use `--json` flag to operate on multiple components at once:
 homeboy git commit --json '{"components":[{"id":"comp1","message":"msg1"},{"id":"comp2","message":"msg2"}]}'
 
 # Bulk status check
-homeboy git status --json '{"componentIds":["comp1","comp2","comp3"]}'
+homeboy git status --json '{"component_ids":["comp1","comp2","comp3"]}'
 
 # Bulk push with tags
-homeboy git push --json '{"componentIds":["comp1","comp2"],"tags":true}'
+homeboy git push --json '{"component_ids":["comp1","comp2"],"tags":true}'
 
 # Bulk pull
-homeboy git pull --json '{"componentIds":["comp1","comp2"]}'
+homeboy git pull --json '{"component_ids":["comp1","comp2"]}'
 ```
 
 JSON input supports:
@@ -138,7 +138,7 @@ homeboy changelog add <component> "message"  # Add single entry
 homeboy changelog add --cwd "message"        # Add to cwd changelog
 
 # Bulk add with JSON
-homeboy changelog add --json '{"componentId":"comp1","messages":["Change 1","Change 2"]}'
+homeboy changelog add --json '{"component_id":"comp1","messages":["Change 1","Change 2"]}'
 ```
 
 ### Version Management (Component-Scoped)

@@ -3,14 +3,14 @@
 ## Synopsis
 
 ```sh
-homeboy deploy <projectId> [<componentIds...>] [-c|--component <id>]... [--all] [--outdated] [--dry-run] [--json '<spec>']
+homeboy deploy <project_id> [<component_ids...>] [-c|--component <id>]... [--all] [--outdated] [--dry-run] [--json '<spec>']
 # If no component IDs are provided, you must use --all or --outdated.
 ```
 
 ## Arguments and flags
 
-- `projectId`: project ID
-- `<componentIds...>` (optional): component IDs to deploy (positional, trailing)
+- `project_id`: project ID
+- `<component_ids...>` (optional): component IDs to deploy (positional, trailing)
 
 Options:
 
@@ -38,13 +38,13 @@ If no component IDs are provided and neither `--all` nor `--outdated` is set, Ho
 ```json
 {
   "command": "deploy.run",
-  "project_id": "<projectId>",
+  "project_id": "<project_id>",
   "all": false,
   "outdated": false,
   "dry_run": false,
   "results": [
     {
-      "id": "<componentId>",
+      "id": "<component_id>",
       "name": "<name>",
       "status": "deployed|failed|skipped|planned",
       "deploy_reason": "explicitly_selected|all_selected|version_mismatch|unknown_local_version|unknown_remote_version",

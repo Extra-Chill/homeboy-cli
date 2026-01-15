@@ -11,24 +11,24 @@ homeboy db <COMMAND>
 ### `tables`
 
 ```sh
-homeboy db tables <projectId> [<subtarget>] [<args...>]
+homeboy db tables <project_id> [<subtarget>] [<args...>]
 ```
 
 ### `describe`
 
 ```sh
-homeboy db describe <projectId> [<subtarget>] <table>
+homeboy db describe <project_id> [<subtarget>] <table>
 ```
 
 Notes:
 
-- Subtargets are only recognized if the project has `subTargets` configured.
+- Subtargets are only recognized if the project has `sub_targets` configured.
 - The first trailing arg is treated as `<subtarget>` if it matches by slug or name; otherwise it is treated as the `<table>`.
 
 ### `query`
 
 ```sh
-homeboy db query <projectId> [<subtarget>] <sql...>
+homeboy db query <project_id> [<subtarget>] <sql...>
 ```
 
 Note: `query` is intended for SELECT-only operations. Non-SELECT statements are rejected.
@@ -36,7 +36,7 @@ Note: `query` is intended for SELECT-only operations. Non-SELECT statements are 
 ### `search`
 
 ```sh
-homeboy db search <projectId> <table> --column <column> --pattern <pattern> [options]
+homeboy db search <project_id> <table> --column <column> --pattern <pattern> [options]
 ```
 
 Options:
@@ -60,23 +60,23 @@ homeboy db search mysite wp_posts --column post_status --exact --pattern publish
 ### `delete-row`
 
 ```sh
-homeboy db delete-row <projectId> [<subtarget>] <table> <rowId>
+homeboy db delete-row <project_id> [<subtarget>] <table> <row_id>
 ```
 
 Notes:
 
-- `<rowId>` must be numeric.
+- `<row_id>` must be numeric.
 
 ### `drop-table`
 
 ```sh
-homeboy db drop-table <projectId> [<subtarget>] <table>
+homeboy db drop-table <project_id> [<subtarget>] <table>
 ```
 
 ### `tunnel`
 
 ```sh
-homeboy db tunnel <projectId> [--local-port <port>]
+homeboy db tunnel <project_id> [--local-port <port>]
 ```
 
 ## JSON output

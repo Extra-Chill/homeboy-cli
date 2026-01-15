@@ -11,13 +11,13 @@ homeboy module <COMMAND>
 ### `list`
 
 ```sh
-homeboy module list [-p|--project <projectId>]
+homeboy module list [-p|--project <project_id>]
 ```
 
 ### `run`
 
 ```sh
-homeboy module run <moduleId> [-p|--project <projectId>] [-c|--component <componentId>] [-i|--input <key=value>]... [<args...>]
+homeboy module run <module_id> [-p|--project <project_id>] [-c|--component <component_id>] [-i|--input <key=value>]... [<args...>]
 ```
 
 - `--project` is required when the module needs project context.
@@ -28,24 +28,24 @@ homeboy module run <moduleId> [-p|--project <projectId>] [-c|--component <compon
 ### `setup`
 
 ```sh
-homeboy module setup <moduleId>
+homeboy module setup <module_id>
 ```
 
 ### `install`
 
 ```sh
-homeboy module install <source> [--id <moduleId>]
+homeboy module install <source> [--id <module_id>]
 ```
 
 Installs a module into Homeboy's modules directory.
 
-- If `<source>` is a git URL, Homeboy clones it and writes `sourceUrl` into the installed module's `<moduleId>.json` manifest.
+- If `<source>` is a git URL, Homeboy clones it and writes `sourceUrl` into the installed module's `<module_id>.json` manifest.
 - If `<source>` is a local path, Homeboy symlinks the directory into the modules directory.
 
 ### `update`
 
 ```sh
-homeboy module update <moduleId>
+homeboy module update <module_id>
 ```
 
 Updates a git-cloned module.
@@ -57,7 +57,7 @@ Updates a git-cloned module.
 ### `uninstall`
 
 ```sh
-homeboy module uninstall <moduleId>
+homeboy module uninstall <module_id>
 ```
 
 Uninstalls a module.
@@ -68,7 +68,7 @@ Uninstalls a module.
 ### `action`
 
 ```sh
-homeboy module action <moduleId> <actionId> [-p|--project <projectId>] [--data <json>]
+homeboy module action <module_id> <action_id> [-p|--project <project_id>] [--data <json>]
 ```
 
 Executes an action defined in the module manifest.
@@ -80,8 +80,8 @@ Executes an action defined in the module manifest.
 
 Homeboy builds an **effective settings** map for each module by merging settings across scopes, in order (later scopes override earlier ones):
 
-1. Project (`projects/<projectId>.json`): `scoped_modules.<moduleId>.settings`
-2. Component (`components/<componentId>.json`): `scoped_modules.<moduleId>.settings`
+1. Project (`projects/<project_id>.json`): `scoped_modules.<module_id>.settings`
+2. Component (`components/<component_id>.json`): `scoped_modules.<module_id>.settings`
 
 When running a module, Homeboy passes an execution context via environment variables:
 
@@ -95,11 +95,11 @@ Modules can define additional environment variables via `runtime.env` in their m
 
 Module settings validation currently happens during module execution (and may also be checked by other commands). There is no dedicated validation-only command in the CLI.
 
-`homeboy module run` requires the module to be installed/linked under the Homeboy modules directory (discovered by scanning `<config dir>/homeboy/modules/<moduleId>/<moduleId>.json`). There is no separate "installedModules in global config" requirement.
+`homeboy module run` requires the module to be installed/linked under the Homeboy modules directory (discovered by scanning `<config dir>/homeboy/modules/<module_id>/<module_id>.json`). There is no separate "installedModules in global config" requirement.
 
 ## Runtime Configuration
 
-Executable modules define their runtime behavior in their module manifest (`modules/<moduleId>/<moduleId>.json`):
+Executable modules define their runtime behavior in their module manifest (`modules/<module_id>/<module_id>.json`):
 
 ```json
 {

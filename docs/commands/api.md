@@ -3,45 +3,45 @@
 ## Synopsis
 
 ```sh
-homeboy api <projectId> <COMMAND>
+homeboy api <project_id> <COMMAND>
 ```
 
 ## Description
 
 Make HTTP requests to a project’s configured API.
 
-This command uses the project’s API configuration (`projects/<projectId>.json`) and any stored authentication (see `homeboy auth`).
+This command uses the project’s API configuration (`projects/<project_id>.json`) and any stored authentication (see `homeboy auth`).
 
 ## Subcommands
 
 ### `get`
 
 ```sh
-homeboy api <projectId> get <endpoint>
+homeboy api <project_id> get <endpoint>
 ```
 
 ### `post`
 
 ```sh
-homeboy api <projectId> post <endpoint> [--body <json>]
+homeboy api <project_id> post <endpoint> [--body <json>]
 ```
 
 ### `put`
 
 ```sh
-homeboy api <projectId> put <endpoint> [--body <json>]
+homeboy api <project_id> put <endpoint> [--body <json>]
 ```
 
 ### `patch`
 
 ```sh
-homeboy api <projectId> patch <endpoint> [--body <json>]
+homeboy api <project_id> patch <endpoint> [--body <json>]
 ```
 
 ### `delete`
 
 ```sh
-homeboy api <projectId> delete <endpoint>
+homeboy api <project_id> delete <endpoint>
 ```
 
 ## Notes

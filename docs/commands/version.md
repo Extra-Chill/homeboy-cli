@@ -11,21 +11,21 @@ homeboy version <COMMAND>
 ### `show`
 
 ```sh
-homeboy version show [<componentId>]
+homeboy version show [<component_id>]
 homeboy version show --cwd
 ```
 
 ### `bump`
 
 ```sh
-homeboy version bump [<componentId>] <patch|minor|major>
+homeboy version bump [<component_id>] <patch|minor|major>
 homeboy version bump --cwd <patch|minor|major>
 ```
 
 ### `set`
 
 ```sh
-homeboy version set [<componentId>] <newVersion>
+homeboy version set [<component_id>] <new_version>
 ```
 
 `set` writes the version targets directly without incrementing and does not finalize the changelog.
@@ -37,14 +37,14 @@ Both subcommands support `--cwd` for ad-hoc operations in any directory without 
 This command:
 
 - Bumps all configured `version_targets` using semantic versioning (X.Y.Z).
-- Finalizes the component changelog by moving the current "next" section (usually `Unreleased`) into a new `## [<newVersion>] - YYYY-MM-DD` section.
+- Finalizes the component changelog by moving the current "next" section (usually `Unreleased`) into a new `## [<new_version>] - YYYY-MM-DD` section.
 
 Changelog entries must be added *before* running this command (recommended: `homeboy changelog add --json ...`).
 
 Recommended release workflow (non-enforced):
 
 - Land work as scoped feature/fix commits first.
-- Use `homeboy changes <componentId>` to review everything since the last tag.
+- Use `homeboy changes <component_id>` to review everything since the last tag.
 - Add changelog items as user-facing release notes that capture anything impacting user or developer experience (not a copy of commit subjects).
 - Run `homeboy version bump ...` when the only remaining local changes are release metadata (changelog + version).
 
@@ -52,7 +52,7 @@ In this version of Homeboy, the `--json` flag is on `changelog add` (not on `cha
 
 Arguments:
 
-- `<componentId>`: component ID
+- `<component_id>`: component ID
 - `<patch|minor|major>`: version bump type
 
 ## JSON output

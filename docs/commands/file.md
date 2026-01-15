@@ -8,18 +8,18 @@ homeboy file <COMMAND>
 
 ## Subcommands
 
-- `list <projectId> <path>`
-- `read <projectId> <path>`
-- `write <projectId> <path>` (reads content from stdin)
-- `delete <projectId> <path> [-r|--recursive]` (delete directories recursively)
-- `rename <projectId> <oldPath> <newPath>`
-- `find <projectId> <path> [options]` (search for files by name)
-- `grep <projectId> <path> <pattern> [options]` (search file contents)
+- `list <project_id> <path>`
+- `read <project_id> <path>`
+- `write <project_id> <path>` (reads content from stdin)
+- `delete <project_id> <path> [-r|--recursive]` (delete directories recursively)
+- `rename <project_id> <old_path> <new_path>`
+- `find <project_id> <path> [options]` (search for files by name)
+- `grep <project_id> <path> <pattern> [options]` (search file contents)
 
 ### `find`
 
 ```sh
-homeboy file find <projectId> <path> [options]
+homeboy file find <project_id> <path> [options]
 ```
 
 Options:
@@ -44,7 +44,7 @@ homeboy file find mysite /var/www --name "*.log" --max-depth 2
 ### `grep`
 
 ```sh
-homeboy file grep <projectId> <path> <pattern> [options]
+homeboy file grep <project_id> <path> <pattern> [options]
 ```
 
 Options:

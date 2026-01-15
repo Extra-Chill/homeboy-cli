@@ -26,7 +26,7 @@ This prints raw markdown to stdout.
 ### `add`
 
 ```sh
-homeboy changelog add <componentId> <message>
+homeboy changelog add <component_id> <message>
 homeboy changelog add --cwd <message>
 homeboy changelog add --json <spec>
 ```
@@ -41,9 +41,9 @@ Notes:
 ### `init`
 
 ```sh
-homeboy changelog init <componentId>
-homeboy changelog init <componentId> --path "docs/CHANGELOG.md"
-homeboy changelog init <componentId> --configure
+homeboy changelog init <component_id>
+homeboy changelog init <component_id> --path "docs/CHANGELOG.md"
+homeboy changelog init <component_id> --configure
 homeboy changelog init --cwd
 ```
 
@@ -118,7 +118,7 @@ This section applies only when JSON output is used.
 ```json
 {
   "command": "add",
-  "component_id": "<componentId>",
+  "component_id": "<component_id>",
   "changelog_path": "<absolute/or/resolved/path.md>",
   "next_section_label": "<label>",
   "messages": ["<message>", "<message>"],
@@ -130,7 +130,7 @@ This section applies only when JSON output is used.
 Bulk JSON input uses a single object (not an array):
 
 ```json
-{ "component_id": "<componentId>", "messages": ["<message>"] }
+{ "component_id": "<component_id>", "messages": ["<message>"] }
 ```
 
 ### JSON output (init)
@@ -138,7 +138,7 @@ Bulk JSON input uses a single object (not an array):
 ```json
 {
   "command": "init",
-  "component_id": "<componentId>",
+  "component_id": "<component_id>",
   "changelog_path": "<absolute/path/to/CHANGELOG.md>",
   "initial_version": "0.3.2",
   "next_section_label": "Unreleased",

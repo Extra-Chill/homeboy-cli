@@ -3,13 +3,13 @@
 ## Synopsis
 
 ```sh
-homeboy changes <componentId> [--since <tag>] [--git-diffs]
+homeboy changes <component_id> [--since <tag>] [--git-diffs]
 homeboy changes --cwd [--git-diffs]
 homeboy changes --json <spec> [--git-diffs]
 
 # Project mode
-homeboy changes --project <projectId> [<componentIds...>] [--git-diffs]
-homeboy changes <projectId> <componentId> [<componentId>...] [--git-diffs]
+homeboy changes --project <project_id> [<component_ids...>] [--git-diffs]
+homeboy changes <project_id> <component_id> [<component_id>...] [--git-diffs]
 ```
 
 ## Description
@@ -33,9 +33,9 @@ Release workflow note:
 - `--json <spec>`: bulk mode input
   - Priority: `--cwd > --json > --project > positional`
   - `<spec>` supports `-` (stdin), `@file.json`, or an inline JSON string
-  - Spec format: `{ "componentIds": ["id1", "id2"] }`
-- `--project <projectId>`: show changes for all components attached to a project
-  - If you also pass positional `<componentIds...>`, Homeboy only returns changes for those components
+  - Spec format: `{ "component_ids": ["id1", "id2"] }`
+- `--project <project_id>`: show changes for all components attached to a project
+  - If you also pass positional `<component_ids...>`, Homeboy only returns changes for those components
 - `--since <tag>`: tag name to compare against (single-component mode only)
 - `--git-diffs`: include commit-range diff content in output
 
@@ -47,7 +47,7 @@ Release workflow note:
 
 ```json
 {
-  "component_id": "<componentId>",
+  "component_id": "<component_id>",
   "path": "<local path>",
   "success": true,
   "latest_tag": "<tag>|null",
@@ -86,8 +86,8 @@ Notes:
   "action": "changes",
   "results": [
     {
-      "id": "<componentId>",
-      "component_id": "<componentId>",
+      "id": "<component_id>",
+      "component_id": "<component_id>",
       "path": "<local path>",
       "success": true,
       "commits": [...],

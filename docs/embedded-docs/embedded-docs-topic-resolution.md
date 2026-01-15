@@ -4,7 +4,7 @@ Homeboy embeds markdown files from `homeboy/docs/` into the CLI binary at build 
 
 In addition, `homeboy docs` reads documentation provided by installed modules. For each installed module, it looks under:
 
-- `dirs::config_dir()/homeboy/modules/<moduleId>/docs/`
+- `dirs::config_dir()/homeboy/modules/<module_id>/docs/`
 
 Module docs use the same key format as embedded docs (relative path within the module's `docs/` directory, without `.md`).
 

@@ -79,12 +79,12 @@ Create based on workspace docs:
 
 **Project** (deployable environment with domain):
 ```bash
-homeboy project create "<name>" <domain> --server <serverId> --module <moduleId>
+homeboy project create "<name>" <domain> --server <server_id> --module <module_id>
 ```
 
 **Component** (buildable/deployable unit):
 ```bash
-homeboy component create "<name>" --local-path "." --remote-path "<path>" --project <projectId>
+homeboy component create "<name>" --local-path "." --remote-path "<path>" --project <project_id>
 homeboy component set <id> --build-command "./build.sh" --build-artifact "build/<name>.zip"
 ```
 
@@ -94,7 +94,7 @@ homeboy component set <id> --build-command "./build.sh" --build-artifact "build/
 2. **remotePath**: Match existing component patterns in target project
 3. **buildArtifact/buildCommand**: From build.sh, Makefile, or workspace docs
 4. **domain**: ASK (cannot derive locally)
-5. **serverId**: Auto-select if only one exists
+5. **server_id**: Auto-select if only one exists
 
 ## Verification
 

@@ -17,7 +17,7 @@ Authentication is scoped per project ID.
 ### `login`
 
 ```sh
-homeboy auth login --project <projectId> [--identifier <usernameOrEmail>] [--password <password>]
+homeboy auth login --project <project_id> [--identifier <username_or_email>] [--password <password>]
 ```
 
 If `--identifier` or `--password` are omitted, Homeboy prompts on stderr and reads from stdin.
@@ -25,13 +25,13 @@ If `--identifier` or `--password` are omitted, Homeboy prompts on stderr and rea
 ### `logout`
 
 ```sh
-homeboy auth logout --project <projectId>
+homeboy auth logout --project <project_id>
 ```
 
 ### `status`
 
 ```sh
-homeboy auth status --project <projectId>
+homeboy auth status --project <project_id>
 ```
 
 ## Output

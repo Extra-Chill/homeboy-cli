@@ -6,6 +6,12 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## 0.16.0
+
+- **BREAKING**: JSON output now uses native snake_case field names (e.g., project_id, server_id, base_path)
+- Remove all serde camelCase conversion annotations
+- Consolidate json module into config and output modules
+
 ## 0.15.0
 
 - Added bulk merge support for component/project/server set commands

@@ -34,11 +34,24 @@ By default, `commit` stages all changes before committing. Use these flags for g
 All subcommands support `--cwd` for ad-hoc operations in any git directory without requiring component registration:
 
 - `status --cwd`
-- `commit --cwd [-m <message>] [--staged-only] [--files <paths>...] [spec|--json <spec>]`
+- `commit --cwd [message] [-m <message>] [--staged-only] [--files <paths>...] [--json <spec>]`
 - `push --cwd [--tags]` (or omit `--cwd` and omit `<componentId>`)
 - `pull --cwd` (or omit `--cwd` and omit `<componentId>`)
 - `tag --cwd <tagName> [-m <message>]`
   - Tag name is **required** when using `--cwd` (or when omitting `<componentId>`), since there is no component version to derive from.
+
+**CWD commit examples:**
+
+```sh
+# Positional message (auto-shifted from component_id position)
+homeboy git commit --cwd "Fix the bug"
+
+# Explicit -m flag (also works)
+homeboy git commit --cwd -m "Fix the bug"
+
+# JSON spec with --cwd
+homeboy git commit --cwd --json '{"message":"Fix bug","stagedOnly":true}'
+```
 
 ### JSON Spec Mode (commit)
 

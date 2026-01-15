@@ -149,6 +149,14 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             staged_only,
             files,
         } => {
+            // When --cwd is set, component_id is ignored. If user passed a positional
+            // argument it was likely intended as the message/spec. Shift it.
+            let effective_spec = if cwd && component_id.is_some() && spec.is_none() {
+                component_id.clone()
+            } else {
+                spec.clone()
+            };
+
             // Explicit --json flag always uses JSON mode
             if let Some(json_spec) = json {
                 let target = if cwd { None } else { component_id.as_deref() };
@@ -166,7 +174,7 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             }
 
             // Auto-detect: check if positional spec looks like JSON or is a plain message
-            let (inferred_message, json_spec) = match &spec {
+            let (inferred_message, json_spec) = match &effective_spec {
                 Some(s) => {
                     let trimmed = s.trim();
                     // JSON indicators: starts with { or [, uses @file, or - for stdin

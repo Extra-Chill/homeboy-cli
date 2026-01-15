@@ -40,9 +40,9 @@ JSON output is wrapped in the global envelope.
 
 `data` is one of:
 
-- `{ "command": "login", "projectId": "...", "success": true }`
-- `{ "command": "logout", "projectId": "..." }`
-- `{ "command": "status", "projectId": "...", "authenticated": true }`
+- `{ "command": "login", "project_id": "...", "success": true }`
+- `{ "command": "logout", "project_id": "..." }`
+- `{ "command": "status", "project_id": "...", "authenticated": true }`
 
 Note: `command` is a tagged enum value (`login|logout|status`), and fields are camelCase (`projectId`).
 

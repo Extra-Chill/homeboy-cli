@@ -110,7 +110,7 @@ Notes:
 
 ```json
 {
-  "componentIds": ["extra-chill-multisite", "extra-chill-api"],
+  "component_ids": ["extra-chill-multisite", "extra-chill-api"],
   "tags": true
 }
 ```
@@ -126,7 +126,7 @@ Notes:
 
 ```json
 {
-  "componentId": "<componentId>",
+  "component_id": "<componentId>",
   "path": "<local path>",
   "action": "status|commit|push|pull|tag",
   "success": true,
@@ -143,7 +143,7 @@ Notes:
   "action": "status|commit|push|pull",
   "results": [
     {
-      "componentId": "extra-chill-multisite",
+      "component_id": "extra-chill-multisite",
       "path": "/path/to/component",
       "action": "commit",
       "success": true,
@@ -152,7 +152,7 @@ Notes:
       "stderr": ""
     },
     {
-      "componentId": "extra-chill-api",
+      "component_id": "extra-chill-api",
       "path": "/path/to/component",
       "action": "commit",
       "success": false,
@@ -214,13 +214,13 @@ homeboy git commit --json '{"components":[{"id":"extra-chill-multisite","message
 homeboy git commit --json '{"components":[{"id":"extra-chill-multisite","message":"Release prep","stagedOnly":true}]}'
 
 # Bulk status check
-homeboy git status --json '{"componentIds":["extra-chill-multisite","extra-chill-api","extra-chill-users"]}'
+homeboy git status --json '{"component_ids":["extra-chill-multisite","extra-chill-api","extra-chill-users"]}'
 
 # Bulk push with tags
-homeboy git push --json '{"componentIds":["extra-chill-multisite","extra-chill-api"],"tags":true}'
+homeboy git push --json '{"component_ids":["extra-chill-multisite","extra-chill-api"],"tags":true}'
 
 # Bulk pull
-homeboy git pull --json '{"componentIds":["extra-chill-multisite","extra-chill-api"]}'
+homeboy git pull --json '{"component_ids":["extra-chill-multisite","extra-chill-api"]}'
 ```
 
 ## Related

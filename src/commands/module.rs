@@ -118,7 +118,7 @@ pub fn run(args: ModuleArgs, _global: &crate::commands::GlobalArgs) -> CmdResult
 }
 
 #[derive(Serialize)]
-#[serde(tag = "command", rename_all = "camelCase")]
+#[serde(tag = "command")]
 pub enum ModuleOutput {
     #[serde(rename = "module.list")]
     List {
@@ -171,7 +171,7 @@ pub enum ModuleOutput {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ModuleEntry {
     pub id: String,
     pub name: String,

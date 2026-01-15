@@ -84,7 +84,7 @@ pub fn run(args: LogsArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<L
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct LogsOutput {
     pub command: String,
     pub project_id: String,

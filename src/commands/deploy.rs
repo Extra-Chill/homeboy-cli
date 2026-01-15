@@ -31,7 +31,7 @@ pub struct DeployArgs {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DeployOutput {
     pub command: String,
     pub project_id: String,

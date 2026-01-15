@@ -9,28 +9,22 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct VersionTarget {
     pub file: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pattern: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChangelogTarget {
-    pub file: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ScopedModuleConfig {
     #[serde(default)]
     pub settings: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct Component {
     #[serde(skip_deserializing)]
     pub id: String,
@@ -44,7 +38,7 @@ pub struct Component {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version_targets: Option<Vec<VersionTarget>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub changelog_targets: Option<Vec<ChangelogTarget>>,
+    pub changelog_target: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub changelog_next_section_label: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,7 +63,7 @@ impl Component {
             build_artifact,
             scoped_modules: None,
             version_targets: None,
-            changelog_targets: None,
+            changelog_target: None,
             changelog_next_section_label: None,
             changelog_next_section_aliases: None,
             build_command: None,
@@ -266,19 +260,10 @@ pub fn update(
     })
 }
 
-/// Add a changelog target to a component's configuration.
-pub fn add_changelog_target(component_id: &str, file_path: &str) -> Result<()> {
+/// Set the changelog target for a component's configuration.
+pub fn set_changelog_target(component_id: &str, file_path: &str) -> Result<()> {
     let mut component = load(component_id)?;
-
-    let target = ChangelogTarget {
-        file: file_path.to_string(),
-    };
-
-    match &mut component.changelog_targets {
-        Some(targets) => targets.push(target),
-        None => component.changelog_targets = Some(vec![target]),
-    }
-
+    component.changelog_target = Some(file_path.to_string());
     save(&component)
 }
 

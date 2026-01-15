@@ -33,14 +33,14 @@ pub enum SshSubcommand {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(tag = "action", rename_all = "camelCase")]
+#[serde(tag = "action")]
 pub enum SshOutput {
     Connect(SshConnectOutput),
     List(SshListOutput),
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct SshConnectOutput {
     pub resolved_type: String,
     pub project_id: Option<String>,
@@ -49,7 +49,7 @@ pub struct SshConnectOutput {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct SshListOutput {
     pub servers: Vec<Server>,
 }

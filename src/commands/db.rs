@@ -86,7 +86,7 @@ enum DbCommand {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DbOutput {
     pub command: String,
     #[serde(flatten)]

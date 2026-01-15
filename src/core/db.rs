@@ -14,7 +14,7 @@ const DEFAULT_DATABASE_HOST: &str = "127.0.0.1";
 const DEFAULT_LOCAL_DB_PORT: u16 = 33306;
 
 #[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DbResult {
     pub project_id: String,
     pub base_path: Option<String>,
@@ -30,7 +30,7 @@ pub struct DbResult {
 }
 
 #[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DbTunnelInfo {
     pub local_port: u16,
     pub remote_host: String,
@@ -40,7 +40,7 @@ pub struct DbTunnelInfo {
 }
 
 #[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DbTunnelResult {
     pub project_id: String,
     pub base_path: Option<String>,

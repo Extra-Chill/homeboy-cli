@@ -209,7 +209,7 @@ fn resolve_version_file_path(local_path: &str, file: &str) -> String {
 
 /// Information about a version target after reading
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct VersionTargetInfo {
     pub file: String,
     pub pattern: String,
@@ -219,7 +219,7 @@ pub struct VersionTargetInfo {
 
 /// Result of reading a component's version
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ComponentVersionInfo {
     pub version: String,
     pub targets: Vec<VersionTargetInfo>,
@@ -227,7 +227,7 @@ pub struct ComponentVersionInfo {
 
 /// Result of bumping a component's version
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct BumpResult {
     pub old_version: String,
     pub new_version: String,
@@ -361,7 +361,7 @@ pub fn read_version(component_id: Option<&str>) -> Result<ComponentVersionInfo> 
 
 /// Result of directly setting a component's version
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct SetResult {
     pub old_version: String,
     pub new_version: String,

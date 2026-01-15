@@ -113,8 +113,8 @@ This section applies only when JSON output is used.
 ```json
 {
   "command": "add",
-  "componentId": "<componentId>",
-  "changelogPath": "<absolute/or/resolved/path.md>",
+  "component_id": "<componentId>",
+  "changelog_path": "<absolute/or/resolved/path.md>",
   "nextSectionLabel": "<label>",
   "messages": ["<message>", "<message>"],
   "itemsAdded": 2,
@@ -127,8 +127,8 @@ This section applies only when JSON output is used.
 ```json
 {
   "command": "init",
-  "componentId": "<componentId>",
-  "changelogPath": "<absolute/path/to/CHANGELOG.md>",
+  "component_id": "<componentId>",
+  "changelog_path": "<absolute/path/to/CHANGELOG.md>",
   "initialVersion": "0.3.2",
   "nextSectionLabel": "Unreleased",
   "created": true,

@@ -6,7 +6,7 @@ use crate::error::{Error, Result};
 use crate::{base_path, shell, token};
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct FileEntry {
     pub name: String,
     pub path: String,
@@ -16,7 +16,7 @@ pub struct FileEntry {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ListResult {
     pub base_path: Option<String>,
     pub path: String,
@@ -24,7 +24,7 @@ pub struct ListResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ReadResult {
     pub base_path: Option<String>,
     pub path: String,
@@ -32,7 +32,7 @@ pub struct ReadResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct WriteResult {
     pub base_path: Option<String>,
     pub path: String,
@@ -40,7 +40,7 @@ pub struct WriteResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DeleteResult {
     pub base_path: Option<String>,
     pub path: String,
@@ -48,7 +48,7 @@ pub struct DeleteResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct RenameResult {
     pub base_path: Option<String>,
     pub old_path: String,
@@ -221,7 +221,7 @@ pub fn rename(project_id: &str, old_path: &str, new_path: &str) -> Result<Rename
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct FindResult {
     pub base_path: Option<String>,
     pub path: String,
@@ -230,7 +230,7 @@ pub struct FindResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct GrepMatch {
     pub file: String,
     pub line: u32,
@@ -238,7 +238,7 @@ pub struct GrepMatch {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct GrepResult {
     pub base_path: Option<String>,
     pub path: String,

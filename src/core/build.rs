@@ -9,7 +9,7 @@ use crate::ssh::execute_local_command_in_dir;
 // === Public API ===
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct BuildOutput {
     pub command: String,
     pub component_id: String,

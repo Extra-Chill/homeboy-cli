@@ -124,7 +124,7 @@ enum ProjectComponentsCommand {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ProjectComponentsOutput {
     pub action: String,
     pub project_id: String,
@@ -133,7 +133,7 @@ pub struct ProjectComponentsOutput {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ProjectListItem {
     id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -141,7 +141,7 @@ pub struct ProjectListItem {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ProjectPinOutput {
     pub action: String,
     pub project_id: String,
@@ -155,7 +155,7 @@ pub struct ProjectPinOutput {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ProjectPinListItem {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -166,7 +166,7 @@ pub struct ProjectPinListItem {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ProjectPinChange {
     pub path: String,
     pub r#type: String,
@@ -217,7 +217,7 @@ enum ProjectPinType {
 }
 
 #[derive(Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ProjectOutput {
     command: String,
     #[serde(skip_serializing_if = "Option::is_none")]

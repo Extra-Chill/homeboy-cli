@@ -10,7 +10,7 @@ use crate::ssh::SshClient;
 // === Local Context Detection (homeboy context command) ===
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ComponentGap {
     pub field: String,
     pub reason: String,
@@ -18,7 +18,7 @@ pub struct ComponentGap {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ContainedComponentInfo {
     pub id: String,
     pub build_artifact: String,
@@ -30,7 +30,7 @@ pub struct ContainedComponentInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ProjectContext {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -38,7 +38,7 @@ pub struct ProjectContext {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ContextOutput {
     pub command: String,
     pub cwd: String,
@@ -205,10 +205,10 @@ fn build_component_info(component: &component::Component) -> ContainedComponentI
         });
     }
 
-    // Check for CHANGELOG.md without changelogTargets
-    if component.changelog_targets.is_none() && local_path.join("CHANGELOG.md").exists() {
+    // Check for CHANGELOG.md without changelogTarget
+    if component.changelog_target.is_none() && local_path.join("CHANGELOG.md").exists() {
         gaps.push(ComponentGap {
-            field: "changelogTargets".to_string(),
+            field: "changelogTarget".to_string(),
             reason: "CHANGELOG.md exists".to_string(),
             command: format!(
                 "homeboy component set {} --changelog-target \"CHANGELOG.md\"",
@@ -229,7 +229,7 @@ fn build_component_info(component: &component::Component) -> ContainedComponentI
 // === Repository Discovery ===
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DiscoveredRepo {
     pub path: String,
     pub name: String,
@@ -238,7 +238,7 @@ pub struct DiscoveredRepo {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DiscoverOutput {
     pub command: String,
     pub base_path: String,

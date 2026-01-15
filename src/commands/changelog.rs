@@ -53,20 +53,20 @@ pub enum ChangelogCommand {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ChangelogShowOutput {
     pub topic_label: String,
     pub content: String,
 }
 
 #[derive(Serialize)]
-#[serde(tag = "command", rename_all = "camelCase")]
+#[serde(tag = "command")]
 pub enum ChangelogOutput {
-    #[serde(rename_all = "camelCase")]
+    
     Show(ChangelogShowOutput),
-    #[serde(rename_all = "camelCase")]
+    
     Add(AddItemsOutput),
-    #[serde(rename_all = "camelCase")]
+    
     Init(InitOutput),
 }
 

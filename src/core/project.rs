@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct Project {
     #[serde(skip)]
     pub id: String,
@@ -103,21 +103,21 @@ impl ConfigEntity for Project {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ScopedModuleConfig {
     #[serde(default)]
     pub settings: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct RemoteFileConfig {
     #[serde(default)]
     pub pinned_files: Vec<PinnedRemoteFile>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+
 pub struct PinnedRemoteFile {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -133,14 +133,14 @@ impl PinnedRemoteFile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct RemoteLogConfig {
     #[serde(default)]
     pub pinned_logs: Vec<PinnedRemoteLog>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+
 pub struct PinnedRemoteLog {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -182,7 +182,7 @@ impl Default for PinOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DatabaseConfig {
     #[serde(default = "default_db_host")]
     pub host: String,
@@ -221,7 +221,7 @@ impl Default for DatabaseConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ApiConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -232,7 +232,7 @@ pub struct ApiConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct AuthConfig {
     pub header: String,
     #[serde(default)]
@@ -244,7 +244,7 @@ pub struct AuthConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct VariableSource {
     pub source: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -254,7 +254,7 @@ pub struct VariableSource {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct AuthFlowConfig {
     pub endpoint: String,
     #[serde(default = "default_post_method")]
@@ -270,7 +270,7 @@ fn default_post_method() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct SubTarget {
     pub name: String,
     pub domain: String,
@@ -290,7 +290,7 @@ impl SubTarget {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ToolsConfig {
     #[serde(default)]
     pub bandcamp_scraper: BandcampScraperConfig,
@@ -299,14 +299,14 @@ pub struct ToolsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct BandcampScraperConfig {
     #[serde(default)]
     pub default_tag: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct NewsletterConfig {
     #[serde(default)]
     pub sendy_list_id: String,

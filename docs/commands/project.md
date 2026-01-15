@@ -93,7 +93,7 @@ CLI mode:
 ```json
 {
   "command": "project.create",
-  "projectId": "<projectId>",
+  "project_id": "<projectId>",
   "project": { }
 }
 ```
@@ -138,9 +138,9 @@ JSON output:
 ```json
 {
   "command": "project.set",
-  "projectId": "<projectId>",
+  "project_id": "<projectId>",
   "project": { },
-  "updated": ["domain", "serverId"],
+  "updated": ["domain", "server_id"],
   "import": null
 }
 ```
@@ -168,7 +168,7 @@ JSON output (`show`):
 ```json
 {
   "command": "project.show",
-  "projectId": "<projectId>",
+  "project_id": "<projectId>",
   "project": { },
   "import": null
 }
@@ -197,11 +197,11 @@ JSON output:
 ```json
 {
   "command": "project.components.list",
-  "projectId": "<projectId>",
+  "project_id": "<projectId>",
   "components": {
     "action": "list",
-    "projectId": "<projectId>",
-    "componentIds": ["<componentId>", "<componentId>"],
+    "project_id": "<projectId>",
+    "component_ids": ["<componentId>", "<componentId>"],
     "components": [ { } ]
   }
 }
@@ -242,7 +242,7 @@ Replaces the full `componentIds` list on the project (deduped, order-preserving)
 You can also do this via `project set` by merging `componentIds`:
 
 ```sh
-homeboy project set <projectId> --json '{"componentIds":["chubes-theme","chubes-blocks"]}'
+homeboy project set <projectId> --json '{"component_ids":["chubes-theme","chubes-blocks"]}'
 ```
 
 Example:
@@ -256,14 +256,14 @@ JSON output:
 ```json
 {
   "command": "project.components.set",
-  "projectId": "<projectId>",
+  "project_id": "<projectId>",
   "components": {
     "action": "set",
-    "projectId": "<projectId>",
-    "componentIds": ["<componentId>", "<componentId>"],
+    "project_id": "<projectId>",
+    "component_ids": ["<componentId>", "<componentId>"],
     "components": [ { } ]
   },
-  "updated": ["componentIds"]
+  "updated": ["component_ids"]
 }
 ```
 
@@ -284,17 +284,17 @@ JSON output:
 ```json
 {
   "command": "project.pin.list",
-  "projectId": "<projectId>",
+  "project_id": "<projectId>",
   "pin": {
     "action": "list",
-    "projectId": "<projectId>",
+    "project_id": "<projectId>",
     "type": "file|log",
     "items": [
       {
         "path": "<path>",
         "label": "<label>|null",
-        "displayName": "<display-name>",
-        "tailLines": 100
+        "display_name": "<display-name>",
+        "tail_lines": 100
       }
     ]
   }
@@ -312,10 +312,10 @@ JSON output:
 ```json
 {
   "command": "project.pin.add",
-  "projectId": "<projectId>",
+  "project_id": "<projectId>",
   "pin": {
     "action": "add",
-    "projectId": "<projectId>",
+    "project_id": "<projectId>",
     "type": "file|log",
     "added": { "path": "<path>", "type": "file|log" }
   }
@@ -333,10 +333,10 @@ JSON output:
 ```json
 {
   "command": "project.pin.remove",
-  "projectId": "<projectId>",
+  "project_id": "<projectId>",
   "pin": {
     "action": "remove",
-    "projectId": "<projectId>",
+    "project_id": "<projectId>",
     "type": "file|log",
     "removed": { "path": "<path>", "type": "file|log" }
   }

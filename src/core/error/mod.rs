@@ -85,13 +85,13 @@ impl ErrorCode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct Hint {
     pub message: String,
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ConfigMissingKeyDetails {
     pub key: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -99,14 +99,14 @@ pub struct ConfigMissingKeyDetails {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ConfigInvalidJsonDetails {
     pub path: String,
     pub error: String,
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ConfigInvalidValueDetails {
     pub key: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -115,7 +115,7 @@ pub struct ConfigInvalidValueDetails {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ConfigIdCollisionDetails {
     pub id: String,
     pub requested_type: String,
@@ -123,7 +123,7 @@ pub struct ConfigIdCollisionDetails {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct NoActiveProjectDetails {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_path: Option<String>,
@@ -149,19 +149,19 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct NotFoundDetails {
     pub id: String,
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct MissingArgumentDetails {
     pub args: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct InvalidArgumentDetails {
     pub field: String,
     pub problem: String,
@@ -172,7 +172,7 @@ pub struct InvalidArgumentDetails {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct InternalIoErrorDetails {
     pub error: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -180,7 +180,7 @@ pub struct InternalIoErrorDetails {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct InternalJsonErrorDetails {
     pub error: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -188,7 +188,7 @@ pub struct InternalJsonErrorDetails {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct TargetDetails {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
@@ -199,7 +199,7 @@ pub struct TargetDetails {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct RemoteCommandFailedDetails {
     pub command: String,
     pub exit_code: i32,
@@ -209,14 +209,14 @@ pub struct RemoteCommandFailedDetails {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct SshServerInvalidDetails {
     pub server_id: String,
     pub missing_fields: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct SshIdentityFileNotFoundDetails {
     pub server_id: String,
     pub identity_file: String,

@@ -4,7 +4,7 @@ use serde::Serialize;
 use super::CmdResult;
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct CliOutput {
     pub command: String,
     #[serde(flatten)]

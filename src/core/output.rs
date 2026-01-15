@@ -38,7 +38,7 @@ pub enum MergeOutput {
 
 /// Result of a config merge operation.
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct MergeResult {
     pub id: String,
     pub updated_fields: Vec<String>,
@@ -46,7 +46,7 @@ pub struct MergeResult {
 
 /// Result of a config remove operation.
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct RemoveResult {
     pub id: String,
     pub removed_from: Vec<String>,
@@ -58,7 +58,7 @@ pub struct RemoveResult {
 
 /// Summary of a batch create/update operation.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+
 pub struct BatchResult {
     pub created: u32,
     pub updated: u32,
@@ -69,7 +69,7 @@ pub struct BatchResult {
 
 /// Individual item result within a batch operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct BatchResultItem {
     pub id: String,
     pub status: String,
@@ -125,7 +125,7 @@ impl BatchResult {
 
 /// Standardized bulk execution result.
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct BulkResult<T: Serialize> {
     pub action: String,
     pub results: Vec<ItemOutcome<T>>,
@@ -134,7 +134,7 @@ pub struct BulkResult<T: Serialize> {
 
 /// Outcome for a single item in a bulk operation.
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ItemOutcome<T: Serialize> {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -146,7 +146,7 @@ pub struct ItemOutcome<T: Serialize> {
 
 /// Summary of bulk operation results.
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct BulkSummary {
     pub total: usize,
     pub succeeded: usize,

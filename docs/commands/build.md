@@ -22,8 +22,8 @@ Requires `buildCommand` to be configured on the component. If not set, the comma
 ```json
 {
   "command": "build.run",
-  "componentId": "<componentId>",
-  "buildCommand": "<command string>",
+  "component_id": "<componentId>",
+  "build_command": "<command string>",
   "stdout": "<stdout>",
   "stderr": "<stderr>",
   "success": true
@@ -40,8 +40,8 @@ Requires `buildCommand` to be configured on the component. If not set, the comma
       "id": "<componentId>",
       "result": {
         "command": "build.run",
-        "componentId": "<componentId>",
-        "buildCommand": "<command string>",
+        "component_id": "<componentId>",
+        "build_command": "<command string>",
         "stdout": "<stdout>",
         "stderr": "<stderr>",
         "success": true

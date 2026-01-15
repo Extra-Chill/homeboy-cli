@@ -6,7 +6,7 @@ use crate::http::ApiClient;
 use crate::project;
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ApiOutput {
     pub project_id: String,
     pub method: String,
@@ -65,7 +65,7 @@ pub fn run(input: &str) -> Result<(ApiOutput, i32)> {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 struct ApiInput {
     project_id: String,
     method: String,

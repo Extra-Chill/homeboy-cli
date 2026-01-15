@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 /// Unified module manifest that can provide platform behavior AND/OR executable tools.
 /// All fields are optional - modules include only what they need.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ModuleManifest {
     // ID derived from filename at runtime, not stored in JSON
     #[serde(default, skip_serializing)]
@@ -115,7 +115,7 @@ impl ConfigEntity for ModuleManifest {
 
 // Requirements configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct RequirementsConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub modules: Vec<String>,
@@ -126,14 +126,14 @@ pub struct RequirementsConfig {
 // Platform behavior configs
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DatabaseConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cli: Option<DatabaseCliConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DatabaseCliConfig {
     pub tables_command: String,
     pub describe_command: String,
@@ -141,7 +141,7 @@ pub struct DatabaseCliConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct CliConfig {
     pub tool: String,
     pub display_name: String,
@@ -151,7 +151,7 @@ pub struct CliConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DiscoveryConfig {
     pub find_command: String,
     pub base_path_transform: String,
@@ -172,7 +172,7 @@ impl DiscoveryConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DeployVerification {
     pub path_pattern: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -182,14 +182,14 @@ pub struct DeployVerification {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct VersionPatternConfig {
     pub extension: String,
     pub pattern: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct BuildConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifact_extensions: Vec<String>,
@@ -202,7 +202,7 @@ pub struct BuildConfig {
 // Executable tool configs (from former modules)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct RuntimeConfig {
     /// Shell command to execute when running the module.
     /// Template variables: {{entrypoint}}, {{args}}, {{modulePath}}, plus project context vars.
@@ -235,7 +235,7 @@ pub struct RuntimeConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct InputConfig {
     pub id: String,
     #[serde(rename = "type")]
@@ -261,7 +261,7 @@ pub struct SelectOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct OutputConfig {
     pub schema: OutputSchema,
     pub display: String,
@@ -277,7 +277,7 @@ pub struct OutputSchema {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ActionConfig {
     pub id: String,
     pub label: String,
@@ -294,7 +294,7 @@ pub struct ActionConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct SettingConfig {
     pub id: String,
     #[serde(rename = "type")]

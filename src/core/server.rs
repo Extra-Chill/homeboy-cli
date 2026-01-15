@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct Server {
     #[serde(skip_deserializing, default)]
     pub id: String,
@@ -190,7 +190,7 @@ pub fn set_identity_file(id: &str, identity_file: Option<String>) -> Result<Serv
 // ============================================================================
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct KeyGenerateResult {
     pub server: Server,
     pub public_key: String,
@@ -198,7 +198,7 @@ pub struct KeyGenerateResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct KeyImportResult {
     pub server: Server,
     pub public_key: String,

@@ -78,7 +78,7 @@ enum ComponentCommand {
 }
 
 #[derive(Default, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ComponentOutput {
     pub command: String,
     pub component_id: Option<String>,

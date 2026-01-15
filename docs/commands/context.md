@@ -23,9 +23,9 @@ Prints a JSON payload describing the current working directory context:
 {
   "command": "context.show",
   "cwd": "/absolute/path",
-  "gitRoot": "/absolute/git/root",
+  "git_root": "/absolute/git/root",
   "managed": true,
-  "matchedComponents": ["component_id"],
+  "matched_components": ["component_id"],
   "suggestion": null
 }
 ```
@@ -33,7 +33,7 @@ Prints a JSON payload describing the current working directory context:
 Payload shape:
 
 ```json
-{ "command": "context.show", "cwd": "...", "gitRoot": "...", "managed": true, "matchedComponents": [], "suggestion": null }
+{ "command": "context.show", "cwd": "...", "git_root": "...", "managed": true, "matched_components": [], "suggestion": null }
 ```
 
 ### Fields

@@ -17,7 +17,7 @@ use crate::template::{render_map, TemplateVars};
 use crate::version;
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 struct BulkComponentsInput {
     component_ids: Vec<String>,
 }
@@ -295,7 +295,7 @@ pub enum DeployReason {
 
 /// Result for a single component deployment.
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ComponentDeployResult {
     pub id: String,
     pub status: String,
@@ -362,7 +362,7 @@ impl ComponentDeployResult {
 
 /// Summary of deploy orchestration.
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DeploySummary {
     pub total: u32,
     pub succeeded: u32,
@@ -372,7 +372,7 @@ pub struct DeploySummary {
 
 /// Result of deploy orchestration for multiple components.
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct DeployOrchestrationResult {
     pub results: Vec<ComponentDeployResult>,
     pub summary: DeploySummary,

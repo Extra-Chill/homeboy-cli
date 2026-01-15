@@ -88,7 +88,7 @@ enum FileCommand {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct FileOutput {
     command: String,
     project_id: String,
@@ -107,7 +107,7 @@ pub struct FileOutput {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct FileFindOutput {
     command: String,
     project_id: String,
@@ -119,7 +119,7 @@ pub struct FileFindOutput {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct FileGrepOutput {
     command: String,
     project_id: String,

@@ -13,7 +13,7 @@ use crate::token;
 use crate::{Error, Result};
 
 #[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
+
 pub struct CliToolResult {
     pub tool: String,
     pub module_id: String,

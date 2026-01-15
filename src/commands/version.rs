@@ -65,7 +65,7 @@ impl BumpType {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct VersionShowOutput {
     command: String,
     component_id: String,
@@ -74,7 +74,7 @@ pub struct VersionShowOutput {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct VersionBumpOutput {
     command: String,
     component_id: String,
@@ -87,7 +87,7 @@ pub struct VersionBumpOutput {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct VersionSetOutput {
     command: String,
     component_id: String,

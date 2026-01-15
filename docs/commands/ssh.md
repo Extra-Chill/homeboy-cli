@@ -44,7 +44,7 @@ homeboy ssh list
       "host": "...",
       "user": "...",
       "port": 22,
-      "identityFile": null
+      "identity_file": null
     }
   ]
 }

@@ -108,9 +108,9 @@ Lists all projects that reference the given component. Returns both project IDs 
 ```json
 {
   "command": "component.create|component.show|component.set|component.delete|component.rename|component.list|component.projects",
-  "componentId": "<id>|null",
+  "component_id": "<id>|null",
   "success": true,
-  "updatedFields": ["localPath", "remotePath"],
+  "updated_fields": ["local_path", "remote_path"],
   "component": {},
   "components": [],
   "import": null,

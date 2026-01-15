@@ -86,7 +86,7 @@ pub fn pull_ff_only_interactive(path: &Path) -> Result<()> {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct CommitInfo {
     pub hash: String,
     pub subject: String,
@@ -315,7 +315,7 @@ fn strip_conventional_prefix(subject: &str) -> &str {
 // === Component Git Operations ===
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct GitOutput {
     pub component_id: String,
     pub path: String,
@@ -351,7 +351,7 @@ pub enum BaselineSource {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct UncommittedChanges {
     pub has_changes: bool,
     pub staged: Vec<String>,
@@ -360,7 +360,7 @@ pub struct UncommittedChanges {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct ChangesOutput {
     pub component_id: String,
     pub path: String,
@@ -432,7 +432,7 @@ fn detect_baseline(path: &str, since_tag: Option<&str>) -> Result<BaselineInfo> 
 
 // Input types for JSON parsing
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 struct BulkIdsInput {
     component_ids: Vec<String>,
     #[serde(default)]
@@ -440,13 +440,13 @@ struct BulkIdsInput {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 struct BulkCommitInput {
     components: Vec<CommitSpec>,
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 struct CommitSpec {
     #[serde(default)]
     id: Option<String>,

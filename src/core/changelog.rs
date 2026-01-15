@@ -40,20 +40,16 @@ pub fn resolve_effective_settings(component: Option<&Component>) -> EffectiveCha
 }
 
 pub fn resolve_changelog_path(component: &Component) -> Result<PathBuf> {
-    let target = component
-        .changelog_targets
-        .as_ref()
-        .and_then(|targets| targets.first())
-        .ok_or_else(|| {
-            Error::validation_invalid_argument(
-                "component.changelogTargets",
-                "No changelog targets configured for component. Set component.changelogTargets[0].file".to_string(),
-                None,
-                None,
-            )
-        })?;
+    let target = component.changelog_target.as_ref().ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "component.changelogTarget",
+            "No changelog target configured for component. Set component.changelogTarget".to_string(),
+            None,
+            None,
+        )
+    })?;
 
-    resolve_target_path(&component.local_path, &target.file)
+    resolve_target_path(&component.local_path, target)
 }
 
 fn resolve_target_path(local_path: &str, file: &str) -> Result<PathBuf> {
@@ -452,7 +448,7 @@ fn append_item_to_next_section(
 // === Bulk Operations with JSON Spec ===
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct AddItemsOutput {
     pub component_id: String,
     pub changelog_path: String,
@@ -463,7 +459,7 @@ pub struct AddItemsOutput {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 struct AddItemsInput {
     component_id: String,
     messages: Vec<String>,
@@ -598,7 +594,7 @@ pub fn add_items_cwd(messages: &[String]) -> Result<AddItemsOutput> {
 // === Changelog Init Operations ===
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct InitOutput {
     pub component_id: String,
     pub changelog_path: String,
@@ -654,7 +650,7 @@ pub fn init(component_id: &str, path: Option<&str>, configure: bool) -> Result<I
 
     // Configure component if requested
     let configured = if configure {
-        component::add_changelog_target(component_id, relative_path)?;
+        component::set_changelog_target(component_id, relative_path)?;
         true
     } else {
         false

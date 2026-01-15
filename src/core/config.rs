@@ -382,7 +382,7 @@ fn array_union(base: &mut Vec<Value>, patch: Vec<Value>) {
 
 /// Simple bulk input with just component IDs.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub(crate) struct BulkIdsInput {
     pub component_ids: Vec<String>,
 }

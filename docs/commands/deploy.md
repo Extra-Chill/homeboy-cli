@@ -18,7 +18,7 @@ Options:
 - `--all`: deploy all configured components
 - `--outdated`: deploy only outdated components
   - Determined from the first version target for each component.
-- `--json`: JSON input spec for bulk operations (`{"componentIds": ["component-id", ...]}`)
+- `--json`: JSON input spec for bulk operations (`{"component_ids": ["component-id", ...]}`)
 
 Positional and flag component IDs can be mixed; both are merged into the deployment list.
 
@@ -31,7 +31,7 @@ If no component IDs are provided and neither `--all` nor `--outdated` is set, Ho
 ```json
 {
   "command": "deploy.run",
-  "projectId": "<projectId>",
+  "project_id": "<projectId>",
   "all": false,
   "outdated": false,
   "results": [
@@ -39,15 +39,15 @@ If no component IDs are provided and neither `--all` nor `--outdated` is set, Ho
       "id": "<componentId>",
       "name": "<name>",
       "status": "deployed|failed|skipped",
-      "deployReason": "explicitly_selected|all_selected|version_mismatch|unknown_local_version|unknown_remote_version",
-      "localVersion": "<v>|null",
-      "remoteVersion": "<v>|null",
+      "deploy_reason": "explicitly_selected|all_selected|version_mismatch|unknown_local_version|unknown_remote_version",
+      "local_version": "<v>|null",
+      "remote_version": "<v>|null",
       "error": "<string>|null",
       "artifactPath": "<path>|null",
-      "remotePath": "<path>|null",
-      "buildCommand": "<cmd>|null",
-      "buildExitCode": "<int>|null",
-      "deployExitCode": "<int>|null"
+      "remote_path": "<path>|null",
+      "build_command": "<cmd>|null",
+      "build_exit_code": "<int>|null",
+      "deploy_exit_code": "<int>|null"
     }
   ],
   "summary": { "succeeded": 0, "failed": 0, "skipped": 0 }

@@ -36,7 +36,7 @@ impl InstallMethod {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct VersionCheck {
     pub command: String,
     pub current_version: String,
@@ -46,7 +46,7 @@ pub struct VersionCheck {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+
 pub struct UpgradeResult {
     pub command: String,
     pub install_method: InstallMethod,

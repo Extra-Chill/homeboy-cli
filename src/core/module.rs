@@ -702,7 +702,7 @@ pub fn get_module_settings(
 
     if let Some(pid) = project_id {
         if let Ok(project) = project::load(pid) {
-            if let Some(scoped) = project.scoped_modules.as_ref() {
+            if let Some(scoped) = project.modules.as_ref() {
                 if let Some(module_scope) = scoped.get(module_id) {
                     for (k, v) in &module_scope.settings {
                         settings.insert(k.clone(), v.clone());
@@ -871,7 +871,7 @@ impl ModuleScope {
         let mut settings = HashMap::new();
 
         if let Some(project) = project {
-            if let Some(project_modules) = project.scoped_modules.as_ref() {
+            if let Some(project_modules) = project.modules.as_ref() {
                 if let Some(project_config) = project_modules.get(module_id) {
                     settings.extend(project_config.settings.clone());
                 }
@@ -879,7 +879,7 @@ impl ModuleScope {
         }
 
         if let Some(component) = component {
-            if let Some(component_modules) = component.scoped_modules.as_ref() {
+            if let Some(component_modules) = component.modules.as_ref() {
                 if let Some(component_config) = component_modules.get(module_id) {
                     settings.extend(component_config.settings.clone());
                 }

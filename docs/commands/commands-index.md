@@ -11,7 +11,7 @@
 - [docs](docs.md)
 - [file](file.md)
 - [git](git.md)
-- [init](homeboy-init.md)
+- [init](init.md)
 - [api](api.md)
 - [auth](auth.md)
 - [list](list.md)
@@ -20,8 +20,8 @@
 - [project](project.md)
 - [release](release.md)
 - [server](server.md)
-
 - [ssh](ssh.md)
+- [upgrade](upgrade.md)
 - [version](version.md)
 
 This list covers built-in CLI commands.

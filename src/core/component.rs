@@ -65,7 +65,7 @@ impl Component {
             local_path,
             remote_path,
             build_artifact,
-            scoped_modules: None,
+            modules: None,
             version_targets: None,
             changelog_target: None,
             changelog_next_section_label: None,

@@ -165,7 +165,7 @@ All notable changes to Homeboy CLI are documented in this file.
 
 - Unify plugins and modules under a single module manifest and config surface
 - Remove plugin command and plugin manifest subsystem; migrate CLI/db/deploy/version/build to module-based lookups
-- Rename config fields: plugins→modules, plugin_settings→module_settings, modules→scoped_modules
+- Rename config fields: plugins→modules, plugin_settings→module_settings, modules→scoped_modules (superseded by modules field in current releases)
 
 ## 0.3.0
 

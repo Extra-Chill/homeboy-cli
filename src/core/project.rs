@@ -18,7 +18,7 @@ pub struct Project {
     pub domain: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub scoped_modules: Option<HashMap<String, ScopedModuleConfig>>,
+    pub modules: Option<HashMap<String, ScopedModuleConfig>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server_id: Option<String>,

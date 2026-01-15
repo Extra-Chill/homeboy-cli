@@ -98,8 +98,8 @@ Executes an action defined in the module manifest.
 
 Homeboy builds an **effective settings** map for each module by merging settings across scopes, in order (later scopes override earlier ones):
 
-1. Project (`projects/<project_id>.json`): `scoped_modules.<module_id>.settings`
-2. Component (`components/<component_id>.json`): `scoped_modules.<module_id>.settings`
+1. Project (`projects/<project_id>.json`): `modules.<module_id>.settings`
+2. Component (`components/<component_id>.json`): `modules.<module_id>.settings`
 
 When running a module, Homeboy passes an execution context via environment variables:
 

@@ -114,12 +114,12 @@ pub enum ReleasePlanStatus {
 }
 
 struct ReleaseCapabilityResolver {
-    module: Option<ModuleManifest>,
+    modules: Vec<ModuleManifest>,
 }
 
 impl ReleaseCapabilityResolver {
-    fn new(module: Option<ModuleManifest>) -> Self {
-        Self { module }
+    fn new(modules: Vec<ModuleManifest>) -> Self {
+        Self { modules }
     }
 }
 
@@ -137,23 +137,22 @@ impl PipelineCapabilityResolver for ReleaseCapabilityResolver {
 impl ReleaseCapabilityResolver {
     fn supports_module_action(&self, step_type: &str) -> bool {
         let action_id = format!("release.{}", step_type);
-        self.module
-            .as_ref()
-            .map(|module| module.actions.iter().any(|action| action.id == action_id))
-            .unwrap_or(false)
+        self.modules
+            .iter()
+            .any(|module| module.actions.iter().any(|action| action.id == action_id))
     }
 }
 
 struct ReleaseStepExecutor {
     component_id: String,
-    module_id: Option<String>,
+    modules: Vec<ModuleManifest>,
 }
 
 impl ReleaseStepExecutor {
-    fn new(component_id: String, module: Option<&ModuleManifest>) -> Self {
+    fn new(component_id: String, modules: Vec<ModuleManifest>) -> Self {
         Self {
             component_id,
-            module_id: module.map(|m| m.id.clone()),
+            modules,
         }
     }
 
@@ -295,15 +294,8 @@ impl ReleaseStepExecutor {
     }
 
     fn run_module_action(&self, step: &PipelineStep) -> Result<PipelineStepResult> {
-        let module_id = self.module_id.clone().ok_or_else(|| {
-            Error::validation_invalid_argument(
-                "module",
-                "Module is required for release action steps",
-                None,
-                None,
-            )
-        })?;
         let action_id = format!("release.{}", step.step_type);
+        let module = resolve_module_action(&self.modules, &action_id)?;
         let payload = if step.config.is_empty() {
             None
         } else {
@@ -312,7 +304,7 @@ impl ReleaseStepExecutor {
             })?)
         };
 
-        let response = module::run_action(&module_id, &action_id, None, payload.as_deref())?;
+        let response = module::run_action(&module.id, &action_id, None, payload.as_deref())?;
         let data = serde_json::to_value(response).map_err(|e| {
             Error::internal_json(e.to_string(), Some("module action output".to_string()))
         })?;
@@ -336,16 +328,63 @@ impl PipelineStepExecutor for ReleaseStepExecutor {
     }
 }
 
-fn resolve_module(module_id: Option<&str>) -> Result<Option<ModuleManifest>> {
-    match module_id {
-        Some(id) => {
-            let suggestions = module::available_module_ids();
-            module::load_module(id)
-                .ok_or_else(|| Error::module_not_found(id.to_string(), suggestions))
-                .map(Some)
-        }
-        None => Ok(None),
+fn resolve_modules(component: &Component, module_id: Option<&str>) -> Result<Vec<ModuleManifest>> {
+    if module_id.is_some() {
+        return Err(Error::validation_invalid_argument(
+            "module",
+            "Module selection is configured via component.modules; --module is not supported",
+            None,
+            None,
+        ));
     }
+
+    let mut modules = Vec::new();
+    if let Some(configured) = component.modules.as_ref() {
+        let mut module_ids: Vec<String> = configured.keys().cloned().collect();
+        module_ids.sort();
+        let suggestions = module::available_module_ids();
+        for module_id in module_ids {
+            let manifest = module::load_module(&module_id).ok_or_else(|| {
+                Error::module_not_found(module_id.to_string(), suggestions.clone())
+            })?;
+            modules.push(manifest);
+        }
+    }
+
+    Ok(modules)
+}
+
+fn resolve_module_action(modules: &[ModuleManifest], action_id: &str) -> Result<ModuleManifest> {
+    let matches: Vec<ModuleManifest> = modules
+        .iter()
+        .filter(|module| module.actions.iter().any(|action| action.id == action_id))
+        .cloned()
+        .collect();
+
+    if matches.is_empty() {
+        return Err(Error::validation_invalid_argument(
+            "release.steps",
+            format!("Missing module action '{}'", action_id),
+            None,
+            None,
+        ));
+    }
+
+    if matches.len() > 1 {
+        let modules: Vec<String> = matches.iter().map(|module| module.id.clone()).collect();
+        return Err(Error::validation_invalid_argument(
+            "release.steps",
+            format!(
+                "Multiple modules provide action '{}' ({})",
+                action_id,
+                modules.join(", ")
+            ),
+            None,
+            None,
+        ));
+    }
+
+    Ok(matches[0].clone())
 }
 
 pub fn resolve_component_release(component: &Component) -> Option<ReleaseConfig> {
@@ -354,8 +393,8 @@ pub fn resolve_component_release(component: &Component) -> Option<ReleaseConfig>
 
 pub fn plan(component_id: &str, module_id: Option<&str>) -> Result<ReleasePlan> {
     let component = component::load(component_id)?;
-    let module = resolve_module(module_id)?;
-    let resolver = ReleaseCapabilityResolver::new(module.clone());
+    let modules = resolve_modules(&component, module_id)?;
+    let resolver = ReleaseCapabilityResolver::new(modules.clone());
     let release = resolve_component_release(&component).ok_or_else(|| {
         Error::validation_invalid_argument(
             "release",
@@ -383,7 +422,7 @@ pub fn plan(component_id: &str, module_id: Option<&str>) -> Result<ReleasePlan> 
         .into_iter()
         .map(ReleasePlanStep::from)
         .collect();
-    let hints = build_plan_hints(component_id, &steps, module.as_ref());
+    let hints = build_plan_hints(component_id, &steps, &modules);
 
     Ok(ReleasePlan {
         component_id: component_id.to_string(),
@@ -396,8 +435,8 @@ pub fn plan(component_id: &str, module_id: Option<&str>) -> Result<ReleasePlan> 
 
 pub fn run(component_id: &str, module_id: Option<&str>) -> Result<ReleaseRun> {
     let component = component::load(component_id)?;
-    let module = resolve_module(module_id)?;
-    let resolver = ReleaseCapabilityResolver::new(module.clone());
+    let modules = resolve_modules(&component, module_id)?;
+    let resolver = ReleaseCapabilityResolver::new(modules.clone());
     let release = resolve_component_release(&component).ok_or_else(|| {
         Error::validation_invalid_argument(
             "release",
@@ -413,7 +452,7 @@ pub fn run(component_id: &str, module_id: Option<&str>) -> Result<ReleaseRun> {
     })?;
 
     let enabled = release.enabled.unwrap_or(true);
-    let executor = ReleaseStepExecutor::new(component_id.to_string(), module.as_ref());
+    let executor = ReleaseStepExecutor::new(component_id.to_string(), modules.clone());
 
     let pipeline_steps: Vec<PipelineStep> =
         release.steps.into_iter().map(PipelineStep::from).collect();
@@ -443,7 +482,7 @@ fn is_core_step(step_type: &str) -> bool {
 fn build_plan_hints(
     component_id: &str,
     steps: &[ReleasePlanStep],
-    module: Option<&ModuleManifest>,
+    modules: &[ModuleManifest],
 ) -> Vec<String> {
     let mut hints = Vec::new();
     if steps.is_empty() {
@@ -454,16 +493,15 @@ fn build_plan_hints(
         .iter()
         .any(|step| matches!(step.status, ReleasePlanStatus::Missing))
     {
-        match module {
-            Some(module) => {
-                hints.push(format!(
-                    "Add module actions like 'release.<step_type>' in {}",
-                    module.id
-                ));
-            }
-            None => {
-                hints.push("Provide --module to resolve module release actions".to_string());
-            }
+        if modules.is_empty() {
+            hints.push("Configure component modules to resolve release actions".to_string());
+        } else {
+            let module_names: Vec<String> =
+                modules.iter().map(|module| module.id.clone()).collect();
+            hints.push(format!(
+                "Release actions are resolved from modules: {}",
+                module_names.join(", ")
+            ));
         }
     }
 

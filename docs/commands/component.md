@@ -80,6 +80,12 @@ Components may define a `release` block for component-scoped release planning. Y
 homeboy component set <id> --json '{"release": {"enabled": true, "steps": []}}'
 ```
 
+Components also define module usage via `modules`:
+
+```sh
+homeboy component set <id> --json '{"modules": {"github": {"settings": {}}, "rust": {"settings": {}}}}'
+```
+
 ```json
 {
   "release": {

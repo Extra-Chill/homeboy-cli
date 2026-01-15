@@ -15,7 +15,7 @@ homeboy release <COMMAND>
 ### `plan`
 
 ```sh
-homeboy release plan <component_id> [--module <module_id>]
+homeboy release plan <component_id>
 ```
 
 Generates an ordered release plan without executing any steps.
@@ -24,12 +24,12 @@ Notes:
 
 - Release config is read from the component (`components/<id>.json`).
 - If no release config exists for the component, the command errors and suggests adding one via `homeboy component set`.
-- `--module` is optional and only used for module actions.
+- Module actions are resolved from `component.modules`.
 
 ### `run`
 
 ```sh
-homeboy release run <component_id> [--module <module_id>]
+homeboy release run <component_id>
 ```
 
 Executes the release pipeline steps defined in the component `release` block.
@@ -38,6 +38,7 @@ Notes:
 
 - Steps run in parallel when dependencies allow it.
 - Any step depending on a failed/missing step is skipped.
+- Release actions use module definitions configured in `component.modules`.
 
 ## JSON output
 

@@ -19,17 +19,11 @@ enum ReleaseCommand {
     Plan {
         /// Component ID to plan
         component_id: String,
-        /// Module ID to source release defaults/actions (optional)
-        #[arg(long)]
-        module: Option<String>,
     },
     /// Run a component release pipeline
     Run {
         /// Component ID to run
         component_id: String,
-        /// Module ID to source release actions (optional)
-        #[arg(long)]
-        module: Option<String>,
     },
 }
 
@@ -45,18 +39,12 @@ pub enum ReleaseOutput {
 
 pub fn run(args: ReleaseArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<ReleaseOutput> {
     match args.command {
-        ReleaseCommand::Plan {
-            component_id,
-            module,
-        } => {
-            let plan = release::plan(&component_id, module.as_deref())?;
+        ReleaseCommand::Plan { component_id } => {
+            let plan = release::plan(&component_id, None)?;
             Ok((ReleaseOutput::Plan { plan }, 0))
         }
-        ReleaseCommand::Run {
-            component_id,
-            module,
-        } => {
-            let run = release::run(&component_id, module.as_deref())?;
+        ReleaseCommand::Run { component_id } => {
+            let run = release::run(&component_id, None)?;
             Ok((ReleaseOutput::Run { run }, 0))
         }
     }

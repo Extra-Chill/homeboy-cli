@@ -134,9 +134,9 @@ pub fn merge(id: Option<&str>, json_spec: &str) -> Result<MergeOutput> {
     let raw = config::read_json_spec_to_string(json_spec)?;
 
     if config::is_json_array(&raw) {
-        return Ok(MergeOutput::Bulk(config::merge_batch_from_json::<
-            Component,
-        >(&raw)?));
+        return Ok(MergeOutput::Bulk(
+            config::merge_batch_from_json::<Component>(&raw)?,
+        ));
     }
 
     Ok(MergeOutput::Single(merge_from_json(id, &raw)?))

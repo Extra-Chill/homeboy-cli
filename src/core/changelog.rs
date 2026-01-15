@@ -4,11 +4,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::component::{self, Component};
-use crate::project;
+use crate::config::read_json_spec_to_string;
 use crate::core::local_files::{self, FileSystem};
 use crate::core::version;
 use crate::error::{Error, Result};
-use crate::config::read_json_spec_to_string;
+use crate::project;
 
 const DEFAULT_NEXT_SECTION_LABEL: &str = "Unreleased";
 
@@ -31,7 +31,11 @@ pub fn resolve_effective_settings(component: Option<&Component>) -> EffectiveCha
 
     let next_section_label = component
         .and_then(|c| c.changelog_next_section_label.clone())
-        .or_else(|| project_settings.as_ref().and_then(|p| p.changelog_next_section_label.clone()))
+        .or_else(|| {
+            project_settings
+                .as_ref()
+                .and_then(|p| p.changelog_next_section_label.clone())
+        })
         .unwrap_or_else(|| DEFAULT_NEXT_SECTION_LABEL.to_string());
 
     let mut next_section_aliases = component
@@ -82,7 +86,10 @@ pub fn resolve_changelog_path(component: &Component) -> Result<PathBuf> {
             "No changelog configured for component".to_string(),
             None,
             Some(vec![
-                format!("Create and configure: homeboy changelog init {} --configure", component.id),
+                format!(
+                    "Create and configure: homeboy changelog init {} --configure",
+                    component.id
+                ),
                 "Or bypass changelog: homeboy version set <version>".to_string(),
             ]),
         )

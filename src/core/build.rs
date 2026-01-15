@@ -1,8 +1,8 @@
 use serde::Serialize;
 
 use crate::component;
-use crate::error::{Error, Result};
 use crate::config::{is_json_input, parse_bulk_ids};
+use crate::error::{Error, Result};
 use crate::output::{BulkResult, BulkSummary, ItemOutcome};
 use crate::permissions;
 use crate::ssh::execute_local_command_in_dir;

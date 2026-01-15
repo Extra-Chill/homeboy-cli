@@ -8,14 +8,14 @@ pub mod component;
 pub mod context;
 pub mod db;
 pub mod deploy;
-pub mod executor;
 pub mod error;
+pub mod executor;
+pub mod files;
 pub mod git;
 pub mod logs;
 pub mod module;
 pub mod output;
 pub mod project;
-pub mod files;
 pub mod server;
 pub mod shell;
 pub mod ssh;
@@ -40,6 +40,6 @@ pub mod defaults;
 // Re-export common types for convenience
 pub use error::{Error, ErrorCode, Result};
 pub use output::{
-    BatchResult, BatchResultItem, BulkResult, BulkSummary, CreateOutput, CreateResult,
-    ItemOutcome, MergeOutput, MergeResult, RemoveResult,
+    BatchResult, BatchResultItem, BulkResult, BulkSummary, CreateOutput, CreateResult, ItemOutcome,
+    MergeOutput, MergeResult, RemoveResult,
 };

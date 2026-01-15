@@ -5,7 +5,8 @@ use std::process::Command;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CRATES_IO_API: &str = "https://crates.io/api/v1/crates/homeboy";
-const GITHUB_RELEASES_API: &str = "https://api.github.com/repos/Extra-Chill/homeboy/releases/latest";
+const GITHUB_RELEASES_API: &str =
+    "https://api.github.com/repos/Extra-Chill/homeboy/releases/latest";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -111,7 +112,10 @@ fn fetch_latest_github_version() -> Result<String> {
         .map_err(|e| Error::other(format!("Failed to parse GitHub release response: {}", e)))?;
 
     // Strip "v" prefix if present (e.g., "v0.15.0" -> "0.15.0")
-    let version = response.tag_name.strip_prefix('v').unwrap_or(&response.tag_name);
+    let version = response
+        .tag_name
+        .strip_prefix('v')
+        .unwrap_or(&response.tag_name);
     Ok(version.to_string())
 }
 

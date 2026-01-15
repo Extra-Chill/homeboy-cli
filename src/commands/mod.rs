@@ -102,9 +102,9 @@ fn read_json_spec_to_string(spec: &str) -> homeboy::Result<String> {
                 None,
             ));
         }
-        stdin
-            .read_to_string(&mut buf)
-            .map_err(|e| homeboy::Error::internal_io(e.to_string(), Some("read stdin".to_string())))?;
+        stdin.read_to_string(&mut buf).map_err(|e| {
+            homeboy::Error::internal_io(e.to_string(), Some("read stdin".to_string()))
+        })?;
         return Ok(buf);
     }
 
@@ -117,8 +117,9 @@ fn read_json_spec_to_string(spec: &str) -> homeboy::Result<String> {
                 None,
             ));
         }
-        return std::fs::read_to_string(Path::new(path))
-            .map_err(|e| homeboy::Error::internal_io(e.to_string(), Some(format!("read {}", path))));
+        return std::fs::read_to_string(Path::new(path)).map_err(|e| {
+            homeboy::Error::internal_io(e.to_string(), Some(format!("read {}", path)))
+        });
     }
 
     Ok(spec.to_string())
@@ -191,9 +192,7 @@ pub(crate) fn run_json(
     global: &GlobalArgs,
 ) -> (homeboy::Result<serde_json::Value>, i32) {
     match command {
-        crate::Commands::Init(args) => {
-            crate::output::map_cmd_result_to_json(init::run_json(args))
-        }
+        crate::Commands::Init(args) => crate::output::map_cmd_result_to_json(init::run_json(args)),
         crate::Commands::Project(args) => {
             crate::output::map_cmd_result_to_json(project::run(args, global))
         }

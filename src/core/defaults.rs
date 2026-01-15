@@ -124,10 +124,7 @@ fn default_cargo_config() -> InstallMethodConfig {
 
 fn default_source_config() -> InstallMethodConfig {
     InstallMethodConfig {
-        path_patterns: vec![
-            "/target/release/".to_string(),
-            "/target/debug/".to_string(),
-        ],
+        path_patterns: vec!["/target/release/".to_string(), "/target/debug/".to_string()],
         upgrade_command: "git pull && cargo build --release".to_string(),
         list_command: None,
     }
@@ -253,9 +250,7 @@ pub fn save_config(config: &HomeboyConfig) -> crate::Result<()> {
 
 /// Check if homeboy.json file exists
 pub fn config_exists() -> bool {
-    paths::homeboy_json()
-        .map(|p| p.exists())
-        .unwrap_or(false)
+    paths::homeboy_json().map(|p| p.exists()).unwrap_or(false)
 }
 
 /// Delete homeboy.json file (reset to defaults)

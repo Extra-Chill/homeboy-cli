@@ -1,4 +1,4 @@
-use crate::config::{self, ConfigEntity, from_str, to_string_pretty};
+use crate::config::{self, from_str, to_string_pretty, ConfigEntity};
 use crate::error::{Error, Result};
 use crate::local_files::{self, FileSystem};
 use crate::output::MergeOutput;

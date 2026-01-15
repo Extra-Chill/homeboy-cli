@@ -57,10 +57,7 @@ pub struct ConfigOutput {
     deleted: Option<bool>,
 }
 
-pub fn run(
-    args: ConfigArgs,
-    _global: &crate::commands::GlobalArgs,
-) -> CmdResult<ConfigOutput> {
+pub fn run(args: ConfigArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<ConfigOutput> {
     match args.command {
         ConfigCommand::Show { builtin } => show(builtin),
         ConfigCommand::Set { pointer, value } => set(&pointer, &value),
@@ -115,9 +112,8 @@ fn set(pointer: &str, value_str: &str) -> CmdResult<ConfigOutput> {
     }
 
     // Parse the value as JSON
-    let value: Value = serde_json::from_str(value_str).map_err(|e| {
-        homeboy::Error::validation_invalid_json(e, Some("parse value".to_string()))
-    })?;
+    let value: Value = serde_json::from_str(value_str)
+        .map_err(|e| homeboy::Error::validation_invalid_json(e, Some("parse value".to_string())))?;
 
     // Load current config (or create default)
     let mut config = defaults::load_config();

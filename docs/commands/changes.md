@@ -64,7 +64,8 @@ Release workflow note:
     "hasChanges": true,
     "staged": ["..."],
     "unstaged": ["..."],
-    "untracked": ["..."]
+    "untracked": ["..."],
+    "hint": "Large untracked list detected..."
   },
   "uncommittedDiff": "<diff>",
   "diff": "<diff>"
@@ -75,6 +76,7 @@ Notes:
 
 - `uncommittedDiff` is present when the working tree has changes.
 - `diff` is included only when `--git-diffs` is used.
+- `uncommitted.hint` appears when untracked output is unusually large.
 - Optional fields like `warning` / `error` may be omitted when unset.
 
 ### Bulk output (`--json` or `--project`)

@@ -216,7 +216,11 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             // CLI flag mode - use inferred message or explicit -m flag
             let final_message = inferred_message.or(message);
             let target = if cwd { None } else { component_id.as_deref() };
-            let options = git::CommitOptions { staged_only, files, exclude };
+            let options = git::CommitOptions {
+                staged_only,
+                files,
+                exclude,
+            };
             let output = git::commit(target, final_message.as_deref(), options)?;
             let exit_code = output.exit_code;
             Ok((GitCommandOutput::Single(output), exit_code))

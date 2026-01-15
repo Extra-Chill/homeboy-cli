@@ -62,11 +62,10 @@ pub struct ChangelogShowOutput {
 #[derive(Serialize)]
 #[serde(tag = "command")]
 pub enum ChangelogOutput {
-    
     Show(ChangelogShowOutput),
-    
+
     Add(AddItemsOutput),
-    
+
     Init(InitOutput),
 }
 

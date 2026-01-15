@@ -1,6 +1,8 @@
 use crate::error::Error;
 use crate::local_files::{self, FileSystem};
-use crate::output::{BatchResult, CreateOutput, CreateResult, MergeOutput, MergeResult, RemoveResult};
+use crate::output::{
+    BatchResult, CreateOutput, CreateResult, MergeOutput, MergeResult, RemoveResult,
+};
 use crate::paths;
 use crate::slugify;
 use crate::Result;
@@ -512,12 +514,7 @@ fn create_single_from_json<T: ConfigEntity>(json_spec: &str) -> Result<CreateRes
         .get("id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            Error::validation_invalid_argument(
-                "id",
-                "Missing required field: id",
-                None,
-                None,
-            )
+            Error::validation_invalid_argument("id", "Missing required field: id", None, None)
         })?
         .to_string();
 

@@ -228,7 +228,9 @@ fn scp_file(ssh_client: &SshClient, local_path: &Path, remote_path: &str) -> Res
     scp_args.push(local_path.to_string_lossy().to_string());
     scp_args.push(format!(
         "{}@{}:{}",
-        ssh_client.user, ssh_client.host, shell::quote_path(remote_path)
+        ssh_client.user,
+        ssh_client.host,
+        shell::quote_path(remote_path)
     ));
 
     eprintln!(
@@ -274,7 +276,9 @@ fn scp_recursive(
     scp_args.push(local_path.to_string_lossy().to_string());
     scp_args.push(format!(
         "{}@{}:{}",
-        ssh_client.user, ssh_client.host, shell::quote_path(remote_path)
+        ssh_client.user,
+        ssh_client.host,
+        shell::quote_path(remote_path)
     ));
 
     eprintln!(

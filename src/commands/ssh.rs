@@ -71,17 +71,16 @@ pub fn run(args: SshArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Ss
             let result = resolve_context(&resolve_args)?;
 
             // When project is resolved with base_path, auto-cd to project root
-            let effective_command =
-                match (&result.project_id, &result.base_path, &args.command) {
-                    // Project with base_path and command: cd to base_path then run command
-                    (Some(_), Some(bp), Some(cmd)) => {
-                        Some(format!("cd {} && {}", shell::quote_path(bp), cmd))
-                    }
-                    // Project with base_path, no command: interactive shell starts in base_path
-                    (Some(_), Some(bp), None) => Some(format!("cd {}", shell::quote_path(bp))),
-                    // No project context or no base_path: use command as-is
-                    _ => args.command.clone(),
-                };
+            let effective_command = match (&result.project_id, &result.base_path, &args.command) {
+                // Project with base_path and command: cd to base_path then run command
+                (Some(_), Some(bp), Some(cmd)) => {
+                    Some(format!("cd {} && {}", shell::quote_path(bp), cmd))
+                }
+                // Project with base_path, no command: interactive shell starts in base_path
+                (Some(_), Some(bp), None) => Some(format!("cd {}", shell::quote_path(bp))),
+                // No project context or no base_path: use command as-is
+                _ => args.command.clone(),
+            };
 
             // Execute interactive SSH (CLI-owned TTY interaction)
             let client = SshClient::from_server(&result.server, &result.server_id)?;

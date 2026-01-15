@@ -376,7 +376,10 @@ fn show(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
     let project = project::load(project_id)?;
 
     let hint = if project.server_id.is_none() {
-        Some("Local project: Commands execute on this machine. Only deploy requires a server.".to_string())
+        Some(
+            "Local project: Commands execute on this machine. Only deploy requires a server."
+                .to_string(),
+        )
     } else if project.component_ids.is_empty() {
         Some(format!(
             "No components linked. Use: homeboy project components add {} <component-id>",
@@ -428,7 +431,12 @@ fn calculate_deploy_readiness(project: &Project) -> (bool, Vec<String>) {
     }
 
     // Check base_path
-    if project.base_path.as_ref().map(|p| p.is_empty()).unwrap_or(true) {
+    if project
+        .base_path
+        .as_ref()
+        .map(|p| p.is_empty())
+        .unwrap_or(true)
+    {
         blockers.push(format!(
             "Missing base_path - set with: homeboy project set {} '{{\"base_path\": \"/path/to/webroot\"}}'",
             project.id

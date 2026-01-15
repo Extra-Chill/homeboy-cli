@@ -158,7 +158,8 @@ pub fn run(
                 let mut new_component = Component::new(id, local_path, remote_path, build_artifact);
 
                 if !version_targets.is_empty() {
-                    new_component.version_targets = Some(component::parse_version_targets(&version_targets)?);
+                    new_component.version_targets =
+                        Some(component::parse_version_targets(&version_targets)?);
                 }
 
                 new_component.build_command = build_command;

@@ -57,7 +57,7 @@ pub fn build_component(component: &component::Component) -> (Option<i32>, Option
     // Fix local permissions before build to ensure zip has correct permissions
     permissions::fix_local_permissions(&component.local_path);
 
-    let output = execute_local_command_in_dir(&build_cmd, Some(&component.local_path));
+    let output = execute_local_command_in_dir(&build_cmd, Some(&component.local_path), None);
 
     if output.success {
         (Some(output.exit_code), None)
@@ -141,7 +141,7 @@ fn execute_build(component_id: &str) -> Result<(BuildOutput, i32)> {
     // Fix local permissions before build to ensure zip has correct permissions
     permissions::fix_local_permissions(&comp.local_path);
 
-    let output = execute_local_command_in_dir(&build_cmd, Some(&comp.local_path));
+    let output = execute_local_command_in_dir(&build_cmd, Some(&comp.local_path), None);
 
     Ok((
         BuildOutput {

@@ -57,16 +57,7 @@ impl SshClient {
         })
     }
 
-    pub fn execute(&self, command: &str) -> CommandOutput {
-        self.execute_with_stdin(command, None)
-    }
-
-    pub fn upload_file(&self, local_path: &str, remote_path: &str) -> CommandOutput {
-        let remote_command = format!("cat > {}", shell::quote_path(remote_path));
-        self.execute_with_stdin(&remote_command, Some(local_path))
-    }
-
-    fn execute_with_stdin(&self, command: &str, stdin_file: Option<&str>) -> CommandOutput {
+    fn build_ssh_args(&self, command: Option<&str>) -> Vec<String> {
         let mut args = Vec::new();
 
         if let Some(identity_file) = &self.identity_file {
@@ -80,7 +71,25 @@ impl SshClient {
         }
 
         args.push(format!("{}@{}", self.user, self.host));
-        args.push(command.to_string());
+
+        if let Some(cmd) = command {
+            args.push(cmd.to_string());
+        }
+
+        args
+    }
+
+    pub fn execute(&self, command: &str) -> CommandOutput {
+        self.execute_with_stdin(command, None)
+    }
+
+    pub fn upload_file(&self, local_path: &str, remote_path: &str) -> CommandOutput {
+        let remote_command = format!("cat > {}", shell::quote_path(remote_path));
+        self.execute_with_stdin(&remote_command, Some(local_path))
+    }
+
+    fn execute_with_stdin(&self, command: &str, stdin_file: Option<&str>) -> CommandOutput {
+        let args = self.build_ssh_args(Some(command));
 
         let mut cmd = Command::new("ssh");
         cmd.args(&args);
@@ -120,23 +129,7 @@ impl SshClient {
     }
 
     pub fn execute_interactive(&self, command: Option<&str>) -> i32 {
-        let mut args = Vec::new();
-
-        if let Some(identity_file) = &self.identity_file {
-            args.push("-i".to_string());
-            args.push(identity_file.clone());
-        }
-
-        if self.port != 22 {
-            args.push("-p".to_string());
-            args.push(self.port.to_string());
-        }
-
-        args.push(format!("{}@{}", self.user, self.host));
-
-        if let Some(cmd) = command {
-            args.push(cmd.to_string());
-        }
+        let args = self.build_ssh_args(command);
 
         let status = Command::new("ssh")
             .args(&args)
@@ -153,10 +146,14 @@ impl SshClient {
 }
 
 pub fn execute_local_command(command: &str) -> CommandOutput {
-    execute_local_command_in_dir(command, None)
+    execute_local_command_in_dir(command, None, None)
 }
 
-pub fn execute_local_command_in_dir(command: &str, current_dir: Option<&str>) -> CommandOutput {
+pub fn execute_local_command_in_dir(
+    command: &str,
+    current_dir: Option<&str>,
+    env: Option<&[(&str, &str)]>,
+) -> CommandOutput {
     #[cfg(windows)]
     let mut cmd = {
         let mut cmd = Command::new("cmd");
@@ -173,6 +170,10 @@ pub fn execute_local_command_in_dir(command: &str, current_dir: Option<&str>) ->
 
     if let Some(dir) = current_dir {
         cmd.current_dir(dir);
+    }
+
+    if let Some(env_pairs) = env {
+        cmd.envs(env_pairs.iter().copied());
     }
 
     match cmd.output() {

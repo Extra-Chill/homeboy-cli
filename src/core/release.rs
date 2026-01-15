@@ -404,12 +404,18 @@ impl ReleaseStepExecutor {
             return Ok(());
         }
 
-        let artifacts_value = response.get("artifacts");
+        let artifacts_value = match response.get("artifacts") {
+            Some(value) => Some(value.clone()),
+            None => response
+                .get("stdout")
+                .and_then(|value| value.as_str())
+                .and_then(|stdout| serde_json::from_str::<serde_json::Value>(stdout).ok()),
+        };
         let Some(artifacts_value) = artifacts_value else {
             return Ok(());
         };
 
-        let artifacts = parse_release_artifacts(artifacts_value)?;
+        let artifacts = parse_release_artifacts(&artifacts_value)?;
         if artifacts.is_empty() {
             return Ok(());
         }

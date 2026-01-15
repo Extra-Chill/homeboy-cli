@@ -239,6 +239,18 @@ fn main() -> std::process::ExitCode {
         return std::process::ExitCode::SUCCESS;
     }
 
+    // Show help for changelog when neither subcommand nor --self is provided
+    if let Commands::Changelog(ref args) = cli.command {
+        if args.command.is_none() && !args.show_self {
+            let cmd = build_augmented_command(&module_info);
+            if let Some(mut changelog_cmd) = cmd.find_subcommand("changelog").cloned() {
+                changelog_cmd.print_help().expect("Failed to print help");
+                println!();
+                return std::process::ExitCode::SUCCESS;
+            }
+        }
+    }
+
     if let ResponseMode::Raw(RawOutputMode::Markdown) = mode {
         let markdown_result = commands::run_markdown(cli.command, &global);
 

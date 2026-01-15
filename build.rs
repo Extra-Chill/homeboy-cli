@@ -12,7 +12,7 @@ fn main() {
     }
 
     let mut doc_paths = Vec::new();
-    collect_md_files(&docs_root, &mut doc_paths);
+    collect_md_files(&docs_root, &docs_root, &mut doc_paths);
     doc_paths.sort();
 
     for path in &doc_paths {
@@ -26,7 +26,7 @@ fn main() {
         .expect("Failed to write generated_docs.rs");
 }
 
-fn collect_md_files(dir: &Path, out: &mut Vec<PathBuf>) {
+fn collect_md_files(docs_root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
     let entries = fs::read_dir(dir)
         .unwrap_or_else(|err| panic!("Failed to read dir {}: {}", dir.display(), err));
 
@@ -35,11 +35,19 @@ fn collect_md_files(dir: &Path, out: &mut Vec<PathBuf>) {
         let path = entry.path();
 
         if path.is_dir() {
-            collect_md_files(&path, out);
+            collect_md_files(docs_root, &path, out);
             continue;
         }
 
         if path.extension().and_then(|ext| ext.to_str()) == Some("md") {
+            // Exclude docs/changelog.md from embedded docs.
+            // Homeboy's changelog is accessed via `homeboy changelog --self` instead.
+            // Only exclude changelog.md at the docs root, not docs/commands/changelog.md.
+            if path.file_name().and_then(|n| n.to_str()) == Some("changelog.md")
+                && path.parent() == Some(docs_root)
+            {
+                continue;
+            }
             out.push(path);
         }
     }

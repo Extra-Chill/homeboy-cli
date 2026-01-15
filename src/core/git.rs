@@ -464,6 +464,8 @@ pub struct CommitOptions {
     pub staged_only: bool,
     /// Stage and commit only these specific files
     pub files: Option<Vec<String>>,
+    /// Stage all except these files (mutually exclusive with `files`)
+    pub exclude: Option<Vec<String>>,
 }
 
 fn get_component_path(component_id: &str) -> Result<String> {
@@ -602,17 +604,51 @@ pub fn commit(
 
     // Stage changes based on options
     if !options.staged_only {
-        let add_args: Vec<&str> = match &options.files {
-            Some(files) => {
+        match (&options.files, &options.exclude) {
+            // Both specified: error (mutually exclusive)
+            (Some(_), Some(_)) => {
+                return Err(Error::validation_invalid_argument(
+                    "files/exclude",
+                    "Cannot use both --files and --exclude",
+                    None,
+                    None,
+                ));
+            }
+            // Include only specific files
+            (Some(files), None) => {
                 let mut args = vec!["add", "--"];
                 args.extend(files.iter().map(|s| s.as_str()));
-                args
+                let add_output =
+                    execute_git(&path, &args).map_err(|e| Error::other(e.to_string()))?;
+                if !add_output.status.success() {
+                    return Ok(GitOutput::from_output(id, path, "commit", add_output));
+                }
             }
-            None => vec!["add", "."],
-        };
-        let add_output = execute_git(&path, &add_args).map_err(|e| Error::other(e.to_string()))?;
-        if !add_output.status.success() {
-            return Ok(GitOutput::from_output(id, path, "commit", add_output));
+            // Exclude specific files: stage all, then unstage excluded
+            (None, Some(excluded)) => {
+                let add_output =
+                    execute_git(&path, &["add", "."]).map_err(|e| Error::other(e.to_string()))?;
+                if !add_output.status.success() {
+                    return Ok(GitOutput::from_output(id, path, "commit", add_output));
+                }
+                // Unstage excluded files (git reset -- file1 file2)
+                // Note: git reset without --hard only unstages, does not discard changes
+                let mut reset_args = vec!["reset", "--"];
+                reset_args.extend(excluded.iter().map(|s| s.as_str()));
+                let reset_output =
+                    execute_git(&path, &reset_args).map_err(|e| Error::other(e.to_string()))?;
+                if !reset_output.status.success() {
+                    return Ok(GitOutput::from_output(id, path, "commit", reset_output));
+                }
+            }
+            // Default: stage all
+            (None, None) => {
+                let add_output =
+                    execute_git(&path, &["add", "."]).map_err(|e| Error::other(e.to_string()))?;
+                if !add_output.status.success() {
+                    return Ok(GitOutput::from_output(id, path, "commit", add_output));
+                }
+            }
         }
     }
 
@@ -647,6 +683,7 @@ fn commit_bulk(json_spec: &str) -> Result<BulkResult<GitOutput>> {
         let options = CommitOptions {
             staged_only: spec.staged_only,
             files: spec.files.clone(),
+            exclude: None,
         };
         match commit(Some(&id), Some(&spec.message), options) {
             Ok(output) => {
@@ -715,6 +752,7 @@ pub fn commit_from_json(id: Option<&str>, json_spec: &str) -> Result<CommitJsonO
     let options = CommitOptions {
         staged_only: spec.staged_only,
         files: spec.files,
+        exclude: None,
     };
 
     let output = commit(target_id.as_deref(), Some(&spec.message), options)?;

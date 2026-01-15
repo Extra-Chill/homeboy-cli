@@ -398,22 +398,22 @@ pub fn update(
             }
         }
         project.server_id = new_server_id;
-        updated.push("serverId".to_string());
+        updated.push("server_id".to_string());
     }
 
     if let Some(new_base_path) = base_path {
         project.base_path = new_base_path;
-        updated.push("basePath".to_string());
+        updated.push("base_path".to_string());
     }
 
     if let Some(new_table_prefix) = table_prefix {
         project.table_prefix = new_table_prefix;
-        updated.push("tablePrefix".to_string());
+        updated.push("table_prefix".to_string());
     }
 
     if let Some(new_component_ids) = component_ids {
         project.component_ids = new_component_ids;
-        updated.push("componentIds".to_string());
+        updated.push("component_ids".to_string());
     }
 
     save(&project)?;

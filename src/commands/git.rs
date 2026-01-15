@@ -61,6 +61,10 @@ enum GitCommand {
         /// Stage and commit only these specific files
         #[arg(long, num_args = 1..)]
         files: Option<Vec<String>>,
+
+        /// Hidden: captures common mistake, suggests --files instead
+        #[arg(long, hide = true, num_args = 1..)]
+        exclude: Option<Vec<String>>,
     },
     /// Push local commits to remote
     Push {
@@ -148,7 +152,21 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             message,
             staged_only,
             files,
+            exclude,
         } => {
+            // Handle common mistake: --exclude is not supported, suggest --files
+            if exclude.is_some() {
+                return Err(homeboy::Error::validation_invalid_argument(
+                    "--exclude",
+                    "The --exclude flag is not supported".to_string(),
+                    None,
+                    Some(vec![
+                        "Use --files to specify which files to include in the commit".to_string(),
+                        "Example: homeboy git commit <component> -m \"message\" --files file1.txt file2.txt".to_string(),
+                    ]),
+                ));
+            }
+
             // When --cwd is set, component_id is ignored. If user passed a positional
             // argument it was likely intended as the message/spec. Shift it.
             let effective_spec = if cwd && component_id.is_some() && spec.is_none() {

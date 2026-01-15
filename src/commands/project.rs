@@ -3,6 +3,7 @@ use serde::Serialize;
 
 use homeboy::component::{self, Component};
 use homeboy::project::{self, Project};
+use homeboy::server;
 
 #[derive(Args)]
 pub struct ProjectArgs {
@@ -242,6 +243,10 @@ pub struct ProjectOutput {
     batch: Option<homeboy::BatchResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deploy_ready: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deploy_blockers: Option<Vec<String>>,
 }
 
 pub fn run(
@@ -381,16 +386,65 @@ fn show(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
         None
     };
 
+    // Calculate deploy readiness
+    let (deploy_ready, deploy_blockers) = calculate_deploy_readiness(&project);
+
     Ok((
         ProjectOutput {
             command: "project.show".to_string(),
             project_id: Some(project.id.clone()),
             project: Some(project),
             hint,
+            deploy_ready: Some(deploy_ready),
+            deploy_blockers: if deploy_blockers.is_empty() {
+                None
+            } else {
+                Some(deploy_blockers)
+            },
             ..Default::default()
         },
         0,
     ))
+}
+
+fn calculate_deploy_readiness(project: &Project) -> (bool, Vec<String>) {
+    let mut blockers = Vec::new();
+
+    // Check server_id
+    match &project.server_id {
+        None => {
+            blockers.push(format!(
+                "Missing server_id - set with: homeboy project set {} '{{\"server_id\": \"<server-id>\"}}'",
+                project.id
+            ));
+        }
+        Some(sid) if !server::exists(sid) => {
+            blockers.push(format!(
+                "Server '{}' not found - create with: homeboy server set {} '{{\"host\": \"...\", \"user\": \"...\"}}'",
+                sid, sid
+            ));
+        }
+        _ => {}
+    }
+
+    // Check base_path
+    if project.base_path.as_ref().map(|p| p.is_empty()).unwrap_or(true) {
+        blockers.push(format!(
+            "Missing base_path - set with: homeboy project set {} '{{\"base_path\": \"/path/to/webroot\"}}'",
+            project.id
+        ));
+    }
+
+    // Check components
+    if project.component_ids.is_empty() {
+        blockers.push(format!(
+            "No components linked - add with: homeboy project components add {} <component-id>",
+            project.id
+        ));
+    }
+
+    let deploy_ready = blockers.is_empty();
+    (deploy_ready, blockers)
 }
 
 fn set(project_id: Option<&str>, json: &str) -> homeboy::Result<(ProjectOutput, i32)> {

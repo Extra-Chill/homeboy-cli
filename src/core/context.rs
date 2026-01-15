@@ -338,7 +338,7 @@ pub fn resolve_project_server(project_id: &str) -> Result<ProjectServerContext> 
     let project = project::load(project_id)?;
 
     let server_id = project.server_id.clone().ok_or_else(|| {
-        Error::config_missing_key("project.serverId", Some(project_id.to_string()))
+        Error::config_missing_key("project.server_id", Some(project_id.to_string()))
     })?;
 
     let server =
@@ -356,7 +356,7 @@ pub fn require_project_base_path(project_id: &str, project: &Project) -> Result<
         .base_path
         .clone()
         .filter(|p| !p.is_empty())
-        .ok_or_else(|| Error::config_missing_key("project.basePath", Some(project_id.to_string())))
+        .ok_or_else(|| Error::config_missing_key("project.base_path", Some(project_id.to_string())))
 }
 
 pub fn resolve_project_server_with_base_path(

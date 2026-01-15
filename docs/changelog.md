@@ -6,6 +6,15 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## [0.18.0] - 2026-01-15
+
+- Add belt & suspenders permission fixing (before build + after extraction)
+- Add -O flag for SCP legacy protocol compatibility (OpenSSH 9.x)
+- Add verbose output for deploy steps (mkdir/upload/extract)
+- Add SSH auto-cd to project base_path when project is resolved
+- Fix changelog finalization error propagation with helpful hints
+- Inherit changelog settings from project when component has single project
+
 ## 0.17.0
 
 - Agnostic local/remote command execution - db, logs, files now work for local projects

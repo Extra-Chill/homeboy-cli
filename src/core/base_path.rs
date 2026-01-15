@@ -21,7 +21,7 @@ pub fn join_remote_path(base_path: Option<&str>, path: &str) -> Result<String> {
     }
 
     let Some(base) = resolve_optional_base_path(base_path) else {
-        return Err(Error::config_missing_key("basePath", None));
+        return Err(Error::config_missing_key("base_path", None));
     };
 
     if base.ends_with('/') {

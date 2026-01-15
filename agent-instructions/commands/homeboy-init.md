@@ -40,7 +40,14 @@ Then read workspace docs (CLAUDE.md, README.md) for project context.
       { "id": "project-id", "domain": "example.com" }
     ],
     "components": [
-      { "id": "component-id", "local_path": "...", "remote_path": "...", "build_artifact": "..." }
+      {
+        "id": "component-id",
+        "local_path": "...",
+        "remote_path": "...",
+        "build_artifact": "...",
+        "build_command": "./build.sh",
+        "version_targets": [{ "file": "plugin.php", "pattern": "..." }]
+      }
     ],
     "modules": [
       { "id": "module-id", "name": "...", "version": "...", "ready": true, "compatible": true }

@@ -10,6 +10,30 @@ CLI for project development and deployment. Provides terminal access to project 
 
 **CLI documentation**: run `homeboy docs` (and `homeboy docs <topic>`).
 
+## First Steps (Required)
+
+**ALWAYS run `homeboy init` first** when entering any repository:
+
+```bash
+homeboy init
+```
+
+This returns critical context:
+- `context.managed`: Is this repo configured?
+- `context.matched_components`: Components in current directory
+- `context.components[].gaps`: Missing config with remediation commands
+- `components[].version_targets`: Files managed by `homeboy version`
+- Available servers, projects, components, modules
+
+**Decision Tree:**
+| Condition | Action |
+|-----------|--------|
+| `managed: true` | Ready to operate. Check `gaps` and run any remediation commands. |
+| `managed: false` + `contained_components` | Monorepo root. Navigate to component directory or use component ID in commands. |
+| `managed: false` (empty) | Unregistered repo. Create project/component based on workspace docs. |
+
+**Do NOT proceed with builds, deploys, or version changes until you understand the context.**
+
 ## Commands Overview
 
 | Command | Purpose |

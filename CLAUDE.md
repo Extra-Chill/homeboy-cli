@@ -17,3 +17,18 @@ When validating changes in this workspace, always run tests using the **release 
 
 - `cargo test --release`
 - When running the CLI for validation, prefer `cargo run --release -p homeboy-cli -- <args>`.
+
+## Agent Workflow (Critical)
+
+When working with Homeboy-managed repositories:
+
+1. **Always start with `homeboy init`** - Understand context before any operations
+2. **Use Homeboy commands for version changes** - `homeboy version set/bump`, never manual file edits
+3. **Use Homeboy for builds** - `homeboy build <component>`, not manual build scripts
+4. **Use Homeboy for deploys** - `homeboy deploy`, not manual rsync/scp
+
+Never assume repo structure. Let `homeboy init` tell you:
+- Which components exist
+- What build commands are configured
+- What version targets are managed
+- What gaps need remediation

@@ -75,7 +75,7 @@ Adds one or more changelog items to the configured "next" section in the compone
 
 `--json` for this command is an `add` subcommand option (not a root/global flag).
 
-Configuration / defaults:
+Configuration / defaults (strict by default):
 
 - Changelog path resolution:
   - If `changelogTargets` is set in the component config, the first target's `file` is used (relative to `component.localPath` unless it's absolute).
@@ -85,7 +85,12 @@ Configuration / defaults:
 - "Next section" resolution:
   - If no label is configured, Homeboy defaults to `Unreleased`.
   - If no aliases are configured, Homeboy matches both `Unreleased` and `[Unreleased]`.
-  - Config overrides (most specific first): component config → project config.
+  - If aliases are configured, Homeboy ensures the label and bracketed label are included for matching.
+  - Config overrides (most specific first): component config → project config → defaults.
+
+Notes:
+
+- Homeboy does not auto-fix existing changelogs. If the next section is missing or empty, commands will error with hints to fix it manually.
 
 
 ## JSON output

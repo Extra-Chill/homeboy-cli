@@ -566,7 +566,7 @@ pub fn bump_component_version(component: &Component, bump_type: &str) -> Result<
                 "Changelog has no finalized versions".to_string(),
                 None,
                 Some(vec![
-                    "Add at least one finalized version section like '## 0.1.0'".to_string(),
+                    "Add at least one finalized version section like '## [0.1.0] - YYYY-MM-DD'".to_string(),
                 ]),
             )
         })?;
@@ -882,22 +882,24 @@ pub fn bump_version_cwd(bump_type: &str) -> Result<BumpResult> {
     let changelog_path = changelog::detect_changelog_path(&cwd);
     let (changelog_finalized, changelog_changed, changelog_path_str) =
         if let Some(cl_path) = &changelog_path {
-            let changelog_content = fs::read_to_string(cl_path).unwrap_or_default();
+            let changelog_content = fs::read_to_string(cl_path)
+                .map_err(|e| Error::internal_io(e.to_string(), Some("read changelog".to_string())))?;
             let settings = changelog::default_settings();
 
-            if let Ok((finalized, changed)) = changelog::finalize_next_section(
+            let (finalized, changed) = changelog::finalize_next_section(
                 &changelog_content,
                 &settings.next_section_aliases,
                 &new_version,
                 false,
-            ) {
-                if changed {
-                    let _ = fs::write(cl_path, &finalized);
-                }
-                (true, changed, cl_path.to_string_lossy().to_string())
-            } else {
-                (false, false, cl_path.to_string_lossy().to_string())
+            )?;
+
+            if changed {
+                fs::write(cl_path, &finalized).map_err(|e| {
+                    Error::internal_io(e.to_string(), Some("write changelog".to_string()))
+                })?;
             }
+
+            (true, changed, cl_path.to_string_lossy().to_string())
         } else {
             (false, false, String::new())
         };

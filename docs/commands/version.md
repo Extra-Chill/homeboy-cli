@@ -42,8 +42,8 @@ Both subcommands support `--cwd` for ad-hoc operations in any directory without 
 
 This command:
 
-- Bumps all configured `versionTargets`.
-- Finalizes the component changelog by moving the current "next" section (usually `Unreleased`) into a new `## <newVersion>` section.
+- Bumps all configured `versionTargets` using semantic versioning (X.Y.Z).
+- Finalizes the component changelog by moving the current "next" section (usually `Unreleased`) into a new `## [<newVersion>] - YYYY-MM-DD` section.
 
 Changelog entries must be added *before* running this command (recommended: `homeboy changelog add --json ...`).
 
@@ -94,6 +94,11 @@ Arguments:
 Errors:
 
 - `bump` errors if the changelog cannot be resolved, if the changelog is out of sync with the current version, or if the "next" section is missing/empty.
+- `bump` errors if the current version is not semantic versioning format (X.Y.Z).
+
+Notes:
+
+- Homeboy does not auto-fix existing changelogs. If the next section is missing or empty, follow the hints in the error to fix it manually.
 
 ## Exit code
 

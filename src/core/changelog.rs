@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::component::{self, Component};
+use crate::project;
 use crate::core::local_files::{self, FileSystem};
 use crate::core::version;
 use crate::error::{Error, Result};
@@ -18,12 +19,24 @@ pub struct EffectiveChangelogSettings {
 }
 
 pub fn resolve_effective_settings(component: Option<&Component>) -> EffectiveChangelogSettings {
+    let project_settings = component
+        .and_then(|c| component::projects_using(&c.id).ok())
+        .and_then(|projects| {
+            if projects.len() == 1 {
+                project::load(&projects[0]).ok()
+            } else {
+                None
+            }
+        });
+
     let next_section_label = component
         .and_then(|c| c.changelog_next_section_label.clone())
+        .or_else(|| project_settings.as_ref().and_then(|p| p.changelog_next_section_label.clone()))
         .unwrap_or_else(|| DEFAULT_NEXT_SECTION_LABEL.to_string());
 
     let mut next_section_aliases = component
         .and_then(|c| c.changelog_next_section_aliases.clone())
+        .or_else(|| project_settings.and_then(|p| p.changelog_next_section_aliases.clone()))
         .unwrap_or_default();
 
     if next_section_aliases.is_empty() {
@@ -31,6 +44,29 @@ pub fn resolve_effective_settings(component: Option<&Component>) -> EffectiveCha
             next_section_label.clone(),
             format!("[{}]", next_section_label),
         ]);
+    } else {
+        let label_alias = next_section_label.trim();
+        let bracketed_alias = format!("[{}]", label_alias);
+
+        let mut has_label = false;
+        let mut has_bracketed = false;
+
+        for alias in &next_section_aliases {
+            let trimmed_alias = alias.trim();
+            if trimmed_alias == label_alias {
+                has_label = true;
+            }
+            if trimmed_alias == bracketed_alias {
+                has_bracketed = true;
+            }
+        }
+
+        if !has_label {
+            next_section_aliases.push(next_section_label.clone());
+        }
+        if !has_bracketed {
+            next_section_aliases.push(format!("[{}]", next_section_label));
+        }
     }
 
     EffectiveChangelogSettings {
@@ -42,10 +78,13 @@ pub fn resolve_effective_settings(component: Option<&Component>) -> EffectiveCha
 pub fn resolve_changelog_path(component: &Component) -> Result<PathBuf> {
     let target = component.changelog_target.as_ref().ok_or_else(|| {
         Error::validation_invalid_argument(
-            "component.changelogTarget",
-            "No changelog target configured for component. Set component.changelogTarget".to_string(),
+            "component.changelog_target",
+            "No changelog configured for component".to_string(),
             None,
-            None,
+            Some(vec![
+                format!("Create and configure: homeboy changelog init {} --configure", component.id),
+                "Or bypass changelog: homeboy version set <version>".to_string(),
+            ]),
         )
     })?;
 
@@ -186,7 +225,10 @@ pub fn finalize_next_section(
             "changelog",
             "Next changelog section not found (cannot finalize)",
             None,
-            None,
+            Some(vec![
+                "Add a next section heading like '## Unreleased' (or configure changelogNextSectionLabel/aliases).".to_string(),
+                "Run `homeboy changelog init` to create a Keep a Changelog template.".to_string(),
+            ]),
         )
     })?;
 
@@ -203,7 +245,10 @@ pub fn finalize_next_section(
             "changelog",
             "Next changelog section is empty",
             None,
-            None,
+            Some(vec![
+                "Add changelog items before bumping (e.g., `homeboy changelog add <componentId> -m \"...\"`).".to_string(),
+                "Ensure the next section contains at least one bullet item.".to_string(),
+            ]),
         ));
     }
 

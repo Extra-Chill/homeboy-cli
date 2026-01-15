@@ -3,7 +3,7 @@
 ## Synopsis
 
 ```sh
-homeboy deploy <projectId> [<componentIds...>] [-c|--component <id>]... [--all] [--outdated] [--json '<spec>']
+homeboy deploy <projectId> [<componentIds...>] [-c|--component <id>]... [--all] [--outdated] [--dry-run] [--json '<spec>']
 # If no component IDs are provided, you must use --all or --outdated.
 ```
 
@@ -18,6 +18,7 @@ Options:
 - `--all`: deploy all configured components
 - `--outdated`: deploy only outdated components
   - Determined from the first version target for each component.
+- `--dry-run`: preview what would be deployed without executing (no build, no upload)
 - `--json`: JSON input spec for bulk operations (`{"component_ids": ["component-id", ...]}`)
 
 Positional and flag component IDs can be mixed; both are merged into the deployment list.
@@ -34,11 +35,12 @@ If no component IDs are provided and neither `--all` nor `--outdated` is set, Ho
   "project_id": "<projectId>",
   "all": false,
   "outdated": false,
+  "dry_run": false,
   "results": [
     {
       "id": "<componentId>",
       "name": "<name>",
-      "status": "deployed|failed|skipped",
+      "status": "deployed|failed|skipped|planned",
       "deploy_reason": "explicitly_selected|all_selected|version_mismatch|unknown_local_version|unknown_remote_version",
       "local_version": "<v>|null",
       "remote_version": "<v>|null",
@@ -68,7 +70,26 @@ Exit code is `0` when `summary.failed == 0`, otherwise `1`.
 - `0` when all selected component deploys succeed.
 - `1` when any component deploy fails.
 
+## Preview Before Deploying
+
+Use `--dry-run` to see what would be deployed without executing:
+
+```sh
+homeboy deploy myproject --outdated --dry-run
+```
+
+To see detailed git changes (commits, diffs) before deploying, use the `changes` command:
+
+```sh
+# Show changes for all project components
+homeboy changes --project myproject
+
+# Show changes with git diffs included
+homeboy changes --project myproject --git-diffs
+```
+
 ## Related
 
 - [build](build.md)
+- [changes](changes.md)
 - [component](component.md)

@@ -28,6 +28,10 @@ pub struct DeployArgs {
     /// Deploy only outdated components
     #[arg(long)]
     pub outdated: bool,
+
+    /// Preview what would be deployed without executing
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 #[derive(Serialize)]
@@ -37,6 +41,7 @@ pub struct DeployOutput {
     pub project_id: String,
     pub all: bool,
     pub outdated: bool,
+    pub dry_run: bool,
     pub results: Vec<ComponentDeployResult>,
     pub summary: DeploySummary,
 }
@@ -71,6 +76,7 @@ pub fn run(mut args: DeployArgs, _global: &crate::commands::GlobalArgs) -> CmdRe
         component_ids: all_component_ids,
         all: args.all,
         outdated: args.outdated,
+        dry_run: args.dry_run,
     };
 
     let result = deploy::run(&args.project_id, &config)?;
@@ -82,6 +88,7 @@ pub fn run(mut args: DeployArgs, _global: &crate::commands::GlobalArgs) -> CmdRe
             project_id: args.project_id,
             all: args.all,
             outdated: args.outdated,
+            dry_run: args.dry_run,
             results: result.results,
             summary: result.summary,
         },

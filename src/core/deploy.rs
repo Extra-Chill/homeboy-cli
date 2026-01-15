@@ -301,6 +301,7 @@ pub struct DeployConfig {
     pub component_ids: Vec<String>,
     pub all: bool,
     pub outdated: bool,
+    pub dry_run: bool,
 }
 
 /// Reason why a component was selected for deployment.
@@ -449,12 +450,37 @@ pub fn deploy_components(
         .filter_map(|c| version::get_component_version(c).map(|v| (c.id.clone(), v)))
         .collect();
 
-    // Gather remote versions if needed
-    let remote_versions = if config.outdated {
+    // Gather remote versions if needed (for --outdated or --dry-run)
+    let remote_versions = if config.outdated || config.dry_run {
         fetch_remote_versions(&components_to_deploy, base_path, &ctx.client)
     } else {
         HashMap::new()
     };
+
+    // Dry-run mode: return planned results without building or deploying
+    if config.dry_run {
+        let results: Vec<ComponentDeployResult> = components_to_deploy
+            .iter()
+            .map(|c| {
+                let local_version = local_versions.get(&c.id).cloned();
+                let remote_version = remote_versions.get(&c.id).cloned();
+                ComponentDeployResult::new(c, base_path)
+                    .with_status("planned")
+                    .with_versions(local_version, remote_version)
+            })
+            .collect();
+
+        let total = results.len() as u32;
+        return Ok(DeployOrchestrationResult {
+            results,
+            summary: DeploySummary {
+                total,
+                succeeded: 0,
+                failed: 0,
+                skipped: 0,
+            },
+        });
+    }
 
     // Execute deployments
     let mut results: Vec<ComponentDeployResult> = vec![];

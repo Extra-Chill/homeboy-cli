@@ -1,8 +1,6 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
-use crate::docs;
-
 use super::CmdResult;
 use homeboy::changelog::{self, AddItemsOutput, InitOutput};
 
@@ -170,19 +168,19 @@ pub fn run(
     }
 }
 
-fn show_markdown() -> CmdResult<String> {
-    let resolved = docs::resolve(&["changelog".to_string()])?;
+// Homeboy's own changelog is embedded separately from the docs system
+// to avoid collision with docs/commands/changelog.md command docs.
+const HOMEBOY_CHANGELOG: &str = include_str!("../../docs/changelog.md");
 
-    Ok((resolved.content, 0))
+fn show_markdown() -> CmdResult<String> {
+    Ok((HOMEBOY_CHANGELOG.to_string(), 0))
 }
 
 fn show_json() -> CmdResult<ChangelogShowOutput> {
-    let resolved = docs::resolve(&["changelog".to_string()])?;
-
     Ok((
         ChangelogShowOutput {
-            topic_label: resolved.topic_label,
-            content: resolved.content,
+            topic_label: "changelog".to_string(),
+            content: HOMEBOY_CHANGELOG.to_string(),
         },
         0,
     ))

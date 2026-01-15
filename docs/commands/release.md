@@ -39,6 +39,7 @@ Notes:
 - Steps run in parallel when dependencies allow it.
 - Any step depending on a failed/missing step is skipped.
 - Release actions use module definitions configured in `component.modules`.
+- Release payload includes version, tag, notes, and artifacts (from the finalized changelog and package steps).
 
 ## JSON output
 
@@ -85,6 +86,25 @@ Notes:
           "warnings": [],
           "hints": [],
           "data": {}
+        },
+        {
+          "id": "publish",
+          "type": "publish",
+          "status": "success",
+          "missing": [],
+          "warnings": [],
+          "hints": [],
+          "data": {
+            "release": {
+              "version": "1.2.3",
+              "tag": "v1.2.3",
+              "notes": "- Added feature",
+              "artifacts": [
+                { "path": "dist/homeboy-macos.zip", "type": "binary", "platform": "macos" }
+              ],
+              "component_id": "homeboy"
+            }
+          }
         }
       ]
     }

@@ -632,6 +632,16 @@ pub fn run_action(
     project_id: Option<&str>,
     data: Option<&str>,
 ) -> Result<serde_json::Value> {
+    run_action_with_payload(module_id, action_id, project_id, data, None)
+}
+
+pub fn run_action_with_payload(
+    module_id: &str,
+    action_id: &str,
+    project_id: Option<&str>,
+    data: Option<&str>,
+    payload: Option<&serde_json::Value>,
+) -> Result<serde_json::Value> {
     let module = load_module(module_id)
         .ok_or_else(|| Error::other(format!("Module '{}' not found", module_id)))?;
 
@@ -681,7 +691,7 @@ pub fn run_action(
 
             let method = action.method.as_deref().unwrap_or("POST");
             let settings = get_module_settings(module_id, Some(pid))?;
-            let payload = interpolate_action_payload(action, &selected, &settings)?;
+            let payload = interpolate_action_payload(action, &selected, &settings, payload)?;
 
             if method == "GET" {
                 client.get(endpoint)
@@ -804,15 +814,21 @@ fn interpolate_action_payload(
     action: &ActionConfig,
     selected: &[serde_json::Value],
     settings: &HashMap<String, serde_json::Value>,
+    payload: Option<&serde_json::Value>,
 ) -> Result<serde_json::Value> {
     let payload_template = match &action.payload {
         Some(p) => p,
-        None => return Ok(serde_json::Value::Object(serde_json::Map::new())),
+        None => {
+            if let Some(payload) = payload {
+                return Ok(payload.clone());
+            }
+            return Ok(serde_json::Value::Object(serde_json::Map::new()));
+        }
     };
 
     let mut result = serde_json::Map::new();
     for (key, value) in payload_template {
-        let interpolated = interpolate_payload_value(value, selected, settings)?;
+        let interpolated = interpolate_payload_value(value, selected, settings, payload)?;
         result.insert(key.clone(), interpolated);
     }
 
@@ -823,6 +839,7 @@ fn interpolate_payload_value(
     value: &serde_json::Value,
     selected: &[serde_json::Value],
     settings: &HashMap<String, serde_json::Value>,
+    payload: Option<&serde_json::Value>,
 ) -> Result<serde_json::Value> {
     match value {
         serde_json::Value::String(template) => {
@@ -834,6 +851,12 @@ fn interpolate_payload_value(
                     .get(key)
                     .cloned()
                     .unwrap_or(serde_json::Value::String(String::new())))
+            } else if template.starts_with("{{payload.") && template.ends_with("}}") {
+                let key = &template[10..template.len() - 2];
+                Ok(payload
+                    .and_then(|payload| payload.get(key))
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null))
             } else {
                 Ok(serde_json::Value::String(template.clone()))
             }
@@ -841,14 +864,17 @@ fn interpolate_payload_value(
         serde_json::Value::Array(arr) => {
             let interpolated: Result<Vec<serde_json::Value>> = arr
                 .iter()
-                .map(|v| interpolate_payload_value(v, selected, settings))
+                .map(|v| interpolate_payload_value(v, selected, settings, payload))
                 .collect();
             Ok(serde_json::Value::Array(interpolated?))
         }
         serde_json::Value::Object(obj) => {
             let mut result = serde_json::Map::new();
             for (k, v) in obj {
-                result.insert(k.clone(), interpolate_payload_value(v, selected, settings)?);
+                result.insert(
+                    k.clone(),
+                    interpolate_payload_value(v, selected, settings, payload)?,
+                );
             }
             Ok(serde_json::Value::Object(result))
         }

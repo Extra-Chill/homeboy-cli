@@ -3,12 +3,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::component::{self, Component};
+use crate::core::local_files::FileSystem;
 use crate::error::{Error, Result};
 use crate::module::{self, ModuleManifest};
 use crate::pipeline::{
     self, PipelineCapabilityResolver, PipelinePlanStep, PipelineRunResult, PipelineRunStatus,
     PipelineStep, PipelineStepExecutor, PipelineStepResult,
 };
+use crate::{changelog, version};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 
@@ -65,6 +67,25 @@ pub struct ReleaseRun {
     pub component_id: String,
     pub enabled: bool,
     pub result: PipelineRunResult,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct ReleaseArtifact {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+
+struct ReleaseContext {
+    version: Option<String>,
+    tag: Option<String>,
+    notes: Option<String>,
+    artifacts: Vec<ReleaseArtifact>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,6 +167,7 @@ impl ReleaseCapabilityResolver {
 struct ReleaseStepExecutor {
     component_id: String,
     modules: Vec<ModuleManifest>,
+    context: std::sync::Mutex<ReleaseContext>,
 }
 
 impl ReleaseStepExecutor {
@@ -153,6 +175,7 @@ impl ReleaseStepExecutor {
         Self {
             component_id,
             modules,
+            context: std::sync::Mutex::new(ReleaseContext::default()),
         }
     }
 
@@ -228,9 +251,10 @@ impl ReleaseStepExecutor {
             .get("bump")
             .and_then(|v| v.as_str())
             .unwrap_or("patch");
-        let result = crate::version::bump_version(Some(&self.component_id), bump_type)?;
-        let data = serde_json::to_value(result)
+        let result = version::bump_version(Some(&self.component_id), bump_type)?;
+        let data = serde_json::to_value(&result)
             .map_err(|e| Error::internal_json(e.to_string(), Some("version output".to_string())))?;
+        self.store_version_context(&result.new_version)?;
         Ok(self.step_result(
             step,
             PipelineRunStatus::Success,
@@ -256,15 +280,13 @@ impl ReleaseStepExecutor {
 
         let tag_name = match tag {
             Some(name) => name,
-            None => {
-                let info = crate::version::read_version(Some(&self.component_id))?;
-                info.version
-            }
+            None => self.default_tag()?,
         };
 
         let output = crate::git::tag(Some(&self.component_id), Some(&tag_name), message)?;
         let data = serde_json::to_value(output)
             .map_err(|e| Error::internal_json(e.to_string(), Some("git tag output".to_string())))?;
+        self.store_tag_context(&tag_name)?;
         Ok(self.step_result(
             step,
             PipelineRunStatus::Success,
@@ -293,21 +315,122 @@ impl ReleaseStepExecutor {
         ))
     }
 
+    fn build_release_payload(&self, step: &PipelineStep) -> Result<serde_json::Value> {
+        let context = self.context.lock().map_err(|_| {
+            Error::internal_unexpected("Failed to lock release context".to_string())
+        })?;
+        let version = context.version.clone().unwrap_or_default();
+        let tag = context
+            .tag
+            .clone()
+            .unwrap_or_else(|| format!("v{}", version));
+        let notes = context.notes.clone().unwrap_or_default();
+        let artifacts = context.artifacts.clone();
+
+        let release_payload = serde_json::json!({
+            "release": {
+                "version": version,
+                "tag": tag,
+                "notes": notes,
+                "component_id": self.component_id,
+                "artifacts": artifacts
+            }
+        });
+
+        let mut payload = release_payload;
+        if !step.config.is_empty() {
+            let config_value = serde_json::to_value(&step.config).map_err(|e| {
+                Error::internal_json(e.to_string(), Some("release step config".to_string()))
+            })?;
+            payload["config"] = config_value;
+        }
+
+        Ok(payload)
+    }
+
+    fn store_version_context(&self, version_value: &str) -> Result<()> {
+        let mut context = self.context.lock().map_err(|_| {
+            Error::internal_unexpected("Failed to lock release context".to_string())
+        })?;
+        context.version = Some(version_value.to_string());
+        context.tag = Some(format!("v{}", version_value));
+        context.notes = Some(self.load_release_notes()?);
+        Ok(())
+    }
+
+    fn store_tag_context(&self, tag_value: &str) -> Result<()> {
+        let mut context = self.context.lock().map_err(|_| {
+            Error::internal_unexpected("Failed to lock release context".to_string())
+        })?;
+        context.tag = Some(tag_value.to_string());
+        Ok(())
+    }
+
+    fn default_tag(&self) -> Result<String> {
+        let context = self.context.lock().map_err(|_| {
+            Error::internal_unexpected("Failed to lock release context".to_string())
+        })?;
+        if let Some(tag) = context.tag.as_ref() {
+            return Ok(tag.clone());
+        }
+        if let Some(version) = context.version.as_ref() {
+            return Ok(format!("v{}", version));
+        }
+        let info = version::read_version(Some(&self.component_id))?;
+        Ok(format!("v{}", info.version))
+    }
+
+    fn load_release_notes(&self) -> Result<String> {
+        let component = component::load(&self.component_id)?;
+        let changelog_path = changelog::resolve_changelog_path(&component)?;
+        let changelog_content = crate::core::local_files::local().read(&changelog_path)?;
+        let notes = extract_latest_notes(&changelog_content).ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "changelog",
+                "No finalized changelog entries found for release notes",
+                None,
+                None,
+            )
+        })?;
+        Ok(notes)
+    }
+
+    fn update_artifacts_from_step(
+        &self,
+        step: &PipelineStep,
+        response: &serde_json::Value,
+    ) -> Result<()> {
+        if step.step_type != "package" {
+            return Ok(());
+        }
+
+        let artifacts_value = response.get("artifacts");
+        let Some(artifacts_value) = artifacts_value else {
+            return Ok(());
+        };
+
+        let artifacts = parse_release_artifacts(artifacts_value)?;
+        if artifacts.is_empty() {
+            return Ok(());
+        }
+
+        let mut context = self.context.lock().map_err(|_| {
+            Error::internal_unexpected("Failed to lock release context".to_string())
+        })?;
+        context.artifacts = artifacts;
+        Ok(())
+    }
+
     fn run_module_action(&self, step: &PipelineStep) -> Result<PipelineStepResult> {
         let action_id = format!("release.{}", step.step_type);
         let module = resolve_module_action(&self.modules, &action_id)?;
-        let payload = if step.config.is_empty() {
-            None
-        } else {
-            Some(serde_json::to_string(&step.config).map_err(|e| {
-                Error::internal_json(e.to_string(), Some("release step config".to_string()))
-            })?)
-        };
-
-        let response = module::run_action(&module.id, &action_id, None, payload.as_deref())?;
+        let payload = self.build_release_payload(step)?;
+        let response =
+            module::run_action_with_payload(&module.id, &action_id, None, None, Some(&payload))?;
         let data = serde_json::to_value(response).map_err(|e| {
             Error::internal_json(e.to_string(), Some("module action output".to_string()))
         })?;
+        self.update_artifacts_from_step(step, &data)?;
         Ok(self.step_result(
             step,
             PipelineRunStatus::Success,
@@ -385,6 +508,100 @@ fn resolve_module_action(modules: &[ModuleManifest], action_id: &str) -> Result<
     }
 
     Ok(matches[0].clone())
+}
+
+fn extract_latest_notes(content: &str) -> Option<String> {
+    let mut in_section = false;
+    let mut buffer = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("## ") {
+            if in_section {
+                break;
+            }
+            if extract_version_from_heading(trimmed).is_some() {
+                in_section = true;
+                continue;
+            }
+        }
+
+        if in_section {
+            buffer.push(line);
+        }
+    }
+
+    let notes = buffer.join("\n").trim().to_string();
+    if notes.is_empty() {
+        None
+    } else {
+        Some(notes)
+    }
+}
+
+fn extract_version_from_heading(label: &str) -> Option<String> {
+    let semver_pattern = regex::Regex::new(r"\[?(\d+\.\d+\.\d+)\]?").ok()?;
+    semver_pattern
+        .captures(label)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().to_string())
+}
+
+fn parse_release_artifacts(value: &serde_json::Value) -> Result<Vec<ReleaseArtifact>> {
+    let mut artifacts = Vec::new();
+    let items = match value {
+        serde_json::Value::Array(arr) => arr.clone(),
+        serde_json::Value::Object(_) => vec![value.clone()],
+        _ => Vec::new(),
+    };
+
+    for item in items {
+        let artifact = match item {
+            serde_json::Value::String(path) => ReleaseArtifact {
+                path,
+                artifact_type: None,
+                platform: None,
+            },
+            serde_json::Value::Object(map) => {
+                let path = map
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        Error::validation_invalid_argument(
+                            "release.artifacts",
+                            "Artifact is missing 'path'",
+                            None,
+                            None,
+                        )
+                    })?
+                    .to_string();
+                let artifact_type = map
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string());
+                let platform = map
+                    .get("platform")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string());
+                ReleaseArtifact {
+                    path,
+                    artifact_type,
+                    platform,
+                }
+            }
+            _ => {
+                return Err(Error::validation_invalid_argument(
+                    "release.artifacts",
+                    "Artifact entry is invalid",
+                    None,
+                    None,
+                ))
+            }
+        };
+        artifacts.push(artifact);
+    }
+
+    Ok(artifacts)
 }
 
 pub fn resolve_component_release(component: &Component) -> Option<ReleaseConfig> {

@@ -30,7 +30,6 @@ Release workflow note:
 ## Options
 
 - `--cwd`: use current working directory (ad-hoc mode, no component registration required)
-- `--cwd`: use current working directory (ad-hoc mode, no component registration required)
 - `--json <spec>`: bulk mode input
   - Priority: `--cwd > --json > --project > positional`
   - `<spec>` supports `-` (stdin), `@file.json`, or an inline JSON string
@@ -111,8 +110,6 @@ Notes:
 
 - `0` when the command succeeds and `summary.failed == 0`.
 - `1` in bulk/project modes when `summary.failed > 0`.
-
-> Note: single-target modes (`<componentId>` and `--cwd`) always return exit code `0` on success, even when the underlying git operations report `success: false` in the output.
 
 ## jq examples
 

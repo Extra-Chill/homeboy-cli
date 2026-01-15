@@ -216,9 +216,14 @@ fn value_type_name(value: &Value) -> &'static str {
 
 // === Bulk Operations ===
 
-/// Detect if input is JSON (starts with '{') or a plain ID
+/// Detect if input is JSON object (starts with '{') or a plain ID
 pub fn is_json_input(input: &str) -> bool {
     input.trim_start().starts_with('{')
+}
+
+/// Detect if input is JSON array (starts with '[')
+pub fn is_json_array(input: &str) -> bool {
+    input.trim_start().starts_with('[')
 }
 
 /// Standardized bulk execution result

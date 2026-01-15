@@ -845,7 +845,8 @@ pub fn changes(
             let p = get_cwd_path()?;
             if !is_git_repo(&p) {
                 return Err(Error::git_command_failed("Not a git repository")
-                    .with_hint("Run 'homeboy context' to detect your environment")
+                    .with_hint("Provide a component ID instead: homeboy <command> <component-id>")
+                    .with_hint("Run 'homeboy component list' to see registered components")
                     .with_hint("Run 'homeboy context --discover' to find git repos in subdirectories"));
             }
             ("cwd".to_string(), p)

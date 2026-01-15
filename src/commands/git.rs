@@ -39,9 +39,11 @@ enum GitCommand {
         /// Component ID (optional if provided in JSON body)
         component_id: Option<String>,
 
-        /// JSON spec (positional, supports @file and - for stdin).
-        /// Single: {"id":"x","message":"m","stagedOnly":true,"files":[...]}
-        /// Bulk: {"components":[...]}
+        /// Commit message or JSON spec (auto-detected).
+        /// Plain text: treated as commit message.
+        /// JSON (starts with { or [): parsed as commit spec.
+        /// @file.json: reads JSON from file.
+        /// "-": reads JSON from stdin.
         spec: Option<String>,
 
         /// Explicit JSON spec (takes precedence over positional)
@@ -147,8 +149,8 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
             staged_only,
             files,
         } => {
-            // JSON mode: prioritize --json over positional spec
-            if let Some(json_spec) = json.or(spec) {
+            // Explicit --json flag always uses JSON mode
+            if let Some(json_spec) = json {
                 let target = if cwd { None } else { component_id.as_deref() };
                 let output = git::commit_from_json(target, &json_spec)?;
                 return match output {
@@ -163,10 +165,46 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
                 };
             }
 
-            // CLI flag mode
+            // Auto-detect: check if positional spec looks like JSON or is a plain message
+            let (inferred_message, json_spec) = match &spec {
+                Some(s) => {
+                    let trimmed = s.trim();
+                    // JSON indicators: starts with { or [, uses @file, or - for stdin
+                    let is_json = trimmed.starts_with('{')
+                        || trimmed.starts_with('[')
+                        || trimmed.starts_with('@')
+                        || trimmed == "-";
+                    if is_json {
+                        (None, Some(s.clone()))
+                    } else {
+                        // Treat as plain commit message
+                        (Some(s.clone()), None)
+                    }
+                }
+                None => (None, None),
+            };
+
+            // JSON mode if auto-detected
+            if let Some(json_str) = json_spec {
+                let target = if cwd { None } else { component_id.as_deref() };
+                let output = git::commit_from_json(target, &json_str)?;
+                return match output {
+                    git::CommitJsonOutput::Single(o) => {
+                        let exit_code = o.exit_code;
+                        Ok((GitCommandOutput::Single(o), exit_code))
+                    }
+                    git::CommitJsonOutput::Bulk(b) => {
+                        let exit_code = if b.summary.failed > 0 { 1 } else { 0 };
+                        Ok((GitCommandOutput::Bulk(b), exit_code))
+                    }
+                };
+            }
+
+            // CLI flag mode - use inferred message or explicit -m flag
+            let final_message = inferred_message.or(message);
             let target = if cwd { None } else { component_id.as_deref() };
             let options = git::CommitOptions { staged_only, files };
-            let output = git::commit(target, message.as_deref(), options)?;
+            let output = git::commit(target, final_message.as_deref(), options)?;
             let exit_code = output.exit_code;
             Ok((GitCommandOutput::Single(output), exit_code))
         }

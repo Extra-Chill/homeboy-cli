@@ -325,6 +325,23 @@ pub fn exists(id: &str) -> bool {
     config::exists::<Project>(id)
 }
 
+pub enum MergeOutput {
+    Single(json::MergeResult),
+    Bulk(config::BatchResult),
+}
+
+/// Unified merge that auto-detects single vs bulk operations.
+/// Array input triggers batch merge, object input triggers single merge.
+pub fn merge(id: Option<&str>, json_spec: &str) -> Result<MergeOutput> {
+    let raw = json::read_json_spec_to_string(json_spec)?;
+
+    if json::is_json_array(&raw) {
+        return Ok(MergeOutput::Bulk(config::merge_batch_from_json::<Project>(&raw)?));
+    }
+
+    Ok(MergeOutput::Single(merge_from_json(id, &raw)?))
+}
+
 /// Merge JSON into project config. Accepts JSON string, @file, or - for stdin.
 /// ID can be provided as argument or extracted from JSON body.
 pub fn merge_from_json(id: Option<&str>, json_spec: &str) -> Result<json::MergeResult> {

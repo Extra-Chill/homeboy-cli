@@ -117,6 +117,7 @@ pub(crate) fn list_ids<T: ConfigEntity>() -> Result<Vec<String>> {
 #[serde(rename_all = "camelCase")]
 pub struct BatchResult {
     pub created: u32,
+    pub updated: u32,
     pub skipped: u32,
     pub errors: u32,
     pub items: Vec<BatchResultItem>,
@@ -135,6 +136,7 @@ impl BatchResult {
     pub fn new() -> Self {
         Self {
             created: 0,
+            updated: 0,
             skipped: 0,
             errors: 0,
             items: Vec::new(),
@@ -146,6 +148,15 @@ impl BatchResult {
         self.items.push(BatchResultItem {
             id,
             status: "created".to_string(),
+            error: None,
+        });
+    }
+
+    pub fn record_updated(&mut self, id: String) {
+        self.updated += 1;
+        self.items.push(BatchResultItem {
+            id,
+            status: "updated".to_string(),
             error: None,
         });
     }
@@ -269,6 +280,58 @@ pub(crate) fn merge_from_json<T: ConfigEntity>(
     })
 }
 
+pub(crate) fn merge_batch_from_json<T: ConfigEntity>(spec: &str) -> Result<BatchResult> {
+    let raw = json::read_json_spec_to_string(spec)?;
+    let value: serde_json::Value = json::from_str(&raw)?;
+
+    let items: Vec<serde_json::Value> = if value.is_array() {
+        value.as_array().unwrap().clone()
+    } else {
+        vec![value]
+    };
+
+    let mut result = BatchResult::new();
+
+    for item in items {
+        let id = match item.get("id").and_then(|v| v.as_str()) {
+            Some(id) => id.to_string(),
+            None => {
+                result.record_error(
+                    "unknown".to_string(),
+                    "Missing required field: id".to_string(),
+                );
+                continue;
+            }
+        };
+
+        let mut patch = item.clone();
+        if let Some(obj) = patch.as_object_mut() {
+            obj.remove("id");
+        }
+
+        match load::<T>(&id) {
+            Ok(mut entity) => match json::merge_config(&mut entity, patch) {
+                Ok(_) => {
+                    if let Err(e) = save(&entity) {
+                        result.record_error(id, e.message.clone());
+                    } else {
+                        result.record_updated(id);
+                    }
+                }
+                Err(e) => {
+                    result.record_error(id, e.message.clone());
+                }
+            },
+            Err(e) => {
+                result.record_error(id, format!("{} not found", T::entity_type()));
+                let _ = e; // Suppress unused warning
+            }
+        }
+    }
+
+    Ok(result)
+}
+
 pub(crate) fn remove_from_json<T: ConfigEntity>(
     id: Option<&str>,
     json_spec: &str,
@@ -377,8 +440,9 @@ fn levenshtein(a: &str, b: &str) -> usize {
     prev_row[b_len]
 }
 
-/// Find entity IDs similar to the given target using edit distance.
-/// Returns up to 3 matches with distance <= 3.
+/// Find entity IDs similar to the given target.
+/// Uses prefix matching, suffix matching, and Levenshtein distance.
+/// Returns up to 3 matches prioritized by match quality.
 pub(crate) fn find_similar_ids<T: ConfigEntity>(target: &str) -> Vec<String> {
     let existing = match list_ids::<T>() {
         Ok(ids) => ids,
@@ -386,18 +450,30 @@ pub(crate) fn find_similar_ids<T: ConfigEntity>(target: &str) -> Vec<String> {
     };
 
     let target_lower = target.to_lowercase();
-    let mut matches: Vec<(String, usize)> = existing
-        .into_iter()
-        .filter_map(|id| {
-            let dist = levenshtein(&target_lower, &id.to_lowercase());
-            if dist <= 3 && dist > 0 {
-                Some((id, dist))
-            } else {
-                None
-            }
-        })
-        .collect();
+    let mut matches: Vec<(String, usize)> = Vec::new();
 
-    matches.sort_by_key(|(_, dist)| *dist);
+    for id in existing {
+        let id_lower = id.to_lowercase();
+
+        // Priority 0: Prefix match (target is prefix of existing)
+        if id_lower.starts_with(&target_lower) && id_lower != target_lower {
+            matches.push((id, 0));
+            continue;
+        }
+
+        // Priority 1: Suffix match (target is suffix of existing)
+        if id_lower.ends_with(&target_lower) {
+            matches.push((id, 1));
+            continue;
+        }
+
+        // Priority 2: Levenshtein distance <= 3
+        let dist = levenshtein(&target_lower, &id_lower);
+        if dist <= 3 && dist > 0 {
+            matches.push((id, dist + 10)); // Offset to sort after prefix/suffix
+        }
+    }
+
+    matches.sort_by_key(|(_, priority)| *priority);
     matches.into_iter().take(3).map(|(id, _)| id).collect()
 }

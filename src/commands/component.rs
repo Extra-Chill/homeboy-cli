@@ -92,6 +92,8 @@ pub struct ComponentOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub import: Option<CreateSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub batch: Option<CreateSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub project_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub projects: Option<Vec<Project>>,
@@ -134,6 +136,7 @@ pub fn run(
                     component: Some(result.component),
                     components: vec![],
                     import: None,
+                    batch: None,
                     project_ids: None,
                     projects: None,
                 },
@@ -172,6 +175,7 @@ fn create_json(spec: &str, skip_existing: bool) -> CmdResult<ComponentOutput> {
             component: None,
             components: vec![],
             import: Some(summary),
+            batch: None,
             project_ids: None,
             projects: None,
         },
@@ -191,6 +195,7 @@ fn show(id: &str) -> CmdResult<ComponentOutput> {
             component: Some(component),
             components: vec![],
             import: None,
+            batch: None,
             project_ids: None,
             projects: None,
         },
@@ -199,22 +204,44 @@ fn show(id: &str) -> CmdResult<ComponentOutput> {
 }
 
 fn set(id: Option<&str>, json: &str) -> CmdResult<ComponentOutput> {
-    let result = component::merge_from_json(id, json)?;
-    let component = component::load(&result.id)?;
-    Ok((
-        ComponentOutput {
-            command: "component.set".to_string(),
-            component_id: Some(result.id),
-            success: true,
-            updated_fields: result.updated_fields,
-            component: Some(component),
-            components: vec![],
-            import: None,
-            project_ids: None,
-            projects: None,
-        },
-        0,
-    ))
+    match component::merge(id, json)? {
+        component::MergeOutput::Single(result) => {
+            let comp = component::load(&result.id)?;
+            Ok((
+                ComponentOutput {
+                    command: "component.set".to_string(),
+                    component_id: Some(result.id),
+                    success: true,
+                    updated_fields: result.updated_fields,
+                    component: Some(comp),
+                    components: vec![],
+                    import: None,
+                    batch: None,
+                    project_ids: None,
+                    projects: None,
+                },
+                0,
+            ))
+        }
+        component::MergeOutput::Bulk(summary) => {
+            let exit_code = if summary.errors > 0 { 1 } else { 0 };
+            Ok((
+                ComponentOutput {
+                    command: "component.set".to_string(),
+                    component_id: None,
+                    success: summary.errors == 0,
+                    updated_fields: vec![],
+                    component: None,
+                    components: vec![],
+                    import: None,
+                    batch: Some(summary),
+                    project_ids: None,
+                    projects: None,
+                },
+                exit_code,
+            ))
+        }
+    }
 }
 
 fn delete(id: &str) -> CmdResult<ComponentOutput> {
@@ -229,6 +256,7 @@ fn delete(id: &str) -> CmdResult<ComponentOutput> {
             component: None,
             components: vec![],
             import: None,
+            batch: None,
             project_ids: None,
             projects: None,
         },
@@ -248,6 +276,7 @@ fn rename(id: &str, new_id: &str) -> CmdResult<ComponentOutput> {
             component: Some(result.component),
             components: vec![],
             import: None,
+            batch: None,
             project_ids: None,
             projects: None,
         },
@@ -267,6 +296,7 @@ fn list() -> CmdResult<ComponentOutput> {
             component: None,
             components,
             import: None,
+            batch: None,
             project_ids: None,
             projects: None,
         },
@@ -293,6 +323,7 @@ fn projects(id: &str) -> CmdResult<ComponentOutput> {
             component: None,
             components: vec![],
             import: None,
+            batch: None,
             project_ids: Some(project_ids),
             projects: Some(projects_list),
         },

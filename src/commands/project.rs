@@ -234,6 +234,8 @@ pub struct ProjectOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     import: Option<project::CreateSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    batch: Option<project::CreateSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     hint: Option<String>,
 }
 
@@ -359,6 +361,7 @@ fn list() -> homeboy::Result<(ProjectOutput, i32)> {
             removed: None,
             deleted: None,
             import: None,
+            batch: None,
             hint: None,
         },
         0,
@@ -396,23 +399,45 @@ fn show(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
 }
 
 fn set(project_id: Option<&str>, json: &str) -> homeboy::Result<(ProjectOutput, i32)> {
-    let result = project::merge_from_json(project_id, json)?;
-    Ok((
-        ProjectOutput {
-            command: "project.set".to_string(),
-            project_id: Some(result.id.clone()),
-            project: Some(project::load(&result.id)?),
-            projects: None,
-            components: None,
-            pin: None,
-            updated: Some(result.updated_fields),
-            removed: None,
-            deleted: None,
-            import: None,
-            hint: None,
-        },
-        0,
-    ))
+    match project::merge(project_id, json)? {
+        project::MergeOutput::Single(result) => Ok((
+            ProjectOutput {
+                command: "project.set".to_string(),
+                project_id: Some(result.id.clone()),
+                project: Some(project::load(&result.id)?),
+                projects: None,
+                components: None,
+                pin: None,
+                updated: Some(result.updated_fields),
+                removed: None,
+                deleted: None,
+                import: None,
+                batch: None,
+                hint: None,
+            },
+            0,
+        )),
+        project::MergeOutput::Bulk(summary) => {
+            let exit_code = if summary.errors > 0 { 1 } else { 0 };
+            Ok((
+                ProjectOutput {
+                    command: "project.set".to_string(),
+                    project_id: None,
+                    project: None,
+                    projects: None,
+                    components: None,
+                    pin: None,
+                    updated: None,
+                    removed: None,
+                    deleted: None,
+                    import: None,
+                    batch: Some(summary),
+                    hint: None,
+                },
+                exit_code,
+            ))
+        }
+    }
 }
 
 fn remove(project_id: Option<&str>, json: &str) -> homeboy::Result<(ProjectOutput, i32)> {
@@ -429,6 +454,7 @@ fn remove(project_id: Option<&str>, json: &str) -> homeboy::Result<(ProjectOutpu
             removed: Some(result.removed_from),
             deleted: None,
             import: None,
+            batch: None,
             hint: None,
         },
         0,
@@ -450,6 +476,7 @@ fn rename(project_id: &str, new_id: &str) -> homeboy::Result<(ProjectOutput, i32
             removed: None,
             deleted: None,
             import: None,
+            batch: None,
             hint: None,
         },
         0,
@@ -471,6 +498,7 @@ fn delete(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
             removed: None,
             deleted: Some(vec![project_id.to_string()]),
             import: None,
+            batch: None,
             hint: None,
         },
         0,
@@ -522,6 +550,7 @@ fn components_list(project_id: &str) -> homeboy::Result<(ProjectOutput, i32)> {
             removed: None,
             deleted: None,
             import: None,
+            batch: None,
             hint: None,
         },
         0,
@@ -592,6 +621,7 @@ fn write_project_components(
             removed: None,
             deleted: None,
             import: None,
+            batch: None,
             hint: None,
         },
         0,
@@ -669,6 +699,7 @@ fn pin_list(project_id: &str, pin_type: ProjectPinType) -> homeboy::Result<(Proj
             removed: None,
             deleted: None,
             import: None,
+            batch: None,
             hint: None,
         },
         0,
@@ -719,6 +750,7 @@ fn pin_add(
             removed: None,
             deleted: None,
             import: None,
+            batch: None,
             hint: None,
         },
         0,
@@ -759,6 +791,7 @@ fn pin_remove(
             removed: None,
             deleted: None,
             import: None,
+            batch: None,
             hint: None,
         },
         0,

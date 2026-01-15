@@ -121,6 +121,23 @@ pub fn save(component: &Component) -> Result<()> {
     config::save(component)
 }
 
+pub enum MergeOutput {
+    Single(json::MergeResult),
+    Bulk(config::BatchResult),
+}
+
+/// Unified merge that auto-detects single vs bulk operations.
+/// Array input triggers batch merge, object input triggers single merge.
+pub fn merge(id: Option<&str>, json_spec: &str) -> Result<MergeOutput> {
+    let raw = json::read_json_spec_to_string(json_spec)?;
+
+    if json::is_json_array(&raw) {
+        return Ok(MergeOutput::Bulk(config::merge_batch_from_json::<Component>(&raw)?));
+    }
+
+    Ok(MergeOutput::Single(merge_from_json(id, &raw)?))
+}
+
 /// Merge JSON into component config. Accepts JSON string, @file, or - for stdin.
 /// ID can be provided as argument or extracted from JSON body.
 /// If JSON contains an `id` field that differs from the target, automatically renames the component.

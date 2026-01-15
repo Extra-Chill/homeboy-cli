@@ -15,7 +15,7 @@ Note: some subcommands accept a `--json` flag for bulk operations.
 ### Single Component Mode
 
 - `status <componentId>`
-- `commit <componentId> [spec] [--json <spec>] [-m <message>] [--staged-only] [--files <paths>...]`
+- `commit <componentId> [message-or-spec] [--json <spec>] [-m <message>] [--staged-only] [--files <paths>...]`
 - `push <componentId> [--tags]`
 - `pull <componentId>`
 - `tag <componentId> [tagName] [-m <message>]`
@@ -44,8 +44,9 @@ All subcommands support `--cwd` for ad-hoc operations in any git directory witho
 
 `homeboy git commit` accepts a **JSON spec** for single or bulk commits.
 
-- You can pass the spec positionally: `homeboy git commit <componentId> '<json>'`
-- Or explicitly: `homeboy git commit <componentId> --json '<json>'`
+- You can pass the spec positionally: `homeboy git commit <componentId> '<json>'` (auto-detected as JSON)
+- Or pass a plain message positionally: `homeboy git commit <componentId> 'Update docs'`
+- Or explicitly: `homeboy git commit <componentId> --json '<json>'` (forces JSON mode)
 - The JSON spec value supports:
   - an inline JSON string
   - `-` to read from stdin

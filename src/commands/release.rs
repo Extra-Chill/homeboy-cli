@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
-use homeboy::release::{self, ReleasePlan};
+use homeboy::release::{self, ReleasePlan, ReleaseRun};
 
 use super::CmdResult;
 
@@ -23,6 +23,14 @@ enum ReleaseCommand {
         #[arg(long)]
         module: Option<String>,
     },
+    /// Run a component release pipeline
+    Run {
+        /// Component ID to run
+        component_id: String,
+        /// Module ID to source release actions (optional)
+        #[arg(long)]
+        module: Option<String>,
+    },
 }
 
 #[derive(Serialize)]
@@ -31,6 +39,8 @@ enum ReleaseCommand {
 pub enum ReleaseOutput {
     #[serde(rename = "release.plan")]
     Plan { plan: ReleasePlan },
+    #[serde(rename = "release.run")]
+    Run { run: ReleaseRun },
 }
 
 pub fn run(args: ReleaseArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<ReleaseOutput> {
@@ -41,6 +51,13 @@ pub fn run(args: ReleaseArgs, _global: &crate::commands::GlobalArgs) -> CmdResul
         } => {
             let plan = release::plan(&component_id, module.as_deref())?;
             Ok((ReleaseOutput::Plan { plan }, 0))
+        }
+        ReleaseCommand::Run {
+            component_id,
+            module,
+        } => {
+            let run = release::run(&component_id, module.as_deref())?;
+            Ok((ReleaseOutput::Run { run }, 0))
         }
     }
 }

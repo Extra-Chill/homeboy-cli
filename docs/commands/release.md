@@ -26,6 +26,19 @@ Notes:
 - If no release config exists for the component, the command errors and suggests adding one via `homeboy component set`.
 - `--module` is optional and only used for module actions.
 
+### `run`
+
+```sh
+homeboy release run <component_id> [--module <module_id>]
+```
+
+Executes the release pipeline steps defined in the component `release` block.
+
+Notes:
+
+- Steps run in parallel when dependencies allow it.
+- Any step depending on a failed/missing step is skipped.
+
 ## JSON output
 
 > Note: all command output is wrapped in the global JSON envelope described in the [JSON output contract](../json-output/json-output-contract.md). The object below is the `data` payload.
@@ -36,11 +49,6 @@ Notes:
   "plan": {
     "component_id": "<component_id>",
     "enabled": true,
-    "sources": {
-      "module": true,
-      "project": false,
-      "component": true
-    },
     "steps": [
       {
         "id": "build",
@@ -58,7 +66,33 @@ Notes:
 }
 ```
 
+```json
+{
+  "command": "release.run",
+  "run": {
+    "component_id": "<component_id>",
+    "enabled": true,
+    "result": {
+      "status": "success",
+      "warnings": [],
+      "steps": [
+        {
+          "id": "build",
+          "type": "build",
+          "status": "success",
+          "missing": [],
+          "warnings": [],
+          "hints": [],
+          "data": {}
+        }
+      ]
+    }
+  }
+}
+```
+
 ## Related
 
 - [component](component.md)
 - [module](module.md)
+

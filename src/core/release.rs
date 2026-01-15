@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use crate::component::{self, Component};
 use crate::error::{Error, Result};
 use crate::module::{self, ModuleManifest};
+use crate::pipeline::{self, PipelineCapabilityResolver, PipelinePlanStep, PipelineStep};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 
@@ -29,6 +30,18 @@ pub struct ReleaseStep {
     pub needs: Vec<String>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub config: HashMap<String, serde_json::Value>,
+}
+
+impl From<ReleaseStep> for PipelineStep {
+    fn from(step: ReleaseStep) -> Self {
+        PipelineStep {
+            id: step.id,
+            step_type: step.step_type,
+            label: step.label,
+            needs: step.needs,
+            config: step.config,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +73,26 @@ pub struct ReleasePlanStep {
     pub missing: Vec<String>,
 }
 
+impl From<PipelinePlanStep> for ReleasePlanStep {
+    fn from(step: PipelinePlanStep) -> Self {
+        let status = match step.status {
+            pipeline::PipelineStepStatus::Ready => ReleasePlanStatus::Ready,
+            pipeline::PipelineStepStatus::Missing => ReleasePlanStatus::Missing,
+            pipeline::PipelineStepStatus::Disabled => ReleasePlanStatus::Disabled,
+        };
+
+        Self {
+            id: step.id,
+            step_type: step.step_type,
+            label: step.label,
+            needs: step.needs,
+            config: step.config,
+            status,
+            missing: step.missing,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 
@@ -67,6 +100,36 @@ pub enum ReleasePlanStatus {
     Ready,
     Missing,
     Disabled,
+}
+
+struct ReleaseCapabilityResolver<'a> {
+    module: Option<&'a ModuleManifest>,
+}
+
+impl<'a> ReleaseCapabilityResolver<'a> {
+    fn new(module: Option<&'a ModuleManifest>) -> Self {
+        Self { module }
+    }
+}
+
+impl PipelineCapabilityResolver for ReleaseCapabilityResolver<'_> {
+    fn is_supported(&self, step_type: &str) -> bool {
+        is_core_step(step_type) || self.supports_module_action(step_type)
+    }
+
+    fn missing(&self, step_type: &str) -> Vec<String> {
+        let action_id = format!("release.{}", step_type);
+        vec![format!("Missing action '{}'", action_id)]
+    }
+}
+
+impl ReleaseCapabilityResolver<'_> {
+    fn supports_module_action(&self, step_type: &str) -> bool {
+        let action_id = format!("release.{}", step_type);
+        self.module
+            .map(|module| module.actions.iter().any(|action| action.id == action_id))
+            .unwrap_or(false)
+    }
 }
 
 pub fn resolve_component_release(component: &Component) -> Option<ReleaseConfig> {
@@ -100,11 +163,18 @@ pub fn plan(component_id: &str, module_id: Option<&str>) -> Result<ReleasePlan> 
     })?;
 
     let enabled = release.enabled.unwrap_or(true);
-    let mut warnings = Vec::new();
-    let ordered = order_steps(&release.steps, &mut warnings)?;
-    let steps: Vec<ReleasePlanStep> = ordered
+    let resolver = ReleaseCapabilityResolver::new(module.as_ref());
+    let pipeline_steps: Vec<PipelineStep> = release
+        .steps
+        .iter()
+        .cloned()
+        .map(PipelineStep::from)
+        .collect();
+    let pipeline_plan = pipeline::plan(&pipeline_steps, &resolver, enabled, "release.steps")?;
+    let steps: Vec<ReleasePlanStep> = pipeline_plan
+        .steps
         .into_iter()
-        .map(|step| to_plan_step(&step, module.as_ref(), enabled))
+        .map(ReleasePlanStep::from)
         .collect();
     let hints = build_plan_hints(component_id, &steps, module.as_ref());
 
@@ -112,137 +182,9 @@ pub fn plan(component_id: &str, module_id: Option<&str>) -> Result<ReleasePlan> 
         component_id: component_id.to_string(),
         enabled,
         steps,
-        warnings,
+        warnings: pipeline_plan.warnings,
         hints,
     })
-}
-
-fn order_steps(steps: &[ReleaseStep], warnings: &mut Vec<String>) -> Result<Vec<ReleaseStep>> {
-    if steps.len() <= 1 {
-        return Ok(steps.to_vec());
-    }
-
-    let mut id_index = HashMap::new();
-    for (idx, step) in steps.iter().enumerate() {
-        if id_index.contains_key(&step.id) {
-            return Err(Error::validation_invalid_argument(
-                "release.steps",
-                format!("Duplicate release step id '{}'", step.id),
-                None,
-                None,
-            ));
-        }
-        id_index.insert(step.id.clone(), idx);
-    }
-
-    let mut indegree = vec![0usize; steps.len()];
-    let mut dependents: Vec<Vec<usize>> = vec![Vec::new(); steps.len()];
-
-    for (idx, step) in steps.iter().enumerate() {
-        for need in &step.needs {
-            if let Some(&parent_idx) = id_index.get(need) {
-                indegree[idx] += 1;
-                dependents[parent_idx].push(idx);
-            } else {
-                return Err(Error::validation_invalid_argument(
-                    "release.steps",
-                    format!("Step '{}' depends on unknown step '{}'", step.id, need),
-                    None,
-                    None,
-                ));
-            }
-        }
-    }
-
-    let mut queue = VecDeque::new();
-    for (idx, count) in indegree.iter().enumerate() {
-        if *count == 0 {
-            queue.push_back(idx);
-        }
-    }
-
-    let mut ordered = Vec::with_capacity(steps.len());
-    while let Some(idx) = queue.pop_front() {
-        ordered.push(steps[idx].clone());
-        for &child in &dependents[idx] {
-            if indegree[child] > 0 {
-                indegree[child] -= 1;
-            }
-            if indegree[child] == 0 {
-                queue.push_back(child);
-            }
-        }
-    }
-
-    if ordered.len() != steps.len() {
-        let pending: Vec<String> = steps
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| indegree[*idx] > 0)
-            .map(|(_, step)| step.id.clone())
-            .collect();
-        return Err(Error::validation_invalid_argument(
-            "release.steps",
-            "Release steps contain a cycle".to_string(),
-            None,
-            Some(pending),
-        ));
-    }
-
-    if steps.iter().any(|step| !step.needs.is_empty()) {
-        warnings.push("Release steps reordered based on dependencies".to_string());
-    }
-
-    Ok(ordered)
-}
-
-fn to_plan_step(
-    step: &ReleaseStep,
-    module: Option<&ModuleManifest>,
-    enabled: bool,
-) -> ReleasePlanStep {
-    let mut missing = Vec::new();
-    let status = if !enabled {
-        ReleasePlanStatus::Disabled
-    } else {
-        let supported = is_step_supported(step, module, &mut missing);
-        if supported {
-            ReleasePlanStatus::Ready
-        } else {
-            ReleasePlanStatus::Missing
-        }
-    };
-
-    ReleasePlanStep {
-        id: step.id.clone(),
-        step_type: step.step_type.clone(),
-        label: step.label.clone(),
-        needs: step.needs.clone(),
-        config: step.config.clone(),
-        status,
-        missing,
-    }
-}
-
-fn is_step_supported(
-    step: &ReleaseStep,
-    module: Option<&ModuleManifest>,
-    missing: &mut Vec<String>,
-) -> bool {
-    let step_type = step.step_type.as_str();
-    if is_core_step(step_type) {
-        return true;
-    }
-
-    let action_id = format!("release.{}", step_type);
-    if let Some(module) = module {
-        if module.actions.iter().any(|action| action.id == action_id) {
-            return true;
-        }
-    }
-
-    missing.push(format!("Missing action '{}'", action_id));
-    false
 }
 
 fn is_core_step(step_type: &str) -> bool {

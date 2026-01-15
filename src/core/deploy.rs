@@ -70,6 +70,24 @@ pub fn deploy_artifact(
             return Ok(result);
         }
     } else {
+        // Validate: archive artifacts require an extract command
+        let is_archive = local_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| matches!(ext, "zip" | "tar" | "gz" | "tgz"))
+            .unwrap_or(false);
+
+        if is_archive && extract_command.is_none() {
+            return Ok(DeployResult::failure(
+                1,
+                format!(
+                    "Archive artifact '{}' requires an extractCommand. \
+                     Add one with: homeboy component set <id> '{{\"extractCommand\": \"unzip -o {{artifact}} && rm {{artifact}}\"}}'",
+                    local_path.display()
+                ),
+            ));
+        }
+
         // For archives, upload to temp location in target directory
         let artifact_filename = local_path
             .file_name()
@@ -312,11 +330,6 @@ impl ComponentDeployResult {
 
     fn with_status(mut self, status: &str) -> Self {
         self.status = status.to_string();
-        self
-    }
-
-    fn with_deploy_reason(mut self, reason: DeployReason) -> Self {
-        self.deploy_reason = Some(reason);
         self
     }
 

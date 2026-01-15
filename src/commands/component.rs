@@ -3,10 +3,11 @@ use serde::Serialize;
 use std::path::Path;
 
 use homeboy::component::{self, Component};
+use homeboy::json;
 use homeboy::project::{self, Project};
 use homeboy::BatchResult;
 
-use super::CmdResult;
+use super::{CmdResult, DynamicSetArgs};
 
 #[derive(Args)]
 pub struct ComponentArgs {
@@ -53,13 +54,8 @@ enum ComponentCommand {
     /// Update component configuration fields
     #[command(visible_aliases = ["edit", "merge"])]
     Set {
-        /// Component ID (optional if provided in JSON body)
-        id: Option<String>,
-        /// JSON spec (positional, supports @file and - for stdin)
-        spec: Option<String>,
-        /// Explicit JSON spec (takes precedence over positional)
-        #[arg(long, value_name = "JSON")]
-        json: Option<String>,
+        #[command(flatten)]
+        args: DynamicSetArgs,
     },
     /// Delete a component configuration
     Delete {
@@ -199,17 +195,7 @@ pub fn run(
             }
         }
         ComponentCommand::Show { id } => show(&id),
-        ComponentCommand::Set { id, spec, json } => {
-            let json_spec = json.or(spec).ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "spec",
-                    "Provide JSON spec or use --json flag",
-                    None,
-                    None,
-                )
-            })?;
-            set(id.as_deref(), &json_spec)
-        }
+        ComponentCommand::Set { args } => set(args),
         ComponentCommand::Delete { id } => delete(&id),
         ComponentCommand::Rename { id, new_id } => rename(&id, &new_id),
         ComponentCommand::List => list(),
@@ -231,8 +217,24 @@ fn show(id: &str) -> CmdResult<ComponentOutput> {
     ))
 }
 
-fn set(id: Option<&str>, json: &str) -> CmdResult<ComponentOutput> {
-    match component::merge(id, json)? {
+fn set(args: DynamicSetArgs) -> CmdResult<ComponentOutput> {
+    // Merge JSON sources: positional/--json spec + dynamic flags
+    let has_input = args.json_spec().is_some() || !args.extra.is_empty();
+    if !has_input {
+        return Err(homeboy::Error::validation_invalid_argument(
+            "spec",
+            "Provide JSON spec, --json flag, or --key value flags",
+            None,
+            None,
+        ));
+    }
+
+    let merged = json::merge_json_sources(args.json_spec(), &args.extra)?;
+    let json_string = serde_json::to_string(&merged).map_err(|e| {
+        homeboy::Error::internal_unexpected(format!("Failed to serialize merged JSON: {}", e))
+    })?;
+
+    match component::merge(args.id.as_deref(), &json_string)? {
         homeboy::MergeOutput::Single(result) => {
             let comp = component::load(&result.id)?;
             Ok((

@@ -19,7 +19,7 @@ pub struct UpgradeArgs {
     pub no_restart: bool,
 }
 
-pub fn run(args: UpgradeArgs, global: &GlobalArgs) -> CmdResult<Value> {
+pub fn run(args: UpgradeArgs, _global: &GlobalArgs) -> CmdResult<Value> {
     if args.check {
         let result = upgrade::check_for_updates()?;
         let json = serde_json::to_value(result)

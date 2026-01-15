@@ -266,6 +266,22 @@ pub fn update(
     })
 }
 
+/// Add a changelog target to a component's configuration.
+pub fn add_changelog_target(component_id: &str, file_path: &str) -> Result<()> {
+    let mut component = load(component_id)?;
+
+    let target = ChangelogTarget {
+        file: file_path.to_string(),
+    };
+
+    match &mut component.changelog_targets {
+        Some(targets) => targets.push(target),
+        None => component.changelog_targets = Some(vec![target]),
+    }
+
+    save(&component)
+}
+
 pub fn rename(id: &str, new_id: &str) -> Result<Component> {
     let new_id = new_id.to_lowercase();
     config::rename::<Component>(id, &new_id)?;

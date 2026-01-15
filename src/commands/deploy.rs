@@ -14,8 +14,12 @@ pub struct DeployArgs {
     #[arg(long)]
     pub json: Option<String>,
 
-    /// Component IDs to deploy
+    /// Component IDs to deploy (positional)
     pub component_ids: Vec<String>,
+
+    /// Component ID to deploy (can be repeated, alternative to positional)
+    #[arg(short = 'c', long = "component")]
+    pub component_flags: Vec<String>,
 
     /// Deploy all configured components
     #[arg(long)]
@@ -58,9 +62,13 @@ pub fn run(mut args: DeployArgs, _global: &crate::commands::GlobalArgs) -> CmdRe
         args.component_ids = deploy::parse_bulk_component_ids(spec)?;
     }
 
+    // Merge positional and flag component IDs
+    let mut all_component_ids = args.component_ids.clone();
+    all_component_ids.extend(args.component_flags.iter().cloned());
+
     // Build config and call core orchestration
     let config = DeployConfig {
-        component_ids: args.component_ids.clone(),
+        component_ids: all_component_ids,
         all: args.all,
         outdated: args.outdated,
     };

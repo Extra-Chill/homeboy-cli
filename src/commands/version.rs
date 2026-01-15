@@ -98,7 +98,7 @@ pub struct VersionSetOutput {
 
 pub fn run(
     args: VersionArgs,
-    global: &crate::commands::GlobalArgs,
+    _global: &crate::commands::GlobalArgs,
 ) -> CmdResult<serde_json::Value> {
     match args.command {
         VersionCommand::Show { cwd, component_id } => {

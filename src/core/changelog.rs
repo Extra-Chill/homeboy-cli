@@ -1,8 +1,11 @@
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::component::{self, Component};
+use crate::core::local_files::{self, FileSystem};
+use crate::core::version;
 use crate::error::{Error, Result};
 use crate::json::read_json_spec_to_string;
 
@@ -229,8 +232,9 @@ pub fn finalize_next_section(
     out_lines.push(format!("## {}", next_label));
     out_lines.push(String::new());
 
-    // Replace old ## Unreleased with ## <new_version>.
-    out_lines.push(format!("## {}", new_version.trim()));
+    // Replace old ## Unreleased with ## [new_version] - date (Keep a Changelog format).
+    let today = Local::now().format("%Y-%m-%d");
+    out_lines.push(format!("## [{}] - {}", new_version.trim(), today));
     out_lines.push(String::new());
 
     // Copy everything after the old heading (body + rest of file).
@@ -357,17 +361,30 @@ fn ensure_next_section(content: &str, aliases: &[String]) -> Result<(String, boo
     Ok((out, true))
 }
 
-/// Get the latest finalized version from the changelog (first ## heading that looks like a semver).
+/// Extract semver from changelog heading formats:
+/// - "0.1.0" -> Some("0.1.0")
+/// - "[0.1.0]" -> Some("0.1.0")
+/// - "0.1.0 - 2025-01-14" -> Some("0.1.0")
+/// - "[0.1.0] - 2025-01-14" -> Some("0.1.0")
+/// - "Unreleased" -> None
+fn extract_version_from_heading(label: &str) -> Option<String> {
+    let semver_pattern = regex::Regex::new(r"\[?(\d+\.\d+\.\d+)\]?").ok()?;
+    semver_pattern
+        .captures(label)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().to_string())
+}
+
+/// Get the latest finalized version from the changelog (first ## heading that contains a semver).
+/// Supports Keep a Changelog format: `## [X.Y.Z] - YYYY-MM-DD`
 /// Returns None if no version section is found.
 pub fn get_latest_finalized_version(content: &str) -> Option<String> {
-    let semver_pattern = regex::Regex::new(r"^\d+\.\d+\.\d+$").ok()?;
-
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("## ") {
             let label = trimmed.trim_start_matches("## ").trim();
-            if semver_pattern.is_match(label) {
-                return Some(label.to_string());
+            if let Some(version) = extract_version_from_heading(label) {
+                return Some(version);
             }
         }
     }
@@ -578,6 +595,131 @@ pub fn add_items_cwd(messages: &[String]) -> Result<AddItemsOutput> {
     })
 }
 
+// === Changelog Init Operations ===
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InitOutput {
+    pub component_id: String,
+    pub changelog_path: String,
+    pub initial_version: String,
+    pub next_section_label: String,
+    pub created: bool,
+    pub configured: bool,
+}
+
+fn generate_template(initial_version: &str, next_label: &str) -> String {
+    let today = Local::now().format("%Y-%m-%d");
+    format!(
+        "# Changelog\n\n## {}\n\n## [{}] - {}\n- Initial release\n",
+        next_label, initial_version, today
+    )
+}
+
+/// Initialize a changelog for a component.
+pub fn init(component_id: &str, path: Option<&str>, configure: bool) -> Result<InitOutput> {
+    let component = component::load(component_id)?;
+    let settings = resolve_effective_settings(Some(&component));
+
+    // Determine changelog path (relative to component)
+    let relative_path = path.unwrap_or("CHANGELOG.md");
+    let changelog_path = resolve_target_path(&component.local_path, relative_path)?;
+
+    // Check if file already exists
+    if changelog_path.exists() {
+        return Err(Error::validation_invalid_argument(
+            "changelog",
+            format!(
+                "Changelog already exists at {}. View with: cat {}",
+                changelog_path.display(),
+                changelog_path.display()
+            ),
+            None,
+            None,
+        ));
+    }
+
+    // Get current version from component (errors if no version targets)
+    let version_info = version::read_version(Some(component_id))?;
+    let initial_version = version_info.version;
+
+    // Ensure parent directory exists
+    if let Some(parent) = changelog_path.parent() {
+        local_files::local().ensure_dir(parent)?;
+    }
+
+    // Generate and write template
+    let content = generate_template(&initial_version, &settings.next_section_label);
+    local_files::local().write(&changelog_path, &content)?;
+
+    // Configure component if requested
+    let configured = if configure {
+        component::add_changelog_target(component_id, relative_path)?;
+        true
+    } else {
+        false
+    };
+
+    Ok(InitOutput {
+        component_id: component_id.to_string(),
+        changelog_path: changelog_path.to_string_lossy().to_string(),
+        initial_version,
+        next_section_label: settings.next_section_label,
+        created: true,
+        configured,
+    })
+}
+
+/// Initialize a changelog in the current working directory.
+pub fn init_cwd(path: Option<&str>) -> Result<InitOutput> {
+    let cwd = std::env::current_dir()
+        .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))?;
+    let settings = default_settings();
+
+    // Determine changelog path
+    let changelog_path = if let Some(p) = path {
+        cwd.join(p)
+    } else {
+        cwd.join("CHANGELOG.md")
+    };
+
+    // Check if file already exists
+    if changelog_path.exists() {
+        return Err(Error::validation_invalid_argument(
+            "changelog",
+            format!(
+                "Changelog already exists at {}. View with: cat {}",
+                changelog_path.display(),
+                changelog_path.display()
+            ),
+            None,
+            None,
+        ));
+    }
+
+    // Try to detect version from CWD (errors if no version files found)
+    let version_info = version::read_version_cwd()?;
+    let initial_version = version_info.version;
+
+    // Ensure parent directory exists
+    if let Some(parent) = changelog_path.parent() {
+        local_files::local().ensure_dir(parent)?;
+    }
+
+    // Generate and write template
+    let content = generate_template(&initial_version, &settings.next_section_label);
+    local_files::local().write(&changelog_path, &content)?;
+
+    Ok(InitOutput {
+        component_id: "cwd".to_string(),
+        changelog_path: changelog_path.to_string_lossy().to_string(),
+        initial_version,
+        next_section_label: settings.next_section_label,
+        created: true,
+        configured: false,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -616,12 +758,14 @@ mod tests {
         let (out, changed) = finalize_next_section(content, &aliases, "0.2.0", false).unwrap();
         assert!(changed);
         let unreleased_pos = out.find("## Unreleased").unwrap();
-        let version_pos = out.find("## 0.2.0").unwrap();
+        let version_pos = out.find("## [0.2.0]").unwrap();
         assert!(
             unreleased_pos < version_pos,
-            "## Unreleased should come before ## 0.2.0"
+            "## Unreleased should come before ## [0.2.0]"
         );
-        assert!(out.contains("## 0.2.0\n\n- First\n- Second"));
+        // Check for Keep a Changelog format: ## [X.Y.Z] - YYYY-MM-DD
+        assert!(out.contains("## [0.2.0] - "));
+        assert!(out.contains("- First\n- Second"));
         assert!(out.contains("## 0.1.0"));
     }
 
@@ -653,12 +797,22 @@ mod tests {
     }
 
     #[test]
-    fn get_latest_finalized_version_skips_non_semver() {
+    fn get_latest_finalized_version_parses_bracketed_format() {
         let content = "# Changelog\n\n## Unreleased\n\n## [1.0.0]\n\n## 0.2.16\n";
-        // [1.0.0] is not matched because of brackets
+        // [1.0.0] is now parsed as 1.0.0 (Keep a Changelog format)
         assert_eq!(
             get_latest_finalized_version(content),
-            Some("0.2.16".to_string())
+            Some("1.0.0".to_string())
+        );
+    }
+
+    #[test]
+    fn get_latest_finalized_version_parses_dated_format() {
+        let content = "# Changelog\n\n## Unreleased\n\n## [1.0.0] - 2025-01-14\n\n## 0.2.16\n";
+        // Full Keep a Changelog format with date
+        assert_eq!(
+            get_latest_finalized_version(content),
+            Some("1.0.0".to_string())
         );
     }
 

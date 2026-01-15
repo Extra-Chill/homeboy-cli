@@ -4,7 +4,7 @@ use serde::Serialize;
 use crate::docs;
 
 use super::CmdResult;
-use homeboy::changelog::{self, AddItemsOutput};
+use homeboy::changelog::{self, AddItemsOutput, InitOutput};
 
 #[derive(Args)]
 pub struct ChangelogArgs {
@@ -32,6 +32,24 @@ pub enum ChangelogCommand {
         /// Changelog item content (non-JSON mode)
         message: Option<String>,
     },
+
+    /// Initialize a new changelog file
+    Init {
+        /// Use current working directory (ad-hoc mode)
+        #[arg(long)]
+        cwd: bool,
+
+        /// Path for the changelog file (relative to component/cwd)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Also update component config to add changelogTargets
+        #[arg(long)]
+        configure: bool,
+
+        /// Component ID
+        component_id: Option<String>,
+    },
 }
 
 #[derive(Serialize)]
@@ -48,17 +66,21 @@ pub enum ChangelogOutput {
     Show(ChangelogShowOutput),
     #[serde(rename_all = "camelCase")]
     Add(AddItemsOutput),
+    #[serde(rename_all = "camelCase")]
+    Init(InitOutput),
 }
 
 pub fn run_markdown(args: ChangelogArgs) -> CmdResult<String> {
     match args.command {
         None => show_markdown(),
-        Some(ChangelogCommand::Add { .. }) => Err(homeboy::Error::validation_invalid_argument(
-            "command",
-            "Markdown output is only supported for 'changelog'",
-            None,
-            None,
-        )),
+        Some(ChangelogCommand::Add { .. }) | Some(ChangelogCommand::Init { .. }) => {
+            Err(homeboy::Error::validation_invalid_argument(
+                "command",
+                "Markdown output is only supported for 'changelog'",
+                None,
+                None,
+            ))
+        }
     }
 }
 
@@ -98,6 +120,29 @@ pub fn run(
             // Core handles auto-detection of JSON in component_id
             let output = changelog::add_items(component_id.as_deref(), &messages)?;
             Ok((ChangelogOutput::Add(output), 0))
+        }
+        Some(ChangelogCommand::Init {
+            cwd,
+            path,
+            configure,
+            component_id,
+        }) => {
+            if cwd {
+                let output = changelog::init_cwd(path.as_deref())?;
+                return Ok((ChangelogOutput::Init(output), 0));
+            }
+
+            let id = component_id.ok_or_else(|| {
+                homeboy::Error::validation_invalid_argument(
+                    "componentId",
+                    "Missing component ID (or use --cwd). List components: homeboy component list",
+                    None,
+                    None,
+                )
+            })?;
+
+            let output = changelog::init(&id, path.as_deref(), configure)?;
+            Ok((ChangelogOutput::Init(output), 0))
         }
     }
 }

@@ -1,6 +1,36 @@
+use clap::Args;
+
 pub type CmdResult<T> = homeboy::Result<(T, i32)>;
 
 pub(crate) struct GlobalArgs {}
+
+/// Shared arguments for dynamic set commands.
+///
+/// Allows arbitrary `--key value` pairs that map directly to JSON keys.
+/// Flag names become JSON keys with no case conversion.
+#[derive(Args, Default, Debug)]
+pub struct DynamicSetArgs {
+    /// Entity ID (optional if provided in JSON body)
+    pub id: Option<String>,
+
+    /// JSON spec (positional, supports @file and - for stdin)
+    pub spec: Option<String>,
+
+    /// Explicit JSON spec (takes precedence over positional)
+    #[arg(long, value_name = "JSON")]
+    pub json: Option<String>,
+
+    /// Additional key=value flags (e.g., --remote-path /var/www)
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    pub extra: Vec<String>,
+}
+
+impl DynamicSetArgs {
+    /// Get the JSON spec from either --json or positional argument
+    pub fn json_spec(&self) -> Option<&str> {
+        self.json.as_deref().or(self.spec.as_deref())
+    }
+}
 
 pub mod api;
 pub mod auth;

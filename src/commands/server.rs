@@ -1,8 +1,11 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
+use homeboy::json;
 use homeboy::server::{self, Server};
 use homeboy::{BatchResult, MergeOutput};
+
+use super::DynamicSetArgs;
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,13 +77,8 @@ enum ServerCommand {
     /// Modify server settings
     #[command(visible_aliases = ["edit", "merge"])]
     Set {
-        /// Server ID (optional if provided in JSON body)
-        server_id: Option<String>,
-        /// JSON spec (positional, supports @file and - for stdin)
-        spec: Option<String>,
-        /// Explicit JSON spec (takes precedence over positional)
-        #[arg(long, value_name = "JSON")]
-        json: Option<String>,
+        #[command(flatten)]
+        args: DynamicSetArgs,
     },
     /// Remove a server configuration
     Delete {
@@ -213,21 +211,7 @@ pub fn run(
             }
         }
         ServerCommand::Show { server_id } => show(&server_id),
-        ServerCommand::Set {
-            server_id,
-            spec,
-            json,
-        } => {
-            let json_spec = json.or(spec).ok_or_else(|| {
-                homeboy::Error::validation_invalid_argument(
-                    "spec",
-                    "Provide JSON spec or use --json flag",
-                    None,
-                    None,
-                )
-            })?;
-            set(server_id.as_deref(), &json_spec)
-        }
+        ServerCommand::Set { args } => set(args),
         ServerCommand::Delete { server_id } => delete(&server_id),
         ServerCommand::List => list(),
         ServerCommand::Key(key_args) => run_key(key_args),
@@ -265,8 +249,24 @@ fn show(server_id: &str) -> homeboy::Result<(ServerOutput, i32)> {
     ))
 }
 
-fn set(server_id: Option<&str>, json: &str) -> homeboy::Result<(ServerOutput, i32)> {
-    match server::merge(server_id, json)? {
+fn set(args: DynamicSetArgs) -> homeboy::Result<(ServerOutput, i32)> {
+    // Merge JSON sources: positional/--json spec + dynamic flags
+    let has_input = args.json_spec().is_some() || !args.extra.is_empty();
+    if !has_input {
+        return Err(homeboy::Error::validation_invalid_argument(
+            "spec",
+            "Provide JSON spec, --json flag, or --key value flags",
+            None,
+            None,
+        ));
+    }
+
+    let merged = json::merge_json_sources(args.json_spec(), &args.extra)?;
+    let json_string = serde_json::to_string(&merged).map_err(|e| {
+        homeboy::Error::internal_unexpected(format!("Failed to serialize merged JSON: {}", e))
+    })?;
+
+    match server::merge(args.id.as_deref(), &json_string)? {
         MergeOutput::Single(result) => {
             let svr = server::load(&result.id)?;
             Ok((

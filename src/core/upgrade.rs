@@ -4,6 +4,7 @@ use std::process::Command;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CRATES_IO_API: &str = "https://crates.io/api/v1/crates/homeboy";
+const GITHUB_RELEASES_API: &str = "https://api.github.com/repos/Extra-Chill/homeboy/releases/latest";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -67,11 +68,16 @@ struct CrateInfo {
     newest_version: String,
 }
 
+#[derive(Deserialize)]
+struct GitHubRelease {
+    tag_name: String,
+}
+
 pub fn current_version() -> &'static str {
     VERSION
 }
 
-pub fn fetch_latest_version() -> Result<String> {
+fn fetch_latest_crates_io_version() -> Result<String> {
     let client = reqwest::blocking::Client::builder()
         .user_agent(format!("homeboy/{}", VERSION))
         .timeout(std::time::Duration::from_secs(10))
@@ -86,6 +92,34 @@ pub fn fetch_latest_version() -> Result<String> {
         .map_err(|e| Error::other(format!("Failed to parse crates.io response: {}", e)))?;
 
     Ok(response.crate_info.newest_version)
+}
+
+fn fetch_latest_github_version() -> Result<String> {
+    let client = reqwest::blocking::Client::builder()
+        .user_agent(format!("homeboy/{}", VERSION))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| Error::other(format!("Failed to create HTTP client: {}", e)))?;
+
+    let response: GitHubRelease = client
+        .get(GITHUB_RELEASES_API)
+        .send()
+        .map_err(|e| Error::other(format!("Failed to query GitHub releases: {}", e)))?
+        .json()
+        .map_err(|e| Error::other(format!("Failed to parse GitHub release response: {}", e)))?;
+
+    // Strip "v" prefix if present (e.g., "v0.15.0" -> "0.15.0")
+    let version = response.tag_name.strip_prefix('v').unwrap_or(&response.tag_name);
+    Ok(version.to_string())
+}
+
+pub fn fetch_latest_version(method: InstallMethod) -> Result<String> {
+    match method {
+        InstallMethod::Cargo => fetch_latest_crates_io_version(),
+        InstallMethod::Homebrew | InstallMethod::Source | InstallMethod::Unknown => {
+            fetch_latest_github_version()
+        }
+    }
 }
 
 pub fn detect_install_method() -> InstallMethod {
@@ -127,7 +161,7 @@ pub fn check_for_updates() -> Result<VersionCheck> {
     let install_method = detect_install_method();
     let current = current_version().to_string();
 
-    let latest = fetch_latest_version().ok();
+    let latest = fetch_latest_version(install_method).ok();
     let update_available = latest
         .as_ref()
         .map(|l| version_is_newer(l, &current))
@@ -289,7 +323,7 @@ fn execute_upgrade(method: InstallMethod) -> Result<(bool, Option<String>)> {
     }
 
     // Try to fetch the new version
-    let new_version = fetch_latest_version().ok();
+    let new_version = fetch_latest_version(method).ok();
 
     Ok((true, new_version))
 }

@@ -3,21 +3,24 @@
 ## Synopsis
 
 ```sh
-homeboy deploy <projectId> [<componentIds...>] [--all] [--outdated] [--json '<spec>']
+homeboy deploy <projectId> [<componentIds...>] [-c|--component <id>]... [--all] [--outdated] [--json '<spec>']
 # If no component IDs are provided, you must use --all or --outdated.
 ```
 
 ## Arguments and flags
 
 - `projectId`: project ID
-- `<componentIds...>` (optional): component IDs to deploy (trailing var args)
+- `<componentIds...>` (optional): component IDs to deploy (positional, trailing)
 
 Options:
 
+- `-c`, `--component`: component ID to deploy (can be repeated, alternative to positional)
 - `--all`: deploy all configured components
 - `--outdated`: deploy only outdated components
   - Determined from the first version target for each component.
 - `--json`: JSON input spec for bulk operations (`{"componentIds": ["component-id", ...]}`)
+
+Positional and flag component IDs can be mixed; both are merged into the deployment list.
 
 If no component IDs are provided and neither `--all` nor `--outdated` is set, Homeboy returns an error.
 

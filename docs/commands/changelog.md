@@ -38,9 +38,33 @@ Notes:
 - When `--cwd` is used, Homeboy auto-detects the changelog file (see CWD Mode below).
 - When `--json` is provided, other args are ignored and the payload's `messages` array is applied in order.
 
+### `init`
+
+```sh
+homeboy changelog init <componentId>
+homeboy changelog init <componentId> --path "docs/CHANGELOG.md"
+homeboy changelog init <componentId> --configure
+homeboy changelog init --cwd
+```
+
+Creates a new changelog file with the Keep a Changelog format (`## [X.Y.Z] - YYYY-MM-DD`).
+
+Options:
+
+- `--path <path>`: Custom path for changelog file (relative to component/cwd). Default: `CHANGELOG.md`
+- `--configure`: Also update component config to add `changelogTargets`
+- `--cwd`: Use current working directory instead of a component
+
+Requirements:
+
+- Component must have `versionTargets` configured (to determine initial version)
+- Errors if changelog file already exists at target path
+
 ### CWD Mode (--cwd)
 
-The `add` subcommand supports `--cwd` for ad-hoc operations in any directory without requiring component registration. When using `--cwd`, Homeboy auto-detects the changelog file by checking for (in order):
+Both `add` and `init` subcommands support `--cwd` for ad-hoc operations in any directory without requiring component registration.
+
+For `add`, Homeboy auto-detects the changelog file by checking for (in order):
 
 1. `CHANGELOG.md`
 2. `docs/changelog.md`
@@ -70,7 +94,7 @@ Configuration / defaults:
 
 `homeboy changelog` returns a tagged union:
 
-- `command`: `show` (default) | `add`
+- `command`: `show` (default) | `add` | `init`
 
 ### JSON output (default)
 
@@ -98,10 +122,25 @@ This section applies only when JSON output is used.
 }
 ```
 
+### JSON output (init)
+
+```json
+{
+  "command": "init",
+  "componentId": "<componentId>",
+  "changelogPath": "<absolute/path/to/CHANGELOG.md>",
+  "initialVersion": "0.3.2",
+  "nextSectionLabel": "Unreleased",
+  "created": true,
+  "configured": false
+}
+```
+
 ## Errors
 
 - `show`: errors if embedded docs do not contain `changelog`
 - `add`: errors if changelog path cannot be resolved, or if `messages` is empty / contains empty strings
+- `init`: errors if changelog already exists, if component not found, or if no version targets configured
 
 ## Related
 

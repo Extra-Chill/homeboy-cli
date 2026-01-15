@@ -270,6 +270,120 @@ pub fn parse_bulk_ids(json_spec: &str) -> Result<BulkIdsInput> {
         .map_err(|e| Error::validation_invalid_json(e, Some("parse bulk IDs input".to_string())))
 }
 
+// === Dynamic CLI Flag Parsing ===
+
+/// Parse CLI key-value pairs into a JSON object.
+///
+/// Input format: `["--key", "value", "--another-key", "other-value"]`
+/// Output: `{"key": <parsed>, "another-key": <parsed>}`
+///
+/// Values are auto-parsed: JSON objects/arrays first, then booleans, numbers, or strings.
+/// Flag names become JSON keys directly (no case conversion).
+pub fn parse_kv_flags(args: &[String]) -> Result<Value> {
+    let mut obj = serde_json::Map::new();
+    let mut iter = args.iter().peekable();
+
+    while let Some(arg) = iter.next() {
+        if let Some(key) = arg.strip_prefix("--") {
+            if key.is_empty() {
+                return Err(Error::validation_invalid_argument(
+                    "flag",
+                    "Empty flag name '--'",
+                    None,
+                    None,
+                ));
+            }
+
+            let value = iter.next().ok_or_else(|| {
+                Error::validation_invalid_argument(
+                    "flag",
+                    format!("Flag '--{}' requires a value", key),
+                    None,
+                    None,
+                )
+            })?;
+
+            obj.insert(key.to_string(), parse_flag_value(value));
+        } else {
+            return Err(Error::validation_invalid_argument(
+                "flag",
+                format!("Expected flag starting with '--', got: {}", arg),
+                None,
+                None,
+            ));
+        }
+    }
+
+    Ok(Value::Object(obj))
+}
+
+/// Parse a flag value with auto-detection.
+/// Priority: JSON parse → boolean → number → string
+fn parse_flag_value(s: &str) -> Value {
+    // Try JSON parse first (handles arrays, objects, quoted strings)
+    if let Ok(v) = serde_json::from_str(s) {
+        return v;
+    }
+
+    // Boolean keywords
+    match s.to_lowercase().as_str() {
+        "true" => return Value::Bool(true),
+        "false" => return Value::Bool(false),
+        "null" => return Value::Null,
+        _ => {}
+    }
+
+    // Integer
+    if let Ok(n) = s.parse::<i64>() {
+        return Value::Number(n.into());
+    }
+
+    // Float
+    if let Ok(n) = s.parse::<f64>() {
+        if let Some(num) = serde_json::Number::from_f64(n) {
+            return Value::Number(num);
+        }
+    }
+
+    // Default to string
+    Value::String(s.to_string())
+}
+
+/// Merge JSON sources from different inputs into a single JSON object.
+///
+/// Priority (highest to lowest):
+/// 1. kv_flags (--key value pairs)
+/// 2. json_spec (positional or --json argument)
+///
+/// Returns a merged JSON object suitable for config operations.
+pub fn merge_json_sources(json_spec: Option<&str>, kv_flags: &[String]) -> Result<Value> {
+    let mut base = if let Some(spec) = json_spec {
+        let raw = read_json_spec_to_string(spec)?;
+        serde_json::from_str(&raw)
+            .map_err(|e| Error::validation_invalid_json(e, Some("parse json spec".to_string())))?
+    } else {
+        Value::Object(serde_json::Map::new())
+    };
+
+    // Parse kv flags if present
+    if !kv_flags.is_empty() {
+        let flags_obj = parse_kv_flags(kv_flags)?;
+        deep_merge(&mut base, flags_obj);
+    }
+
+    // Ensure result is an object
+    if !base.is_object() {
+        return Err(Error::validation_invalid_argument(
+            "json",
+            "JSON spec must be an object",
+            None,
+            None,
+        ));
+    }
+
+    Ok(base)
+}
+
 // === Config Merge Operations ===
 
 /// Result of a config merge operation (public API)

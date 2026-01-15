@@ -6,6 +6,24 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## [0.20.2] - 2026-01-15
+
+- Prepare release pipeline for module-driven publishing
+
+## [0.20.1] - 2026-01-15
+
+- Fix release pipeline executor and module action runtime
+
+## [0.20.0] - 2026-01-15
+
+- Add parallel pipeline planner/executor for releases
+- Add component-scoped release planner and runner
+- Support module actions for release payloads and command execution
+- Add module-driven release payload context (version/tag/notes/artifacts)
+- Add git include/exclude file scoping
+- Add config replace option for set commands
+- Improve changelog CLI help and detection
+
 ## [0.19.3] - 2026-01-15
 
 - Remove agent-instructions directory - docs are the single source of truth

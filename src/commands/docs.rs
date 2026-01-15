@@ -155,7 +155,10 @@ fn run_scaffold(source_dir: Option<&str>, docs_dir: &str) -> CmdResult<DocsOutpu
 
     // Generate hints
     let mut hints = Vec::new();
-    hints.push(format!("Found {} source directories", source_directories.len()));
+    hints.push(format!(
+        "Found {} source directories",
+        source_directories.len()
+    ));
     if !existing_docs.is_empty() {
         hints.push(format!("{} docs already exist", existing_docs.len()));
     }
@@ -183,7 +186,15 @@ fn run_scaffold(source_dir: Option<&str>, docs_dir: &str) -> CmdResult<DocsOutpu
 
 fn find_source_directories(source_path: &Path) -> Vec<String> {
     let mut dirs = Vec::new();
-    let source_dir_names = ["src", "lib", "inc", "app", "components", "modules", "crates"];
+    let source_dir_names = [
+        "src",
+        "lib",
+        "inc",
+        "app",
+        "components",
+        "modules",
+        "crates",
+    ];
 
     for dir_name in &source_dir_names {
         let dir_path = source_path.join(dir_name);

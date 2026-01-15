@@ -35,10 +35,9 @@ impl<T: Serialize> CliResponse<T> {
         }
     }
 
-    pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).unwrap_or_else(|_| {
-            r#"{"success":false,"error":{"code":"internal.json_error","message":"Failed to serialize response","details":{}}}"#
-                .to_string()
+    fn to_json(&self) -> Result<String> {
+        serde_json::to_string_pretty(self).map_err(|e| {
+            Error::internal_json(e.to_string(), Some("serialize response".to_string()))
         })
     }
 }
@@ -63,14 +62,20 @@ impl CliResponse<()> {
     }
 }
 
-pub fn print_success<T: Serialize>(data: T) {
-    println!("{}", CliResponse::success(data).to_json());
+fn print_response<T: Serialize>(response: &CliResponse<T>) -> Result<()> {
+    let payload = response.to_json()?;
+    println!("{}", payload);
+    Ok(())
 }
 
-pub fn print_result<T: Serialize>(result: Result<T>) {
+pub fn print_success<T: Serialize>(data: T) -> Result<()> {
+    print_response(&CliResponse::success(data))
+}
+
+pub fn print_result<T: Serialize>(result: Result<T>) -> Result<()> {
     match result {
         Ok(data) => print_success(data),
-        Err(err) => println!("{}", CliResponse::<()>::from_error(&err).to_json()),
+        Err(err) => print_response(&CliResponse::<()>::from_error(&err)),
     }
 }
 
@@ -129,9 +134,9 @@ fn exit_code_for_error(code: ErrorCode) -> i32 {
     }
 }
 
-pub fn print_json_result(result: Result<serde_json::Value>) {
+pub fn print_json_result(result: Result<serde_json::Value>) -> Result<()> {
     match result {
         Ok(data) => print_success(data),
-        Err(err) => println!("{}", CliResponse::<()>::from_error(&err).to_json()),
+        Err(err) => print_response(&CliResponse::<()>::from_error(&err)),
     }
 }

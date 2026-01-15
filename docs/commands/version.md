@@ -63,14 +63,14 @@ Arguments:
 `homeboy version show` data payload:
 
 - `command`: `version.show`
-- `component_id`
+- `component_id` (omitted in `--cwd` mode)
 - `version` (detected current version)
 - `targets`: array of `{ file, pattern, full_path, match_count }`
 
 `homeboy version bump` data payload:
 
 - `command`: `version.bump`
-- `component_id`
+- `component_id` (omitted in `--cwd` mode)
 - `old_version` (version before bump)
 - `new_version` (version after bump)
 - `targets`: array of `{ file, pattern, full_path, match_count }`

@@ -7,6 +7,14 @@ use homeboy::version::{
 
 use super::CmdResult;
 
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum VersionOutput {
+    Show(VersionShowOutput),
+    Bump(VersionBumpOutput),
+    Set(VersionSetOutput),
+}
+
 #[derive(Args)]
 pub struct VersionArgs {
     #[command(subcommand)]
@@ -68,7 +76,8 @@ impl BumpType {
 
 pub struct VersionShowOutput {
     command: String,
-    component_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    component_id: Option<String>,
     pub version: String,
     targets: Vec<VersionTargetInfo>,
 }
@@ -77,7 +86,8 @@ pub struct VersionShowOutput {
 
 pub struct VersionBumpOutput {
     command: String,
-    component_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    component_id: Option<String>,
     old_version: String,
     new_version: String,
     targets: Vec<VersionTargetInfo>,
@@ -90,36 +100,33 @@ pub struct VersionBumpOutput {
 
 pub struct VersionSetOutput {
     command: String,
-    component_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    component_id: Option<String>,
     old_version: String,
     new_version: String,
     targets: Vec<VersionTargetInfo>,
 }
 
-pub fn run(
-    args: VersionArgs,
-    _global: &crate::commands::GlobalArgs,
-) -> CmdResult<serde_json::Value> {
+pub fn run(args: VersionArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<VersionOutput> {
     match args.command {
         VersionCommand::Show { cwd, component_id } => {
             // Priority: --cwd > component_id
-            let (info, component_id_str) = if cwd {
-                (read_version_cwd()?, "cwd".to_string())
+            let (info, resolved_id) = if cwd {
+                (read_version_cwd()?, None)
             } else {
                 let info = read_version(component_id.as_deref())?;
-                let id = component_id.unwrap_or_else(|| "cwd".to_string());
-                (info, id)
+                (info, component_id)
             };
 
-            let out = VersionShowOutput {
-                command: "version.show".to_string(),
-                component_id: component_id_str,
-                version: info.version,
-                targets: info.targets,
-            };
-            let json = serde_json::to_value(out)
-                .map_err(|e| homeboy::Error::internal_json(e.to_string(), None))?;
-            Ok((json, 0))
+            Ok((
+                VersionOutput::Show(VersionShowOutput {
+                    command: "version.show".to_string(),
+                    component_id: resolved_id,
+                    version: info.version,
+                    targets: info.targets,
+                }),
+                0,
+            ))
         }
         VersionCommand::Bump {
             cwd,
@@ -127,27 +134,26 @@ pub fn run(
             bump_type,
         } => {
             // Priority: --cwd > component_id
-            let (result, component_id_str) = if cwd {
-                (bump_version_cwd(bump_type.as_str())?, "cwd".to_string())
+            let (result, resolved_id) = if cwd {
+                (bump_version_cwd(bump_type.as_str())?, None)
             } else {
                 let result = bump_version(component_id.as_deref(), bump_type.as_str())?;
-                let id = component_id.unwrap_or_else(|| "cwd".to_string());
-                (result, id)
+                (result, component_id)
             };
 
-            let out = VersionBumpOutput {
-                command: "version.bump".to_string(),
-                component_id: component_id_str,
-                old_version: result.old_version,
-                new_version: result.new_version,
-                targets: result.targets,
-                changelog_path: result.changelog_path,
-                changelog_finalized: result.changelog_finalized,
-                changelog_changed: result.changelog_changed,
-            };
-            let json = serde_json::to_value(out)
-                .map_err(|e| homeboy::Error::internal_json(e.to_string(), None))?;
-            Ok((json, 0))
+            Ok((
+                VersionOutput::Bump(VersionBumpOutput {
+                    command: "version.bump".to_string(),
+                    component_id: resolved_id,
+                    old_version: result.old_version,
+                    new_version: result.new_version,
+                    targets: result.targets,
+                    changelog_path: result.changelog_path,
+                    changelog_finalized: result.changelog_finalized,
+                    changelog_changed: result.changelog_changed,
+                }),
+                0,
+            ))
         }
         VersionCommand::Set {
             component_id,
@@ -155,18 +161,17 @@ pub fn run(
         } => {
             // Core validates componentId
             let result = set_version(component_id.as_deref(), &new_version)?;
-            let component_id_str = component_id.unwrap_or_else(|| "unknown".to_string());
 
-            let out = VersionSetOutput {
-                command: "version.set".to_string(),
-                component_id: component_id_str,
-                old_version: result.old_version,
-                new_version: result.new_version,
-                targets: result.targets,
-            };
-            let json = serde_json::to_value(out)
-                .map_err(|e| homeboy::Error::internal_json(e.to_string(), None))?;
-            Ok((json, 0))
+            Ok((
+                VersionOutput::Set(VersionSetOutput {
+                    command: "version.set".to_string(),
+                    component_id,
+                    old_version: result.old_version,
+                    new_version: result.new_version,
+                    targets: result.targets,
+                }),
+                0,
+            ))
         }
     }
 }
@@ -177,7 +182,7 @@ pub fn show_version_output(component_id: &str) -> homeboy::Result<(VersionShowOu
     Ok((
         VersionShowOutput {
             command: "version.show".to_string(),
-            component_id: component_id.to_string(),
+            component_id: Some(component_id.to_string()),
             version: info.version,
             targets: info.targets,
         },

@@ -13,6 +13,17 @@ Homeboy is a config-driven automation engine for development and deployment auto
 - Embedded docs behavior: [Embedded docs topic resolution](embedded-docs/embedded-docs-topic-resolution.md)
 - Changelog content: [Changelog](changelog.md)
 
+## Documentation Management
+
+Homeboy provides tooling for AI-assisted documentation generation and maintenance:
+
+- `homeboy docs scaffold` - Analyze codebase and report documentation status
+- `homeboy docs generate --json` - Bulk create documentation files from JSON spec
+- `homeboy docs documentation/index` - Documentation philosophy and principles
+- `homeboy docs documentation/alignment` - Instructions for maintaining existing docs
+- `homeboy docs documentation/generation` - Instructions for generating new docs
+- `homeboy docs documentation/structure` - File organization standards
+
 ## Configuration
 
 Configuration and state live under the OS config directory (`dirs::config_dir()/homeboy/`).

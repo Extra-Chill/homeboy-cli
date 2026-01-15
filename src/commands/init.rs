@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use clap::Args;
 use serde::Serialize;
 
@@ -10,7 +12,11 @@ use homeboy::server::{self, Server};
 use super::CmdResult;
 
 #[derive(Args)]
-pub struct InitArgs {}
+pub struct InitArgs {
+    /// Show all components, modules, projects, and servers
+    #[arg(long, short = 'a')]
+    pub all: bool,
+}
 
 #[derive(Debug, Serialize)]
 pub struct InitOutput {
@@ -50,27 +56,48 @@ pub struct ModuleEntry {
     pub linked: bool,
 }
 
-pub fn run_json(_args: InitArgs) -> CmdResult<InitOutput> {
+pub fn run_json(args: InitArgs) -> CmdResult<InitOutput> {
     // Get context for current directory
     let (context_output, _) = context::run(None)?;
 
-    // Get all servers
-    let servers = server::list().unwrap_or_default();
-
-    // Get all projects
-    let projects: Vec<ProjectListItem> = project::list()
-        .unwrap_or_default()
-        .into_iter()
-        .map(ProjectListItem::from)
+    // Collect relevant component IDs from context
+    let relevant_ids: HashSet<String> = context_output
+        .matched_components
+        .iter()
+        .chain(context_output.contained_components.iter())
+        .cloned()
         .collect();
 
-    // Get all components
-    let components = component::list().unwrap_or_default();
-
-    // Get all modules with status info
+    // Load all data sources
+    let all_components = component::list().unwrap_or_default();
+    let all_projects = project::list().unwrap_or_default();
+    let all_servers = server::list().unwrap_or_default();
     let all_modules = load_all_modules();
+
+    // Determine if we should show focused output
+    let show_all = args.all || relevant_ids.is_empty();
+
+    // Filter components
+    let components: Vec<Component> = if show_all {
+        all_components
+    } else {
+        all_components
+            .into_iter()
+            .filter(|c| relevant_ids.contains(&c.id))
+            .collect()
+    };
+
+    // Get module IDs linked to matched components
+    let linked_module_ids: HashSet<String> = components
+        .iter()
+        .filter_map(|c| c.modules.as_ref())
+        .flat_map(|m| m.keys().cloned())
+        .collect();
+
+    // Filter modules: linked modules + platform modules (runtime.is_none())
     let modules: Vec<ModuleEntry> = all_modules
         .iter()
+        .filter(|m| show_all || linked_module_ids.contains(&m.id) || m.runtime.is_none())
         .map(|m| ModuleEntry {
             id: m.id.clone(),
             name: m.name.clone(),
@@ -92,6 +119,38 @@ pub fn run_json(_args: InitArgs) -> CmdResult<InitOutput> {
             linked: is_module_linked(&m.id),
         })
         .collect();
+
+    // Filter projects: those containing relevant components
+    let filtered_projects: Vec<Project> = if show_all {
+        all_projects
+    } else {
+        all_projects
+            .into_iter()
+            .filter(|p| p.component_ids.iter().any(|id| relevant_ids.contains(id)))
+            .collect()
+    };
+
+    // Get server IDs from filtered projects
+    let relevant_server_ids: HashSet<String> = filtered_projects
+        .iter()
+        .filter_map(|p| p.server_id.clone())
+        .collect();
+
+    // Convert projects to list items
+    let projects: Vec<ProjectListItem> = filtered_projects
+        .into_iter()
+        .map(ProjectListItem::from)
+        .collect();
+
+    // Filter servers
+    let servers: Vec<Server> = if show_all {
+        all_servers
+    } else {
+        all_servers
+            .into_iter()
+            .filter(|s| relevant_server_ids.contains(&s.id))
+            .collect()
+    };
 
     Ok((
         InitOutput {

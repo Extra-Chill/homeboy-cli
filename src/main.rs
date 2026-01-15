@@ -203,7 +203,7 @@ fn main() -> std::process::ExitCode {
         );
 
         let (json_result, exit_code) = output::map_cmd_result_to_json(result);
-        output::print_json_result(json_result);
+        output::print_json_result(json_result).ok();
         return std::process::ExitCode::from(exit_code_to_u8(exit_code));
     }
 
@@ -226,7 +226,7 @@ fn main() -> std::process::ExitCode {
                     None,
                     None,
                 );
-                output::print_result::<serde_json::Value>(Err(err));
+                output::print_result::<serde_json::Value>(Err(err)).ok();
                 return std::process::ExitCode::from(exit_code_to_u8(2));
             }
         }
@@ -261,7 +261,7 @@ fn main() -> std::process::ExitCode {
                 return std::process::ExitCode::from(exit_code_to_u8(exit_code));
             }
             Err(err) => {
-                output::print_result::<serde_json::Value>(Err(err));
+                output::print_result::<serde_json::Value>(Err(err)).ok();
                 return std::process::ExitCode::from(exit_code_to_u8(1));
             }
         }
@@ -270,7 +270,9 @@ fn main() -> std::process::ExitCode {
     let (json_result, exit_code) = commands::run_json(cli.command, &global);
 
     match mode {
-        ResponseMode::Json => output::print_json_result(json_result),
+        ResponseMode::Json => {
+            output::print_json_result(json_result).ok();
+        }
         ResponseMode::Raw(RawOutputMode::InteractivePassthrough) => {}
         ResponseMode::Raw(RawOutputMode::Markdown) => {}
     }

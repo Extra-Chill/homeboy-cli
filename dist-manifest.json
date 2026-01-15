@@ -1,0 +1,193 @@
+{
+  "dist_version": "0.30.3",
+  "announcement_tag": "v0.20.2",
+  "announcement_tag_is_implicit": true,
+  "announcement_is_prerelease": false,
+  "announcement_title": "v0.20.2",
+  "announcement_github_body": "## Install homeboy 0.20.2\n\n### Install prebuilt binaries via Homebrew\n\n```sh\nbrew install Extra-Chill/tap/homeboy\n```\n\n## Download homeboy 0.20.2\n\n|  File  | Platform | Checksum |\n|--------|----------|----------|\n| [homeboy-aarch64-apple-darwin.tar.xz](https://github.com/Extra-Chill/homeboy/releases/download/v0.20.2/homeboy-aarch64-apple-darwin.tar.xz) | Apple Silicon macOS | [checksum](https://github.com/Extra-Chill/homeboy/releases/download/v0.20.2/homeboy-aarch64-apple-darwin.tar.xz.sha256) |\n\n",
+  "releases": [
+    {
+      "app_name": "homeboy",
+      "app_version": "0.20.2",
+      "env": {
+        "install_dir_env_var": "HOMEBOY_INSTALL_DIR",
+        "unmanaged_dir_env_var": "HOMEBOY_UNMANAGED_INSTALL",
+        "disable_update_env_var": "HOMEBOY_DISABLE_UPDATE",
+        "no_modify_path_env_var": "HOMEBOY_NO_MODIFY_PATH",
+        "print_quiet_env_var": "HOMEBOY_PRINT_QUIET",
+        "print_verbose_env_var": "HOMEBOY_PRINT_VERBOSE",
+        "download_url_env_var": "HOMEBOY_DOWNLOAD_URL",
+        "github_base_url_env_var": "HOMEBOY_INSTALLER_GITHUB_BASE_URL",
+        "ghe_base_url_env_var": "HOMEBOY_INSTALLER_GHE_BASE_URL",
+        "github_token_env_var": "HOMEBOY_GITHUB_TOKEN"
+      },
+      "display_name": "homeboy",
+      "display": true,
+      "artifacts": [
+        "source.tar.gz",
+        "source.tar.gz.sha256",
+        "homeboy.rb",
+        "sha256.sum",
+        "homeboy-aarch64-apple-darwin.tar.xz",
+        "homeboy-aarch64-apple-darwin.tar.xz.sha256"
+      ],
+      "hosting": {
+        "github": {
+          "artifact_base_url": "https://github.com",
+          "artifact_download_path": "/Extra-Chill/homeboy/releases/download/v0.20.2",
+          "owner": "Extra-Chill",
+          "repo": "homeboy"
+        }
+      }
+    }
+  ],
+  "artifacts": {
+    "homeboy-aarch64-apple-darwin.tar.xz": {
+      "name": "homeboy-aarch64-apple-darwin.tar.xz",
+      "kind": "executable-zip",
+      "target_triples": [
+        "aarch64-apple-darwin"
+      ],
+      "path": "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/homeboy-aarch64-apple-darwin.tar.xz",
+      "assets": [
+        {
+          "name": "LICENSE",
+          "path": "LICENSE",
+          "kind": "license"
+        },
+        {
+          "name": "README.md",
+          "path": "README.md",
+          "kind": "readme"
+        },
+        {
+          "id": "homeboy-aarch64-apple-darwin-exe-homeboy",
+          "name": "homeboy",
+          "path": "homeboy",
+          "kind": "executable"
+        }
+      ],
+      "checksum": "homeboy-aarch64-apple-darwin.tar.xz.sha256",
+      "checksums": {
+        "sha256": "170a2e78120a47b059b6bbda1fa3d97092bc658f9560be22987ed214daa0eff3"
+      }
+    },
+    "homeboy-aarch64-apple-darwin.tar.xz.sha256": {
+      "name": "homeboy-aarch64-apple-darwin.tar.xz.sha256",
+      "kind": "checksum",
+      "target_triples": [
+        "aarch64-apple-darwin"
+      ],
+      "path": "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/homeboy-aarch64-apple-darwin.tar.xz.sha256"
+    },
+    "homeboy.rb": {
+      "name": "homeboy.rb",
+      "kind": "installer",
+      "target_triples": [
+        "aarch64-apple-darwin"
+      ],
+      "path": "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/homeboy.rb",
+      "install_hint": "brew install Extra-Chill/tap/homeboy",
+      "description": "Install prebuilt binaries via Homebrew"
+    },
+    "sha256.sum": {
+      "name": "sha256.sum",
+      "kind": "unified-checksum",
+      "path": "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/sha256.sum"
+    },
+    "source.tar.gz": {
+      "name": "source.tar.gz",
+      "kind": "source-tarball",
+      "path": "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/source.tar.gz",
+      "checksum": "source.tar.gz.sha256",
+      "checksums": {
+        "sha256": "79ecf3f71bfd4f3f36692b3c04cb6de61f4b347d00841faf7528d741a445ee32"
+      }
+    },
+    "source.tar.gz.sha256": {
+      "name": "source.tar.gz.sha256",
+      "kind": "checksum",
+      "path": "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/source.tar.gz.sha256"
+    }
+  },
+  "systems": {
+    "build:host:": {
+      "id": "build:host:",
+      "cargo_version_line": "cargo 1.92.0 (344c4567c 2025-10-21)",
+      "build_environment": {
+        "macos": {
+          "os_version": "15.6"
+        }
+      }
+    }
+  },
+  "assets": {
+    "homeboy-aarch64-apple-darwin-exe-homeboy": {
+      "id": "homeboy-aarch64-apple-darwin-exe-homeboy",
+      "name": "homeboy",
+      "system": "build:host:",
+      "target_triples": [
+        "aarch64-apple-darwin"
+      ],
+      "linkage": {
+        "system": [
+          {
+            "path": "/usr/lib/libSystem.B.dylib",
+            "package_manager": null
+          },
+          {
+            "path": "/usr/lib/libiconv.2.dylib",
+            "package_manager": null
+          }
+        ],
+        "frameworks": [
+          {
+            "path": "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+            "package_manager": null
+          },
+          {
+            "path": "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+            "package_manager": null
+          },
+          {
+            "path": "/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration",
+            "package_manager": null
+          }
+        ]
+      }
+    }
+  },
+  "publish_prereleases": false,
+  "force_latest": false,
+  "ci": {
+    "github": {
+      "artifacts_matrix": {
+        "include": [
+          {
+            "runner": "macos-14",
+            "host": "aarch64-apple-darwin",
+            "install_dist": {
+              "shell": "sh",
+              "run": "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.30.3/cargo-dist-installer.sh | sh"
+            },
+            "dist_args": "--artifacts=local --target=aarch64-apple-darwin",
+            "targets": [
+              "aarch64-apple-darwin"
+            ],
+            "cache_provider": "github"
+          }
+        ]
+      },
+      "pr_run_mode": "plan"
+    }
+  },
+  "linkage": [],
+  "upload_files": [
+    "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/source.tar.gz",
+    "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/source.tar.gz.sha256",
+    "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/homeboy.rb",
+    "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/sha256.sum",
+    "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/homeboy-aarch64-apple-darwin.tar.xz",
+    "/Users/chubes/Developer/Extra Chill Platform/homeboy-ecosystem/homeboy/target/distrib/homeboy-aarch64-apple-darwin.tar.xz.sha256"
+  ]
+}

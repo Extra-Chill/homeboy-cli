@@ -339,7 +339,7 @@ fn split_ready_steps(
     let mut blocked = Vec::new();
     let mut skipped = Vec::new();
 
-    let status_map: HashMap<String, PipelineRunStatus> = results
+    let mut status_map: HashMap<String, PipelineRunStatus> = results
         .iter()
         .map(|result| (result.id.clone(), result.status.clone()))
         .collect();
@@ -364,7 +364,7 @@ fn split_ready_steps(
         }
 
         if let Some(dep) = failed_dependency {
-            skipped.push(PipelineStepResult {
+            let result = PipelineStepResult {
                 id: step.id.clone(),
                 step_type: step.step_type.clone(),
                 status: PipelineRunStatus::Skipped,
@@ -373,7 +373,9 @@ fn split_ready_steps(
                 hints: Vec::new(),
                 data: None,
                 error: None,
-            });
+            };
+            status_map.insert(step.id.clone(), PipelineRunStatus::Skipped);
+            skipped.push(result);
             continue;
         }
 

@@ -25,7 +25,7 @@ Only update what needs correction. Preserve accurate existing content. Do not re
 ## Workflow
 
 ### 1. Detect Changes
-Run `homeboy changes` to identify what code has changed. This informs which documentation may be stale.
+Run `homeboy changes --cwd` to identify what code has changed. This informs which documentation may be stale.
 
 ### 2. Discover Documentation
 Find all `.md` files in the codebase:

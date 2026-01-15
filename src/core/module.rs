@@ -315,20 +315,14 @@ fn manifest_path_for_module(module_dir: &Path, id: &str) -> PathBuf {
     module_dir.join(format!("{}.json", id))
 }
 
-/// Find manifest path, supporting both new ({id}.json) and legacy (homeboy.json) naming.
+/// Find manifest path for {id}.json in module directory.
 fn find_manifest_path(module_dir: &Path, id: &str) -> Option<PathBuf> {
-    let new_path = manifest_path_for_module(module_dir, id);
-    if new_path.exists() {
-        return Some(new_path);
+    let manifest_path = manifest_path_for_module(module_dir, id);
+    if manifest_path.exists() {
+        Some(manifest_path)
+    } else {
+        None
     }
-
-    // Fallback for legacy modules
-    let old_path = module_dir.join("homeboy.json");
-    if old_path.exists() {
-        return Some(old_path);
-    }
-
-    None
 }
 
 pub fn load_module(id: &str) -> Option<ModuleManifest> {
@@ -702,7 +696,7 @@ pub fn run_action_with_payload(
             }
         }
         "command" => {
-            let command = action
+            let command_template = action
                 .command
                 .as_ref()
                 .ok_or_else(|| Error::other("Command action missing 'command'"))?;
@@ -712,13 +706,20 @@ pub fn run_action_with_payload(
             let env_pairs: Vec<(&str, &str)> =
                 env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
 
-            let module_path = module
-                .module_path
-                .as_ref()
-                .ok_or_else(|| Error::other("module_path not set".to_string()))?;
+            // Template the command with module_path
+            let module_path = module.module_path.as_deref().unwrap_or(".");
+            let command = template::render(command_template, &[("module_path", module_path)]);
+
+            // Use local_path from release payload if available, otherwise fall back to module_path
+            let working_dir = payload
+                .get("release")
+                .and_then(|r| r.get("local_path"))
+                .and_then(|p| p.as_str())
+                .unwrap_or(module_path);
+
             let output = crate::ssh::execute_local_command_in_dir(
-                command,
-                Some(module_path.as_str()),
+                &command,
+                Some(working_dir),
                 Some(&env_pairs),
             );
             Ok(serde_json::json!({
@@ -1147,29 +1148,6 @@ fn install_from_url(url: &str, id_override: Option<&str>) -> Result<InstallResul
     local_files::ensure_app_dirs()?;
     git::clone_repo(url, &module_dir)?;
 
-    // Migrate manifest to {id}.json naming and add sourceUrl
-    let old_manifest_path = module_dir.join("homeboy.json");
-    let new_manifest_path = manifest_path_for_module(&module_dir, &module_id);
-
-    if old_manifest_path.exists() {
-        let content = local_files::local().read(&old_manifest_path)?;
-        let mut manifest: serde_json::Value = from_str(&content)?;
-
-        // Add sourceUrl for update tracking
-        manifest["sourceUrl"] = serde_json::Value::String(url.to_string());
-
-        // Remove redundant id field (now derived from filename)
-        if let Some(obj) = manifest.as_object_mut() {
-            obj.remove("id");
-        }
-
-        let updated = to_string_pretty(&manifest)?;
-        local_files::local().write(&new_manifest_path, &updated)?;
-
-        // Remove old homeboy.json
-        let _ = std::fs::remove_file(&old_manifest_path);
-    }
-
     // Auto-run setup if module defines a setup_command
     if let Some(module) = load_module(&module_id) {
         if module
@@ -1225,19 +1203,15 @@ fn install_from_path(source_path: &str, id_override: Option<&str>) -> Result<Ins
         None => slugify_id(dir_name)?,
     };
 
-    // Check for manifest: prefer {id}.json, fall back to homeboy.json
-    let manifest_path = find_manifest_path(&source, &module_id).ok_or_else(|| {
-        Error::validation_invalid_argument(
+    let manifest_path = manifest_path_for_module(&source, &module_id);
+    if !manifest_path.exists() {
+        return Err(Error::validation_invalid_argument(
             "source",
-            format!(
-                "No {}.json or homeboy.json found at {}",
-                module_id,
-                source.display()
-            ),
+            format!("No {}.json found at {}", module_id, source.display()),
             Some(source_path.to_string()),
             None,
-        )
-    })?;
+        ));
+    }
 
     // Validate manifest is parseable
     let manifest_content = local_files::local().read(&manifest_path)?;

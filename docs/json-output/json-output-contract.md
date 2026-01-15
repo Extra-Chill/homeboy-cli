@@ -40,6 +40,7 @@ Notes:
 - `data` is omitted on failure.
 - `error` is omitted on success.
 - `error.hints`/`error.retryable` are omitted when not set.
+- JSON serialization errors return `internal.json_error` (no silent fallback).
 
 ## Error fields
 

@@ -246,6 +246,19 @@ impl ReleaseStepExecutor {
     }
 
     fn run_version(&self, step: &PipelineStep) -> Result<PipelineStepResult> {
+        let mode = step
+            .config
+            .get("mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("bump");
+
+        match mode {
+            "validate" => self.run_version_validate(step),
+            _ => self.run_version_bump(step),
+        }
+    }
+
+    fn run_version_bump(&self, step: &PipelineStep) -> Result<PipelineStepResult> {
         let bump_type = step
             .config
             .get("bump")
@@ -255,6 +268,20 @@ impl ReleaseStepExecutor {
         let data = serde_json::to_value(&result)
             .map_err(|e| Error::internal_json(e.to_string(), Some("version output".to_string())))?;
         self.store_version_context(&result.new_version)?;
+        Ok(self.step_result(
+            step,
+            PipelineRunStatus::Success,
+            Some(data),
+            None,
+            Vec::new(),
+        ))
+    }
+
+    fn run_version_validate(&self, step: &PipelineStep) -> Result<PipelineStepResult> {
+        let info = version::read_version(Some(&self.component_id))?;
+        let data = serde_json::to_value(&info)
+            .map_err(|e| Error::internal_json(e.to_string(), Some("version output".to_string())))?;
+        self.store_version_context(&info.version)?;
         Ok(self.step_result(
             step,
             PipelineRunStatus::Success,
@@ -316,6 +343,7 @@ impl ReleaseStepExecutor {
     }
 
     fn build_release_payload(&self, step: &PipelineStep) -> Result<serde_json::Value> {
+        let component = component::load(&self.component_id)?;
         let context = self.context.lock().map_err(|_| {
             Error::internal_unexpected("Failed to lock release context".to_string())
         })?;
@@ -333,6 +361,7 @@ impl ReleaseStepExecutor {
                 "tag": tag,
                 "notes": notes,
                 "component_id": self.component_id,
+                "local_path": component.local_path,
                 "artifacts": artifacts
             }
         });
@@ -429,14 +458,33 @@ impl ReleaseStepExecutor {
 
     fn run_module_action(&self, step: &PipelineStep) -> Result<PipelineStepResult> {
         let action_id = format!("release.{}", step.step_type);
-        let module = resolve_module_action(&self.modules, &action_id)?;
+        let modules = resolve_module_actions(&self.modules, &action_id)?;
         let payload = self.build_release_payload(step)?;
-        let response =
-            module::run_action_with_payload(&module.id, &action_id, None, None, Some(&payload))?;
-        let data = serde_json::to_value(response).map_err(|e| {
-            Error::internal_json(e.to_string(), Some("module action output".to_string()))
-        })?;
-        self.update_artifacts_from_step(step, &data)?;
+
+        let mut results = Vec::new();
+        for module in &modules {
+            let response = module::run_action_with_payload(
+                &module.id,
+                &action_id,
+                None,
+                None,
+                Some(&payload),
+            )?;
+            let module_data = serde_json::to_value(&response).map_err(|e| {
+                Error::internal_json(e.to_string(), Some("module action output".to_string()))
+            })?;
+            self.update_artifacts_from_step(step, &module_data)?;
+            results.push(serde_json::json!({
+                "module": module.id,
+                "response": module_data
+            }));
+        }
+
+        let data = serde_json::json!({
+            "action": action_id,
+            "results": results
+        });
+
         Ok(self.step_result(
             step,
             PipelineRunStatus::Success,
@@ -483,7 +531,10 @@ fn resolve_modules(component: &Component, module_id: Option<&str>) -> Result<Vec
     Ok(modules)
 }
 
-fn resolve_module_action(modules: &[ModuleManifest], action_id: &str) -> Result<ModuleManifest> {
+fn resolve_module_actions(
+    modules: &[ModuleManifest],
+    action_id: &str,
+) -> Result<Vec<ModuleManifest>> {
     let matches: Vec<ModuleManifest> = modules
         .iter()
         .filter(|module| module.actions.iter().any(|action| action.id == action_id))
@@ -493,27 +544,13 @@ fn resolve_module_action(modules: &[ModuleManifest], action_id: &str) -> Result<
     if matches.is_empty() {
         return Err(Error::validation_invalid_argument(
             "release.steps",
-            format!("Missing module action '{}'", action_id),
+            format!("No module provides action '{}'", action_id),
             None,
             None,
         ));
     }
 
-    if matches.len() > 1 {
-        let modules: Vec<String> = matches.iter().map(|module| module.id.clone()).collect();
-        return Err(Error::validation_invalid_argument(
-            "release.steps",
-            format!(
-                "Multiple modules provide action '{}' ({})",
-                action_id,
-                modules.join(", ")
-            ),
-            None,
-            None,
-        ));
-    }
-
-    Ok(matches[0].clone())
+    Ok(matches)
 }
 
 fn extract_latest_notes(content: &str) -> Option<String> {

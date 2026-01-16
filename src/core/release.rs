@@ -358,14 +358,20 @@ impl ReleaseStepExecutor {
                     .and_then(|v| v.as_str())
                     .map(|v| v.to_string())
             });
-        let message = step.config.get("message").and_then(|v| v.as_str());
 
         let tag_name = match tag {
             Some(name) => name,
             None => self.default_tag()?,
         };
 
-        let output = crate::git::tag(Some(&self.component_id), Some(&tag_name), message)?;
+        let message = step
+            .config
+            .get("message")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| format!("Release {}", tag_name));
+
+        let output = crate::git::tag(Some(&self.component_id), Some(&tag_name), Some(&message))?;
         let data = serde_json::to_value(&output)
             .map_err(|e| Error::internal_json(e.to_string(), Some("git tag output".to_string())))?;
 

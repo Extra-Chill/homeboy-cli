@@ -4,6 +4,10 @@ All notable changes to Homeboy CLI are documented in this file.
 
 (This file is embedded into the CLI binary and is also viewable via `homeboy changelog`.)
 
+## [0.22.7] - 2026-01-16
+
+- Make path optional in logs show - shows all pinned logs when omitted
+
 ## [0.22.6] - 2026-01-16
 
 - Add changelog show subcommand with optional component_id support

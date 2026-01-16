@@ -6,6 +6,12 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## [0.20.7] - 2026-01-15
+
+- Add -m flag for changelog add command (consistent with git commit/tag)
+- Support bulk changelog entries via repeatable -m flags
+- Add git.tag and git.push steps to release pipeline
+
 ## [0.20.6] - 2026-01-15
 
 - add init next_steps guidance for agents

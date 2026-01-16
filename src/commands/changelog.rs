@@ -31,8 +31,12 @@ pub enum ChangelogCommand {
         /// Component ID (non-JSON mode)
         component_id: Option<String>,
 
-        /// Changelog item content (non-JSON mode)
-        message: Option<String>,
+        /// Changelog item content (positional, for backward compatibility)
+        positional_message: Option<String>,
+
+        /// Changelog message (repeatable: -m "first" -m "second")
+        #[arg(short = 'm', long = "message", action = clap::ArgAction::Append)]
+        messages: Vec<String>,
     },
 
     /// Initialize a new changelog file
@@ -122,13 +126,19 @@ pub fn run(
             cwd,
             json,
             component_id,
-            message,
+            positional_message,
+            messages,
         }), _) => {
             // Priority: --cwd > --json > component_id (auto-detects JSON)
-            let messages: Vec<String> = message.iter().cloned().collect();
+            // Merge positional message with -m flags (positional goes first)
+            let mut all_messages: Vec<String> = Vec::new();
+            if let Some(msg) = positional_message {
+                all_messages.push(msg.clone());
+            }
+            all_messages.extend(messages.iter().cloned());
 
             if *cwd {
-                let output = changelog::add_items_cwd(&messages)?;
+                let output = changelog::add_items_cwd(&all_messages)?;
                 return Ok((ChangelogOutput::Add(output), 0));
             }
 
@@ -139,7 +149,7 @@ pub fn run(
             }
 
             // Core handles auto-detection of JSON in component_id
-            let output = changelog::add_items(component_id.as_deref(), &messages)?;
+            let output = changelog::add_items(component_id.as_deref(), &all_messages)?;
             Ok((ChangelogOutput::Add(output), 0))
         }
         (Some(ChangelogCommand::Init {

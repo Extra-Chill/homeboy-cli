@@ -40,6 +40,33 @@ Notes:
 - Any step depending on a failed/missing step is skipped.
 - Release actions use module definitions configured in `component.modules`.
 - Release payload includes version, tag, notes, and artifacts (from the finalized changelog and package steps).
+- `module.run` steps execute module runtime commands as part of the pipeline.
+
+## Pipeline step: `module.run`
+
+Use `module.run` to execute a module runtime command as part of the release pipeline.
+
+Example step configuration:
+
+```json
+{
+  "id": "scrape",
+  "type": "module.run",
+  "needs": ["build"],
+  "config": {
+    "module": "bandcamp-scraper",
+    "inputs": [
+      { "id": "artist", "value": "some-artist" }
+    ],
+    "args": ["--verbose"]
+  }
+}
+```
+
+- `config.module` is required.
+- `config.inputs` is optional; each entry must include `id` and `value`.
+- `config.args` is optional; each entry is a CLI arg string.
+- Output includes `stdout`, `stderr`, `exitCode`, `success`, and the release payload.
 
 ## JSON output
 

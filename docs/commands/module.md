@@ -111,6 +111,8 @@ When running a module, Homeboy passes an execution context via environment varia
 
 Modules can define additional environment variables via `runtime.env` in their manifest.
 
+`homeboy module run` and `module.run` pipeline steps share the same execution core (template vars, settings JSON, and env handling). Both paths keep the same CLI output contract while sharing internal execution behavior.
+
 Module settings validation currently happens during module execution (and may also be checked by other commands). There is no dedicated validation-only command in the CLI.
 
 `homeboy module run` requires the module to be installed/linked under the Homeboy modules directory (discovered by scanning `<config dir>/homeboy/modules/<module_id>/<module_id>.json`). There is no separate "installedModules in global config" requirement.

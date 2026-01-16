@@ -12,6 +12,55 @@ use crate::pipeline::{
 };
 use crate::{changelog, version};
 
+fn parse_module_inputs(values: &[serde_json::Value]) -> Result<Vec<(String, String)>> {
+    let mut inputs = Vec::new();
+    for value in values {
+        let entry = value.as_object().ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "release.steps",
+                "module.run inputs must be objects with 'id' and 'value'",
+                None,
+                None,
+            )
+        })?;
+        let id = entry.get("id").and_then(|v| v.as_str()).ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "release.steps",
+                "module.run inputs require 'id'",
+                None,
+                None,
+            )
+        })?;
+        let value = entry.get("value").and_then(|v| v.as_str()).ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "release.steps",
+                "module.run inputs require 'value'",
+                None,
+                None,
+            )
+        })?;
+        inputs.push((id.to_string(), value.to_string()));
+    }
+
+    Ok(inputs)
+}
+
+fn parse_module_args(values: &[serde_json::Value]) -> Result<Vec<String>> {
+    let mut args = Vec::new();
+    for value in values {
+        let arg = value.as_str().ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "release.steps",
+                "module.run args must be strings",
+                None,
+                None,
+            )
+        })?;
+        args.push(arg.to_string());
+    }
+    Ok(args)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 
 pub struct ReleaseConfig {
@@ -146,10 +195,15 @@ impl ReleaseCapabilityResolver {
 
 impl PipelineCapabilityResolver for ReleaseCapabilityResolver {
     fn is_supported(&self, step_type: &str) -> bool {
-        is_core_step(step_type) || self.supports_module_action(step_type)
+        step_type == "module.run"
+            || is_core_step(step_type)
+            || self.supports_module_action(step_type)
     }
 
     fn missing(&self, step_type: &str) -> Vec<String> {
+        if step_type == "module.run" {
+            return Vec::new();
+        }
         let action_id = format!("release.{}", step_type);
         vec![format!("Missing action '{}'", action_id)]
     }
@@ -463,13 +517,8 @@ impl ReleaseStepExecutor {
 
         let mut results = Vec::new();
         for module in &modules {
-            let response = module::run_action_with_payload(
-                &module.id,
-                &action_id,
-                None,
-                None,
-                Some(&payload),
-            )?;
+            let response =
+                module::execute_action(&module.id, &action_id, None, None, Some(&payload))?;
             let module_data = serde_json::to_value(&response).map_err(|e| {
                 Error::internal_json(e.to_string(), Some("module action output".to_string()))
             })?;
@@ -493,12 +542,77 @@ impl ReleaseStepExecutor {
             Vec::new(),
         ))
     }
+
+    fn run_module_runtime(&self, step: &PipelineStep) -> Result<PipelineStepResult> {
+        let module_id = step
+            .config
+            .get("module")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                Error::validation_invalid_argument(
+                    "release.steps",
+                    "module.run requires config.module",
+                    None,
+                    None,
+                )
+            })?;
+
+        let inputs = step
+            .config
+            .get("inputs")
+            .and_then(|v| v.as_array())
+            .map(parse_module_inputs)
+            .unwrap_or_else(|| Ok(Vec::new()))?;
+        let args = step
+            .config
+            .get("args")
+            .and_then(|v| v.as_array())
+            .map(parse_module_args)
+            .unwrap_or_else(|| Ok(Vec::new()))?;
+
+        let payload = self.build_release_payload(step)?;
+        let working_dir = payload
+            .get("release")
+            .and_then(|r| r.get("local_path"))
+            .and_then(|p| p.as_str());
+
+        let outcome = module::run_module_runtime(
+            module_id,
+            None,
+            None,
+            inputs,
+            args,
+            Some(&payload),
+            working_dir,
+        )?;
+
+        let data = serde_json::json!({
+            "module": module_id,
+            "stdout": outcome.result.stdout,
+            "stderr": outcome.result.stderr,
+            "exitCode": outcome.result.exit_code,
+            "success": outcome.result.success,
+            "payload": payload
+        });
+
+        let status = if outcome.result.success {
+            PipelineRunStatus::Success
+        } else {
+            PipelineRunStatus::Failed
+        };
+
+        Ok(self.step_result(step, status, Some(data), None, Vec::new()))
+    }
 }
 
 impl PipelineStepExecutor for ReleaseStepExecutor {
     fn execute_step(&self, step: &PipelineStep) -> Result<PipelineStepResult> {
         if is_core_step(&step.step_type) {
             return self.execute_core_step(step);
+        }
+
+        if step.step_type == "module.run" {
+            return self.run_module_runtime(step);
         }
 
         self.run_module_action(step)

@@ -4,9 +4,13 @@ All notable changes to Homeboy CLI are documented in this file.
 
 (This file is embedded into the CLI binary and is also viewable via `homeboy changelog`.)
 
-## Unreleased
+## [0.21.0] - 2026-01-16
 
-- Full Keep a Changelog subsection support for changelog parsing
+- Add generic module-based deploy override system for platform-specific install commands
+- Add `heck` crate for automatic camelCase/snake_case key normalization in config merges
+- Fix SIGPIPE panic when piping CLI output to commands like `head`
+- Fix `success: true` missing from component set single-item responses
+- Fix deploy error messages to include exit code and fall back to stdout when stderr is empty
 
 ## [0.20.9] - 2026-01-15
 

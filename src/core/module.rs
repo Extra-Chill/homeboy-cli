@@ -47,6 +47,8 @@ pub struct ModuleManifest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deploy: Vec<DeployVerification>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deploy_override: Vec<DeployOverride>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub version_patterns: Vec<VersionPatternConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build: Option<BuildConfig>,
@@ -179,6 +181,23 @@ pub struct DeployVerification {
     pub verify_command: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verify_error_message: Option<String>,
+}
+
+fn default_staging_path() -> String {
+    "/tmp/homeboy-staging".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct DeployOverride {
+    pub path_pattern: String,
+    #[serde(default = "default_staging_path")]
+    pub staging_path: String,
+    pub install_command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_command: Option<String>,
+    #[serde(default)]
+    pub skip_permissions_fix: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

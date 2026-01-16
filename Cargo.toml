@@ -1,6 +1,6 @@
 [package]
 name = "homeboy"
-version = "0.20.9"
+version = "0.21.0"
 edition = "2021"
 license = "MIT"
 authors = ["Chris Huber <chubes@extrachill.com>"]
@@ -21,6 +21,7 @@ path = "src/main.rs"
 # Core library dependencies
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+heck = "0.5"
 thiserror = "2.0"
 anyhow = "1.0"
 dirs = "6.0"

@@ -240,6 +240,7 @@ fn set(args: DynamicSetArgs) -> CmdResult<ComponentOutput> {
             Ok((
                 ComponentOutput {
                     command: "component.set".to_string(),
+                    success: true,
                     component_id: Some(result.id),
                     updated_fields: result.updated_fields,
                     component: Some(comp),

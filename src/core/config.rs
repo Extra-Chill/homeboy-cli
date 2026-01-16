@@ -6,8 +6,9 @@ use crate::output::{
 use crate::paths;
 use crate::slugify;
 use crate::Result;
+use heck::ToSnakeCase;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -238,6 +239,24 @@ fn value_type_name(value: &Value) -> &'static str {
 // Config Merge/Remove Operations (internal)
 // ============================================================================
 
+/// Normalize JSON object keys to snake_case recursively.
+/// Allows callers to use camelCase, PascalCase, or snake_case interchangeably.
+fn normalize_keys_to_snake_case(value: Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let normalized: Map<String, Value> = map
+                .into_iter()
+                .map(|(k, v)| (k.to_snake_case(), normalize_keys_to_snake_case(v)))
+                .collect();
+            Value::Object(normalized)
+        }
+        Value::Array(arr) => {
+            Value::Array(arr.into_iter().map(normalize_keys_to_snake_case).collect())
+        }
+        other => other,
+    }
+}
+
 /// Internal result from merge_config (no ID, caller adds it).
 pub(crate) struct MergeFields {
     pub updated_fields: Vec<String>,
@@ -249,6 +268,9 @@ pub(crate) fn merge_config<T: Serialize + DeserializeOwned>(
     patch: Value,
     replace_fields: &[String],
 ) -> Result<MergeFields> {
+    // Normalize keys to snake_case (accepts camelCase, PascalCase, etc.)
+    let patch = normalize_keys_to_snake_case(patch);
+
     let patch_obj = match &patch {
         Value::Object(obj) => obj,
         _ => {

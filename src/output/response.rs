@@ -63,8 +63,20 @@ impl CliResponse<()> {
 }
 
 fn print_response<T: Serialize>(response: &CliResponse<T>) -> Result<()> {
+    use std::io::{self, Write};
+
     let payload = response.to_json()?;
-    println!("{}", payload);
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    if let Err(e) = writeln!(handle, "{}", payload) {
+        if e.kind() == io::ErrorKind::BrokenPipe {
+            return Ok(()); // Exit gracefully on SIGPIPE
+        }
+        return Err(Error::internal_io(
+            e.to_string(),
+            Some("write stdout".to_string()),
+        ));
+    }
     Ok(())
 }
 

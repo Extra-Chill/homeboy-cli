@@ -10,7 +10,7 @@ use crate::config;
 use crate::context::{resolve_project_ssh_with_base_path, RemoteProjectContext};
 use crate::defaults;
 use crate::error::{Error, Result};
-use crate::module::{load_all_modules, DeployVerification};
+use crate::module::{load_all_modules, DeployOverride, DeployVerification, ModuleManifest};
 use crate::permissions;
 use crate::project::{self, Project};
 use crate::shell;
@@ -133,9 +133,17 @@ pub fn deploy_artifact(
 
             let extract_output = ssh_client.execute(&extract_cmd);
             if !extract_output.success {
+                let error_detail = if extract_output.stderr.is_empty() {
+                    extract_output.stdout.clone()
+                } else {
+                    extract_output.stderr.clone()
+                };
                 return Ok(DeployResult::failure(
                     extract_output.exit_code,
-                    format!("Extract command failed: {}", extract_output.stderr),
+                    format!(
+                        "Extract command failed (exit {}): {}",
+                        extract_output.exit_code, error_detail
+                    ),
                 ));
             }
 
@@ -548,14 +556,28 @@ pub fn deploy_components(
         // Look up verification from modules
         let verification = find_deploy_verification(&install_dir);
 
-        // Deploy using core module
-        let deploy_result = deploy_artifact(
-            &ctx.client,
-            Path::new(&component.build_artifact),
-            &install_dir,
-            component.extract_command.as_deref(),
-            verification.as_ref(),
-        );
+        // Check for module-defined deploy override
+        let deploy_result = if let Some((override_config, module)) = find_deploy_override(&install_dir) {
+            deploy_with_override(
+                &ctx.client,
+                Path::new(&component.build_artifact),
+                &install_dir,
+                &override_config,
+                &module,
+                verification.as_ref(),
+                Some(base_path),
+                project.domain.as_deref(),
+            )
+        } else {
+            // Standard deploy
+            deploy_artifact(
+                &ctx.client,
+                Path::new(&component.build_artifact),
+                &install_dir,
+                component.extract_command.as_deref(),
+                verification.as_ref(),
+            )
+        };
 
         match deploy_result {
             Ok(DeployResult {
@@ -782,4 +804,134 @@ fn find_deploy_verification(target_path: &str) -> Option<DeployVerification> {
         }
     }
     None
+}
+
+/// Find deploy override config from modules.
+fn find_deploy_override(target_path: &str) -> Option<(DeployOverride, ModuleManifest)> {
+    for module in load_all_modules() {
+        for override_config in &module.deploy_override {
+            if target_path.contains(&override_config.path_pattern) {
+                return Some((override_config.clone(), module));
+            }
+        }
+    }
+    None
+}
+
+/// Deploy using module-defined override strategy.
+fn deploy_with_override(
+    ssh_client: &SshClient,
+    local_path: &Path,
+    remote_path: &str,
+    override_config: &DeployOverride,
+    module: &ModuleManifest,
+    verification: Option<&DeployVerification>,
+    site_root: Option<&str>,
+    domain: Option<&str>,
+) -> Result<DeployResult> {
+    let artifact_filename = local_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "buildArtifact",
+                "Build artifact path must include a file name",
+                Some(local_path.display().to_string()),
+                None,
+            )
+        })?;
+
+    let staging_artifact = format!("{}/{}", override_config.staging_path, artifact_filename);
+
+    // Step 1: Create staging directory
+    let mkdir_cmd = format!("mkdir -p {}", shell::quote_path(&override_config.staging_path));
+    eprintln!(
+        "[deploy] Using module deploy override: {}",
+        module.id
+    );
+    eprintln!("[deploy] Creating staging directory: {}", override_config.staging_path);
+    let mkdir_output = ssh_client.execute(&mkdir_cmd);
+    if !mkdir_output.success {
+        return Ok(DeployResult::failure(
+            mkdir_output.exit_code,
+            format!("Failed to create staging directory: {}", mkdir_output.stderr),
+        ));
+    }
+
+    // Step 2: Upload artifact to staging
+    let upload_result = scp_file(ssh_client, local_path, &staging_artifact)?;
+    if !upload_result.success {
+        return Ok(upload_result);
+    }
+
+    // Step 3: Render and execute install command
+    let cli_path = module
+        .cli
+        .as_ref()
+        .and_then(|c| c.default_cli_path.as_deref())
+        .unwrap_or("wp");
+
+    let mut vars = HashMap::new();
+    vars.insert("artifact".to_string(), artifact_filename.to_string());
+    vars.insert("stagingArtifact".to_string(), staging_artifact.clone());
+    vars.insert("targetDir".to_string(), remote_path.to_string());
+    vars.insert("siteRoot".to_string(), site_root.unwrap_or("").to_string());
+    vars.insert("cliPath".to_string(), cli_path.to_string());
+    vars.insert("domain".to_string(), domain.unwrap_or("").to_string());
+
+    let install_cmd = render_map(&override_config.install_command, &vars);
+    eprintln!("[deploy] Running install command: {}", install_cmd);
+
+    let install_output = ssh_client.execute(&install_cmd);
+    if !install_output.success {
+        let error_detail = if install_output.stderr.is_empty() {
+            install_output.stdout.clone()
+        } else {
+            install_output.stderr.clone()
+        };
+        return Ok(DeployResult::failure(
+            install_output.exit_code,
+            format!(
+                "Install command failed (exit {}): {}",
+                install_output.exit_code, error_detail
+            ),
+        ));
+    }
+
+    // Step 4: Run cleanup command if configured
+    if let Some(cleanup_cmd_template) = &override_config.cleanup_command {
+        let cleanup_cmd = render_map(cleanup_cmd_template, &vars);
+        eprintln!("[deploy] Running cleanup: {}", cleanup_cmd);
+        let _ = ssh_client.execute(&cleanup_cmd); // Best effort cleanup
+    }
+
+    // Step 5: Fix permissions unless skipped
+    if !override_config.skip_permissions_fix {
+        eprintln!("[deploy] Fixing file permissions");
+        permissions::fix_deployed_permissions(ssh_client, remote_path)?;
+    }
+
+    // Step 6: Run verification if configured
+    if let Some(v) = verification {
+        if let Some(ref verify_cmd_template) = v.verify_command {
+            let mut verify_vars = HashMap::new();
+            verify_vars.insert(
+                TemplateVars::TARGET_DIR.to_string(),
+                remote_path.to_string(),
+            );
+            let verify_cmd = render_map(verify_cmd_template, &verify_vars);
+
+            let verify_output = ssh_client.execute(&verify_cmd);
+            if !verify_output.success || verify_output.stdout.trim().is_empty() {
+                let error_msg = v
+                    .verify_error_message
+                    .as_ref()
+                    .map(|msg| render_map(msg, &verify_vars))
+                    .unwrap_or_else(|| format!("Deploy verification failed for {}", remote_path));
+                return Ok(DeployResult::failure(1, error_msg));
+            }
+        }
+    }
+
+    Ok(DeployResult::success(0))
 }

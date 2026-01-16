@@ -949,6 +949,33 @@ pub fn add_items(component_id: Option<&str>, messages: &[String], entry_type: Op
     })
 }
 
+// === Changelog Show Operations ===
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ShowOutput {
+    pub component_id: String,
+    pub changelog_path: String,
+    pub content: String,
+}
+
+pub fn show(component_id: &str) -> Result<ShowOutput> {
+    let component = component::load(component_id)?;
+    let changelog_path = resolve_changelog_path(&component)?;
+
+    let content = fs::read_to_string(&changelog_path).map_err(|e| {
+        Error::internal_io(
+            e.to_string(),
+            Some(format!("read changelog at {}", changelog_path.display())),
+        )
+    })?;
+
+    Ok(ShowOutput {
+        component_id: component_id.to_string(),
+        changelog_path: changelog_path.to_string_lossy().to_string(),
+        content,
+    })
+}
+
 // === Changelog Init Operations ===
 
 #[derive(Debug, Clone, Serialize)]

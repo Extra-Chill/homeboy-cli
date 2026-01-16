@@ -2,7 +2,7 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 
 use super::CmdResult;
-use homeboy::changelog::{self, AddItemsOutput, InitOutput};
+use homeboy::changelog::{self, AddItemsOutput, InitOutput, ShowOutput};
 
 #[derive(Args)]
 pub struct ChangelogArgs {
@@ -16,8 +16,11 @@ pub struct ChangelogArgs {
 
 #[derive(Subcommand)]
 pub enum ChangelogCommand {
-    /// Show Homeboy's own changelog (alias for --self)
-    Show,
+    /// Show a changelog (Homeboy's own if no component specified)
+    Show {
+        /// Component ID to show changelog for
+        component_id: Option<String>,
+    },
 
     /// Add changelog items to the configured "next" section
     Add {
@@ -69,6 +72,8 @@ pub struct ChangelogShowOutput {
 pub enum ChangelogOutput {
     Show(ChangelogShowOutput),
 
+    ShowComponent(ShowOutput),
+
     Add(AddItemsOutput),
 
     Init(InitOutput),
@@ -76,21 +81,27 @@ pub enum ChangelogOutput {
 
 pub fn run_markdown(args: ChangelogArgs) -> CmdResult<String> {
     match (&args.command, args.show_self) {
-        (None, true) => show_markdown(),
+        (None, true) => show_homeboy_markdown(),
+        (Some(ChangelogCommand::Show { component_id: None }), _) => show_homeboy_markdown(),
+        (Some(ChangelogCommand::Show { component_id: Some(id) }), _) => {
+            let output = changelog::show(id)?;
+            Ok((output.content, 0))
+        }
         (None, false) => Err(homeboy::Error::validation_invalid_argument(
             "command",
-            "No subcommand provided. Use a subcommand (add, init) or --self to view Homeboy's changelog",
+            "No subcommand provided. Use a subcommand (add, init, show) or --self to view Homeboy's changelog",
             None,
             Some(vec![
                 "homeboy changelog add <component_id> <message>".to_string(),
                 "homeboy changelog init <component_id>".to_string(),
-                "homeboy changelog --self".to_string(),
+                "homeboy changelog show".to_string(),
+                "homeboy changelog show <component_id>".to_string(),
             ]),
         )),
         (Some(ChangelogCommand::Add { .. }) | Some(ChangelogCommand::Init { .. }), _) => {
             Err(homeboy::Error::validation_invalid_argument(
                 "command",
-                "Markdown output is only supported for 'changelog --self'",
+                "Markdown output is only supported for 'changelog show'",
                 None,
                 None,
             ))
@@ -99,7 +110,7 @@ pub fn run_markdown(args: ChangelogArgs) -> CmdResult<String> {
 }
 
 pub fn is_show_markdown(args: &ChangelogArgs) -> bool {
-    args.command.is_none() && args.show_self
+    matches!(args.command, Some(ChangelogCommand::Show { .. })) || (args.command.is_none() && args.show_self)
 }
 
 pub fn run(
@@ -108,17 +119,26 @@ pub fn run(
 ) -> CmdResult<ChangelogOutput> {
     match (&args.command, args.show_self) {
         (None, true) => {
-            let (out, code) = show_json()?;
+            let (out, code) = show_homeboy_json()?;
             Ok((ChangelogOutput::Show(out), code))
+        }
+        (Some(ChangelogCommand::Show { component_id: None }), _) => {
+            let (out, code) = show_homeboy_json()?;
+            Ok((ChangelogOutput::Show(out), code))
+        }
+        (Some(ChangelogCommand::Show { component_id: Some(id) }), _) => {
+            let output = changelog::show(id)?;
+            Ok((ChangelogOutput::ShowComponent(output), 0))
         }
         (None, false) => Err(homeboy::Error::validation_invalid_argument(
             "command",
-            "No subcommand provided. Use a subcommand (add, init) or --self to view Homeboy's changelog",
+            "No subcommand provided. Use a subcommand (add, init, show) or --self to view Homeboy's changelog",
             None,
             Some(vec![
                 "homeboy changelog add <component_id> <message>".to_string(),
                 "homeboy changelog init <component_id>".to_string(),
-                "homeboy changelog --self".to_string(),
+                "homeboy changelog show".to_string(),
+                "homeboy changelog show <component_id>".to_string(),
             ]),
         )),
         (Some(ChangelogCommand::Add {
@@ -173,11 +193,11 @@ pub fn run(
 // to avoid collision with docs/commands/changelog.md command docs.
 const HOMEBOY_CHANGELOG: &str = include_str!("../../docs/changelog.md");
 
-fn show_markdown() -> CmdResult<String> {
+fn show_homeboy_markdown() -> CmdResult<String> {
     Ok((HOMEBOY_CHANGELOG.to_string(), 0))
 }
 
-fn show_json() -> CmdResult<ChangelogShowOutput> {
+fn show_homeboy_json() -> CmdResult<ChangelogShowOutput> {
     Ok((
         ChangelogShowOutput {
             topic_label: "changelog".to_string(),

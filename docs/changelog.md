@@ -6,6 +6,13 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## [0.20.3] - 2026-01-15
+
+- **Release system now fully replaces GitHub Actions** - Complete local release pipeline with package, GitHub release, Homebrew tap, and crates.io publishing
+- Fix module template variable to use snake_case convention (`module_path`)
+- Fix macOS bash 3.x compatibility in module publish scripts (replace `readarray` with POSIX `while read`)
+- Add `dist-manifest.json` to .gitignore for cleaner working directory
+
 ## [0.20.2] - 2026-01-15
 
 - Prepare release pipeline for module-driven publishing

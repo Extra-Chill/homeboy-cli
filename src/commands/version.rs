@@ -1,11 +1,24 @@
 use clap::{Args, Subcommand, ValueEnum};
 use serde::Serialize;
 
+use homeboy::git::{commit, CommitOptions};
 use homeboy::version::{
-    bump_version, bump_version_cwd, read_version, read_version_cwd, set_version, VersionTargetInfo,
+    bump_version, bump_version_cwd, increment_version, read_version, read_version_cwd, set_version,
+    VersionTargetInfo,
 };
 
 use super::CmdResult;
+
+#[derive(Serialize)]
+pub struct GitCommitInfo {
+    pub success: bool,
+    pub message: String,
+    pub files_staged: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stdout: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stderr: Option<String>,
+}
 
 #[derive(Serialize)]
 #[serde(untagged)]
@@ -34,15 +47,23 @@ enum VersionCommand {
     },
     /// Bump version of a component and finalize changelog
     Bump {
+        /// Simulate the bump without making any changes
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip automatic git commit after bump
+        #[arg(long)]
+        no_commit: bool,
+
         /// Use current working directory (ad-hoc mode with auto-detection)
         #[arg(long)]
         cwd: bool,
 
-        /// Component ID
-        component_id: Option<String>,
-
         /// Version bump type
         bump_type: BumpType,
+
+        /// Component ID (optional when using --cwd)
+        component_id: Option<String>,
     },
     /// Set version directly (without incrementing or changelog finalization)
     #[command(visible_aliases = ["edit", "merge"])]
@@ -94,6 +115,10 @@ pub struct VersionBumpOutput {
     changelog_path: String,
     changelog_finalized: bool,
     changelog_changed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dry_run: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    git_commit: Option<GitCommitInfo>,
 }
 
 #[derive(Serialize)]
@@ -129,16 +154,115 @@ pub fn run(args: VersionArgs, _global: &crate::commands::GlobalArgs) -> CmdResul
             ))
         }
         VersionCommand::Bump {
+            dry_run,
+            no_commit,
             cwd,
-            component_id,
             bump_type,
+            component_id,
         } => {
+            if dry_run {
+                let (info, resolved_id) = if cwd {
+                    (read_version_cwd()?, None)
+                } else {
+                    let info = read_version(component_id.as_deref())?;
+                    (info, component_id)
+                };
+
+                let new_version =
+                    increment_version(&info.version, bump_type.as_str()).ok_or_else(|| {
+                        homeboy::error::Error::validation_invalid_argument(
+                            "version",
+                            format!("Invalid version format: {}", info.version),
+                            None,
+                            Some(vec![info.version.clone()]),
+                        )
+                    })?;
+
+                eprintln!(
+                    "[version] [dry-run] Would bump {} -> {}",
+                    info.version, new_version
+                );
+
+                return Ok((
+                    VersionOutput::Bump(VersionBumpOutput {
+                        command: "version.bump".to_string(),
+                        component_id: resolved_id,
+                        old_version: info.version,
+                        new_version,
+                        targets: info.targets,
+                        changelog_path: String::new(),
+                        changelog_finalized: false,
+                        changelog_changed: false,
+                        dry_run: Some(true),
+                        git_commit: None,
+                    }),
+                    0,
+                ));
+            }
+
             // Priority: --cwd > component_id
             let (result, resolved_id) = if cwd {
                 (bump_version_cwd(bump_type.as_str())?, None)
             } else {
                 let result = bump_version(component_id.as_deref(), bump_type.as_str())?;
                 (result, component_id)
+            };
+
+            // Auto-commit unless --no-commit
+            let git_commit = if no_commit {
+                None
+            } else {
+                // Collect files to stage: version targets + changelog
+                let mut files_to_stage: Vec<String> = result
+                    .targets
+                    .iter()
+                    .map(|t| t.full_path.clone())
+                    .collect();
+
+                if !result.changelog_path.is_empty() {
+                    files_to_stage.push(result.changelog_path.clone());
+                }
+
+                let commit_message = format!("release: v{}", result.new_version);
+
+                let options = CommitOptions {
+                    staged_only: false,
+                    files: Some(files_to_stage.clone()),
+                    exclude: None,
+                };
+
+                // Attempt commit - graceful failure (version files already updated)
+                match commit(resolved_id.as_deref(), Some(&commit_message), options) {
+                    Ok(output) => {
+                        let stdout = if output.stdout.is_empty() {
+                            None
+                        } else {
+                            Some(output.stdout)
+                        };
+                        let stderr = if output.stderr.is_empty() {
+                            None
+                        } else {
+                            Some(output.stderr)
+                        };
+                        Some(GitCommitInfo {
+                            success: output.success,
+                            message: commit_message,
+                            files_staged: files_to_stage,
+                            stdout,
+                            stderr,
+                        })
+                    }
+                    Err(e) => {
+                        // Report failure but don't rollback version changes
+                        Some(GitCommitInfo {
+                            success: false,
+                            message: commit_message,
+                            files_staged: files_to_stage,
+                            stdout: None,
+                            stderr: Some(e.to_string()),
+                        })
+                    }
+                }
             };
 
             Ok((
@@ -151,6 +275,8 @@ pub fn run(args: VersionArgs, _global: &crate::commands::GlobalArgs) -> CmdResul
                     changelog_path: result.changelog_path,
                     changelog_finalized: result.changelog_finalized,
                     changelog_changed: result.changelog_changed,
+                    dry_run: Some(false),
+                    git_commit,
                 }),
                 0,
             ))

@@ -89,33 +89,26 @@ pub fn resolve_effective_settings(component: Option<&Component>) -> EffectiveCha
 }
 
 pub fn resolve_changelog_path(component: &Component) -> Result<PathBuf> {
-    // If explicitly configured, use that
-    if let Some(target) = component.changelog_target.as_ref() {
-        return resolve_target_path(&component.local_path, target);
-    }
+    // Require explicit configuration - no auto-detection
+    let target = component.changelog_target.as_ref().ok_or_else(|| {
+        Error::validation_invalid_argument(
+            "component.changelog_target",
+            "No changelog target configured for component",
+            None,
+            Some(vec![
+                format!(
+                    "Configure: homeboy component set {} --changelog-target \"CHANGELOG.md\"",
+                    component.id
+                ),
+                format!(
+                    "Create and configure: homeboy changelog init {} --configure",
+                    component.id
+                ),
+            ]),
+        )
+    })?;
 
-    // Auto-detect from well-known locations
-    if let Some(path) = detect_changelog_path(&component.local_path) {
-        return Ok(path);
-    }
-
-    // No changelog found - provide helpful error
-    Err(Error::validation_invalid_argument(
-        "component.changelog_target",
-        "No changelog found for component",
-        None,
-        Some(vec![
-            format!(
-                "Configure existing: homeboy component set {} --changelog-target \"CHANGELOG.md\"",
-                component.id
-            ),
-            format!(
-                "Create new: homeboy changelog init {} --configure",
-                component.id
-            ),
-            "Bypass changelog: homeboy version set <version>".to_string(),
-        ]),
-    ))
+    resolve_target_path(&component.local_path, target)
 }
 
 fn resolve_target_path(local_path: &str, file: &str) -> Result<PathBuf> {
@@ -270,6 +263,27 @@ fn validate_section_content(body_lines: &[&str]) -> SectionContentStatus {
         SectionContentStatus::SubsectionsOnly
     } else {
         SectionContentStatus::Empty
+    }
+}
+
+pub fn check_next_section_content(
+    changelog_content: &str,
+    next_section_aliases: &[String],
+) -> Result<Option<String>> {
+    let lines: Vec<&str> = changelog_content.lines().collect();
+    let start = match find_next_section_start(&lines, next_section_aliases) {
+        Some(idx) => idx,
+        None => return Ok(None),
+    };
+
+    let end = find_section_end(&lines, start);
+    let body_lines = &lines[start + 1..end];
+    let content_status = validate_section_content(body_lines);
+
+    match content_status {
+        SectionContentStatus::Valid => Ok(None),
+        SectionContentStatus::SubsectionsOnly => Ok(Some(String::from("subsection_headers_only"))),
+        SectionContentStatus::Empty => Ok(Some(String::from("empty"))),
     }
 }
 
@@ -527,9 +541,11 @@ fn append_item_to_next_section(
     }
 
     // Detect if section uses Keep a Changelog subsections
-    let has_subsections = lines[start + 1..section_end]
-        .iter()
-        .any(|l| KEEP_A_CHANGELOG_SUBSECTIONS.iter().any(|h| l.trim().starts_with(h)));
+    let has_subsections = lines[start + 1..section_end].iter().any(|l| {
+        KEEP_A_CHANGELOG_SUBSECTIONS
+            .iter()
+            .any(|h| l.trim().starts_with(h))
+    });
 
     // Find where to insert
     let mut insert_after = start;
@@ -608,10 +624,33 @@ pub struct AddItemsOutput {
 }
 
 #[derive(Debug, Deserialize)]
-
+#[serde(into = "NormalizedAddItemsInput")]
 struct AddItemsInput {
     component_id: String,
+    #[serde(default)]
     messages: Vec<String>,
+    #[serde(default, alias = "message")]
+    message: Option<String>,
+}
+
+#[derive(Debug)]
+struct NormalizedAddItemsInput {
+    component_id: String,
+    messages: Vec<String>,
+}
+
+impl From<AddItemsInput> for NormalizedAddItemsInput {
+    fn from(input: AddItemsInput) -> Self {
+        let messages = if input.message.is_some() {
+            input.message.into_iter().collect()
+        } else {
+            input.messages
+        };
+        Self {
+            component_id: input.component_id,
+            messages,
+        }
+    }
 }
 
 /// Add changelog items from a JSON spec.
@@ -620,9 +659,11 @@ pub fn add_items_bulk(json_spec: &str) -> Result<AddItemsOutput> {
 
     let input: AddItemsInput = serde_json::from_str(&raw).map_err(|e| {
         Error::validation_invalid_json(e, Some("parse changelog add input".to_string()))
+            .with_hint(r#"Example: {"component_id": "my-component", "messages": ["Fixed: bug"]}"#)
     })?;
 
-    add_items(Some(&input.component_id), &input.messages)
+    let normalized: NormalizedAddItemsInput = input.into();
+    add_items(Some(&normalized.component_id), &normalized.messages)
 }
 
 /// Add changelog items to a component. Auto-detects JSON in component_id.
@@ -670,31 +711,6 @@ pub fn add_items(component_id: Option<&str>, messages: &[String]) -> Result<AddI
 
 // === CWD Changelog Operations ===
 
-/// Default changelog settings for use without a component.
-pub fn default_settings() -> EffectiveChangelogSettings {
-    resolve_effective_settings(None)
-}
-
-/// Well-known changelog file names for auto-detection
-const CHANGELOG_CANDIDATES: &[&str] = &[
-    "CHANGELOG.md",
-    "changelog.md",
-    "docs/CHANGELOG.md",
-    "docs/changelog.md",
-    "HISTORY.md",
-];
-
-/// Detect changelog file in a directory by checking for well-known files.
-pub fn detect_changelog_path(base_path: &str) -> Option<PathBuf> {
-    for candidate in CHANGELOG_CANDIDATES {
-        let full_path = Path::new(base_path).join(candidate);
-        if full_path.exists() {
-            return Some(full_path);
-        }
-    }
-    None
-}
-
 /// Add changelog items in the current working directory.
 pub fn add_items_cwd(messages: &[String]) -> Result<AddItemsOutput> {
     if messages.is_empty() {
@@ -706,36 +722,17 @@ pub fn add_items_cwd(messages: &[String]) -> Result<AddItemsOutput> {
         ));
     }
 
-    let cwd = std::env::current_dir()
-        .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))?;
-    let cwd_str = cwd.to_string_lossy().to_string();
+    // Resolve CWD to component - requires explicit configuration
+    let component = component::resolve_from_cwd()?;
+    let settings = resolve_effective_settings(Some(&component));
 
-    let changelog_path = detect_changelog_path(&cwd_str).ok_or_else(|| {
-        Error::validation_invalid_argument(
-            "changelog",
-            "No changelog file found in current directory. Looked for: CHANGELOG.md, docs/changelog.md, HISTORY.md, changelog.md",
-            None,
-            Some(vec![
-                "Run `homeboy changelog init --cwd` to create a Keep a Changelog template.".to_string(),
-            ]),
-        )
-    })?;
-
-    let settings = default_settings();
-    let content = fs::read_to_string(&changelog_path)
-        .map_err(|e| Error::internal_io(e.to_string(), Some("read changelog".to_string())))?;
-
-    let (updated, changed, items_added) =
-        add_next_section_items(&content, &settings.next_section_aliases, messages)?;
-
-    if changed {
-        fs::write(&changelog_path, &updated)
-            .map_err(|e| Error::internal_io(e.to_string(), Some("write changelog".to_string())))?;
-    }
+    // Use component's changelog_target (errors if not configured)
+    let (path, changed, items_added) =
+        read_and_add_next_section_items(&component, &settings, messages)?;
 
     Ok(AddItemsOutput {
-        component_id: "cwd".to_string(),
-        changelog_path: changelog_path.to_string_lossy().to_string(),
+        component_id: component.id.clone(),
+        changelog_path: path.to_string_lossy().to_string(),
         next_section_label: settings.next_section_label,
         messages: messages.to_vec(),
         items_added,
@@ -828,62 +825,10 @@ pub fn init(component_id: &str, path: Option<&str>, configure: bool) -> Result<I
 }
 
 /// Initialize a changelog in the current working directory.
-/// If the changelog file doesn't exist, creates a new one with Keep a Changelog template.
-/// If the changelog file exists, ensures it has an Unreleased section.
+/// Resolves CWD to a component and delegates to component-based init.
 pub fn init_cwd(path: Option<&str>) -> Result<InitOutput> {
-    let cwd = std::env::current_dir()
-        .map_err(|e| Error::other(format!("Failed to get current directory: {}", e)))?;
-    let settings = default_settings();
-
-    // Determine changelog path
-    let changelog_path = if let Some(p) = path {
-        cwd.join(p)
-    } else {
-        cwd.join("CHANGELOG.md")
-    };
-
-    // Handle existing file: ensure Unreleased section exists
-    if changelog_path.exists() {
-        let content = fs::read_to_string(&changelog_path)
-            .map_err(|e| Error::internal_io(e.to_string(), Some("read changelog".to_string())))?;
-
-        let (new_content, changed) = ensure_next_section(&content, &settings.next_section_aliases)?;
-
-        if changed {
-            local_files::local().write(&changelog_path, &new_content)?;
-        }
-
-        return Ok(InitOutput {
-            component_id: "cwd".to_string(),
-            changelog_path: changelog_path.to_string_lossy().to_string(),
-            initial_version: String::new(),
-            next_section_label: settings.next_section_label,
-            created: false,
-            changed,
-            configured: false,
-        });
-    }
-
-    // File doesn't exist: create new changelog with template
-    let version_info = version::read_version_cwd()?;
-    let initial_version = version_info.version;
-
-    if let Some(parent) = changelog_path.parent() {
-        local_files::local().ensure_dir(parent)?;
-    }
-
-    let content = generate_template(&initial_version, &settings.next_section_label);
-    local_files::local().write(&changelog_path, &content)?;
-
-    Ok(InitOutput {
-        component_id: "cwd".to_string(),
-        changelog_path: changelog_path.to_string_lossy().to_string(),
-        initial_version,
-        next_section_label: settings.next_section_label,
-        created: true,
-        changed: true,
-        configured: false,
-    })
+    let component = component::resolve_from_cwd()?;
+    init(&component.id, path, false)
 }
 
 #[cfg(test)]
@@ -979,13 +924,27 @@ mod tests {
     #[test]
     fn validate_section_content_with_direct_bullets() {
         let lines = vec!["- Item one", "- Item two"];
-        assert_eq!(validate_section_content(&lines), SectionContentStatus::Valid);
+        assert_eq!(
+            validate_section_content(&lines),
+            SectionContentStatus::Valid
+        );
     }
 
     #[test]
     fn validate_section_content_with_subsection_bullets() {
-        let lines = vec!["### Added", "", "- New feature", "", "### Fixed", "", "- Bug fix"];
-        assert_eq!(validate_section_content(&lines), SectionContentStatus::Valid);
+        let lines = vec![
+            "### Added",
+            "",
+            "- New feature",
+            "",
+            "### Fixed",
+            "",
+            "- Bug fix",
+        ];
+        assert_eq!(
+            validate_section_content(&lines),
+            SectionContentStatus::Valid
+        );
     }
 
     #[test]
@@ -1000,7 +959,10 @@ mod tests {
     #[test]
     fn validate_section_content_empty() {
         let lines = vec!["", ""];
-        assert_eq!(validate_section_content(&lines), SectionContentStatus::Empty);
+        assert_eq!(
+            validate_section_content(&lines),
+            SectionContentStatus::Empty
+        );
     }
 
     #[test]
@@ -1027,7 +989,11 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         // Error details contain "problem" field with the specific message
-        let problem = err.details.get("problem").and_then(|v| v.as_str()).unwrap_or("");
+        let problem = err
+            .details
+            .get("problem")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         assert!(
             problem.contains("subsection"),
             "Error should mention subsection headers: {}",
@@ -1037,8 +1003,7 @@ mod tests {
 
     #[test]
     fn append_item_works_with_subsection_structure() {
-        let content =
-            "# Changelog\n\n## Unreleased\n\n### Added\n\n- Existing\n\n## 0.1.0\n";
+        let content = "# Changelog\n\n## Unreleased\n\n### Added\n\n- Existing\n\n## 0.1.0\n";
         let aliases = vec!["Unreleased".to_string()];
         let (out, changed) = append_item_to_next_section(content, &aliases, "New item").unwrap();
 

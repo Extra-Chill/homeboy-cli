@@ -20,7 +20,14 @@ homeboy version show --cwd
 ```sh
 homeboy version bump [<component_id>] <patch|minor|major>
 homeboy version bump --cwd <patch|minor|major>
+homeboy version bump [<component_id>] <patch|minor|major> --no-commit
 ```
+
+Flags:
+
+- `--dry-run`: Simulate the bump without making any changes
+- `--no-commit`: Skip automatic git commit after bump
+- `--cwd`: Use current working directory (ad-hoc mode with auto-detection)
 
 ### `set`
 
@@ -38,6 +45,7 @@ Both subcommands support `--cwd` for ad-hoc operations in any directory without 
 
 - Bumps all configured `version_targets` using semantic versioning (X.Y.Z).
 - Finalizes the component changelog by moving the current "next" section (usually `Unreleased`) into a new `## [<new_version>] - YYYY-MM-DD` section.
+- **Auto-commits** version target files and changelog with message `release: v{new_version}`. Use `--no-commit` to skip.
 - Runs any `post_version_bump_commands` configured on the component.
 
 `homeboy version set`:
@@ -81,6 +89,12 @@ Arguments:
 - `changelog_path` (resolved changelog path)
 - `changelog_finalized` (always `true` on success)
 - `changelog_changed` (whether the changelog file was modified)
+- `git_commit` (present unless `--no-commit` or `--dry-run`):
+  - `success`: boolean
+  - `message`: commit message (`release: v{new_version}`)
+  - `files_staged`: array of file paths
+  - `stdout` (omitted if empty)
+  - `stderr` (omitted if empty)
 
 `homeboy version set` data payload:
 
@@ -128,6 +142,22 @@ homeboy component set <id> --changelog-target "path/to/CHANGELOG.md"
 ```
 
 To bypass changelog finalization entirely, use `version set` instead of `version bump`.
+
+## Related Workflows
+
+Before bumping, add changelog entries:
+
+```sh
+homeboy changelog add <component_id> "Added: new feature"
+homeboy changelog add <component_id> -m "Fixed: bug" -m "Changed: behavior"
+```
+
+After bumping, push and optionally tag:
+
+```sh
+homeboy git push <component_id>
+homeboy git tag <component_id>
+```
 
 ## Related
 

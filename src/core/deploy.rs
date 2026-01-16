@@ -557,27 +557,28 @@ pub fn deploy_components(
         let verification = find_deploy_verification(&install_dir);
 
         // Check for module-defined deploy override
-        let deploy_result = if let Some((override_config, module)) = find_deploy_override(&install_dir) {
-            deploy_with_override(
-                &ctx.client,
-                Path::new(&component.build_artifact),
-                &install_dir,
-                &override_config,
-                &module,
-                verification.as_ref(),
-                Some(base_path),
-                project.domain.as_deref(),
-            )
-        } else {
-            // Standard deploy
-            deploy_artifact(
-                &ctx.client,
-                Path::new(&component.build_artifact),
-                &install_dir,
-                component.extract_command.as_deref(),
-                verification.as_ref(),
-            )
-        };
+        let deploy_result =
+            if let Some((override_config, module)) = find_deploy_override(&install_dir) {
+                deploy_with_override(
+                    &ctx.client,
+                    Path::new(&component.build_artifact),
+                    &install_dir,
+                    &override_config,
+                    &module,
+                    verification.as_ref(),
+                    Some(base_path),
+                    project.domain.as_deref(),
+                )
+            } else {
+                // Standard deploy
+                deploy_artifact(
+                    &ctx.client,
+                    Path::new(&component.build_artifact),
+                    &install_dir,
+                    component.extract_command.as_deref(),
+                    verification.as_ref(),
+                )
+            };
 
         match deploy_result {
             Ok(DeployResult {
@@ -844,17 +845,23 @@ fn deploy_with_override(
     let staging_artifact = format!("{}/{}", override_config.staging_path, artifact_filename);
 
     // Step 1: Create staging directory
-    let mkdir_cmd = format!("mkdir -p {}", shell::quote_path(&override_config.staging_path));
-    eprintln!(
-        "[deploy] Using module deploy override: {}",
-        module.id
+    let mkdir_cmd = format!(
+        "mkdir -p {}",
+        shell::quote_path(&override_config.staging_path)
     );
-    eprintln!("[deploy] Creating staging directory: {}", override_config.staging_path);
+    eprintln!("[deploy] Using module deploy override: {}", module.id);
+    eprintln!(
+        "[deploy] Creating staging directory: {}",
+        override_config.staging_path
+    );
     let mkdir_output = ssh_client.execute(&mkdir_cmd);
     if !mkdir_output.success {
         return Ok(DeployResult::failure(
             mkdir_output.exit_code,
-            format!("Failed to create staging directory: {}", mkdir_output.stderr),
+            format!(
+                "Failed to create staging directory: {}",
+                mkdir_output.stderr
+            ),
         ));
     }
 

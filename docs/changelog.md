@@ -4,6 +4,16 @@ All notable changes to Homeboy CLI are documented in this file.
 
 (This file is embedded into the CLI binary and is also viewable via `homeboy changelog`.)
 
+## [0.22.0] - 2026-01-16
+
+- **BREAKING**: Remove `--cwd` flag entirely from CLI - component IDs are THE way to use Homeboy (decouples commands from directory location)
+- **BREAKING**: `version bump` now auto-commits version changes. Use `--no-commit` to opt out.
+- Add `--dry-run` flag to `version bump` for simulating version changes
+- Add changelog warning when Next section is empty during version bump
+- Add template variable syntax support for both `{var}` and `{{var}}` in extract commands
+- Add deploy override visibility in dry-run mode with "Would..." messaging
+- Create unified template variables reference documentation
+
 ## [0.21.0] - 2026-01-16
 
 - Add generic module-based deploy override system for platform-specific install commands

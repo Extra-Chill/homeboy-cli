@@ -212,6 +212,7 @@ fn build_component_info(component: &component::Component) -> ContainedComponentI
             "changelog.md",
             "docs/CHANGELOG.md",
             "docs/changelog.md",
+            "HISTORY.md",
         ];
 
         for candidate in changelog_candidates {

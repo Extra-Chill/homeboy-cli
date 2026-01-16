@@ -2,6 +2,9 @@
 /target/
 dist-manifest.json
 
+# Dependencies
+/node_modules/
+
 # IDE
 .idea/
 .vscode/

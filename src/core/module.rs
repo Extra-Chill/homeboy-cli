@@ -488,7 +488,7 @@ pub fn run_setup(module_id: &str) -> Result<ModuleSetupResult> {
 
     let entrypoint = runtime.entrypoint.clone().unwrap_or_default();
     let vars: Vec<(&str, &str)> = vec![
-        ("modulePath", module_path.as_str()),
+        ("module_path", module_path.as_str()),
         ("entrypoint", entrypoint.as_str()),
     ];
 
@@ -612,7 +612,7 @@ pub(crate) fn execute_action(
             let settings = get_module_settings(module_id, project_id)?;
             let payload = interpolate_action_payload(action, &selected, &settings, payload)?;
             let module_path = module.module_path.as_deref().unwrap_or(".");
-            let vars = vec![("modulePath", module_path)];
+            let vars = vec![("module_path", module_path)];
 
             let working_dir = payload
                 .get("release")
@@ -759,7 +759,7 @@ fn build_template_vars<'a>(
         let domain = proj.domain.as_deref().unwrap_or("");
         let site_path = proj.base_path.as_deref().unwrap_or("");
         vec![
-            ("modulePath", module_path),
+            ("module_path", module_path),
             ("entrypoint", entrypoint),
             ("args", args_str),
             ("projectId", project_id.as_deref().unwrap_or("")),
@@ -768,7 +768,7 @@ fn build_template_vars<'a>(
         ]
     } else {
         vec![
-            ("modulePath", module_path),
+            ("module_path", module_path),
             ("entrypoint", entrypoint),
             ("args", args_str),
         ]
@@ -961,7 +961,7 @@ pub fn is_module_ready(module: &ModuleManifest) -> bool {
         if let Some(ref module_path) = module.module_path {
             let entrypoint = runtime.entrypoint.clone().unwrap_or_default();
             let vars: Vec<(&str, &str)> = vec![
-                ("modulePath", module_path.as_str()),
+                ("module_path", module_path.as_str()),
                 ("entrypoint", entrypoint.as_str()),
             ];
             let command = template::render(ready_check, &vars);

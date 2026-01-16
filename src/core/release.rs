@@ -258,6 +258,7 @@ impl ReleaseStepExecutor {
             "build" => self.run_build(step),
             "changes" => self.run_changes(step),
             "version" => self.run_version(step),
+            "git.commit" => self.run_git_commit(step),
             "git.tag" => self.run_git_tag(step),
             "git.push" => self.run_git_push(step),
             _ => Err(Error::validation_invalid_argument(
@@ -394,6 +395,44 @@ impl ReleaseStepExecutor {
             None,
             Vec::new(),
         ))
+    }
+
+    fn run_git_commit(&self, step: &PipelineStep) -> Result<PipelineStepResult> {
+        let message = step
+            .config
+            .get("message")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| self.default_commit_message());
+
+        let options = crate::git::CommitOptions {
+            staged_only: false,
+            files: None,
+            exclude: None,
+        };
+
+        let output = crate::git::commit(Some(&self.component_id), Some(&message), options)?;
+        let data = serde_json::to_value(&output).map_err(|e| {
+            Error::internal_json(e.to_string(), Some("git commit output".to_string()))
+        })?;
+
+        let status = if output.success {
+            PipelineRunStatus::Success
+        } else {
+            PipelineRunStatus::Failed
+        };
+
+        Ok(self.step_result(step, status, Some(data), None, Vec::new()))
+    }
+
+    fn default_commit_message(&self) -> String {
+        let context = self.context.lock().ok();
+        let version = context
+            .as_ref()
+            .and_then(|c| c.version.as_ref())
+            .map(|v| v.as_str())
+            .unwrap_or("unknown");
+        format!("release: v{}", version)
     }
 
     fn build_release_payload(&self, step: &PipelineStep) -> Result<serde_json::Value> {
@@ -784,8 +823,9 @@ pub fn plan(component_id: &str, module_id: Option<&str>) -> Result<ReleasePlan> 
     })?;
 
     let enabled = release.enabled.unwrap_or(true);
-    let pipeline_steps: Vec<PipelineStep> = release
-        .steps
+
+    let (release_steps, commit_auto_inserted) = auto_insert_commit_step(release.steps);
+    let pipeline_steps: Vec<PipelineStep> = release_steps
         .iter()
         .cloned()
         .map(PipelineStep::from)
@@ -796,7 +836,15 @@ pub fn plan(component_id: &str, module_id: Option<&str>) -> Result<ReleasePlan> 
         .into_iter()
         .map(ReleasePlanStep::from)
         .collect();
-    let hints = build_plan_hints(component_id, &steps, &modules);
+
+    let mut hints = build_plan_hints(component_id, &steps, &modules);
+    if commit_auto_inserted {
+        hints.insert(0, "git.commit step auto-inserted before git.tag".to_string());
+    }
+    hints.push(format!(
+        "Review changes first with: homeboy changes {}",
+        component_id
+    ));
 
     Ok(ReleasePlan {
         component_id: component_id.to_string(),
@@ -826,10 +874,15 @@ pub fn run(component_id: &str, module_id: Option<&str>) -> Result<ReleaseRun> {
     })?;
 
     let enabled = release.enabled.unwrap_or(true);
+
+    let (release_steps, _commit_auto_inserted) = auto_insert_commit_step(release.steps);
+
+    validate_preflight(&component.local_path, &release_steps)?;
+
     let executor = ReleaseStepExecutor::new(component_id.to_string(), modules.clone());
 
     let pipeline_steps: Vec<PipelineStep> =
-        release.steps.into_iter().map(PipelineStep::from).collect();
+        release_steps.into_iter().map(PipelineStep::from).collect();
 
     let run_result = pipeline::run(
         &pipeline_steps,
@@ -846,11 +899,65 @@ pub fn run(component_id: &str, module_id: Option<&str>) -> Result<ReleaseRun> {
     })
 }
 
+fn validate_preflight(local_path: &str, steps: &[ReleaseStep]) -> Result<()> {
+    let uncommitted = crate::git::get_uncommitted_changes(local_path)?;
+    let has_commit_step = steps.iter().any(|s| s.step_type == "git.commit");
+
+    if uncommitted.has_changes && !has_commit_step {
+        return Err(Error::validation_invalid_argument(
+            "working_tree",
+            "Working tree has uncommitted changes",
+            None,
+            None,
+        )
+        .with_hint(
+            "Commit your changes first with `git commit` or ensure a `git.commit` step \
+             is in your release pipeline (auto-inserted when git.tag is present).",
+        ));
+    }
+
+    Ok(())
+}
+
 fn is_core_step(step_type: &str) -> bool {
     matches!(
         step_type,
-        "build" | "changelog" | "version" | "git.tag" | "git.push" | "changes"
+        "build" | "changelog" | "version" | "git.commit" | "git.tag" | "git.push" | "changes"
     )
+}
+
+fn auto_insert_commit_step(steps: Vec<ReleaseStep>) -> (Vec<ReleaseStep>, bool) {
+    let has_tag = steps.iter().any(|s| s.step_type == "git.tag");
+    let has_commit = steps.iter().any(|s| s.step_type == "git.commit");
+
+    if !has_tag || has_commit {
+        return (steps, false);
+    }
+
+    let mut result = Vec::with_capacity(steps.len() + 1);
+    let mut inserted = false;
+
+    for step in steps {
+        if step.step_type == "git.tag" && !inserted {
+            let commit_step = ReleaseStep {
+                id: "git.commit".to_string(),
+                step_type: "git.commit".to_string(),
+                label: Some("Commit release changes".to_string()),
+                needs: step.needs.clone(),
+                config: HashMap::new(),
+            };
+            result.push(commit_step);
+            inserted = true;
+
+            let mut tag_step = step;
+            tag_step.needs = vec!["git.commit".to_string()];
+            result.push(tag_step);
+        } else {
+            result.push(step);
+        }
+    }
+
+    (result, inserted)
 }
 
 fn build_plan_hints(

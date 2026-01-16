@@ -96,12 +96,27 @@ pub struct PipelineRunResult {
     pub status: PipelineRunStatus,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<PipelineRunSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct PipelineRunSummary {
+    pub total_steps: usize,
+    pub succeeded: usize,
+    pub failed: usize,
+    pub skipped: usize,
+    pub missing: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub next_actions: Vec<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 
 pub enum PipelineRunStatus {
     Success,
+    PartialSuccess,
     Failed,
     Skipped,
     Missing,
@@ -248,7 +263,7 @@ pub fn run(
     field: &str,
 ) -> Result<PipelineRunResult> {
     if !enabled {
-        let results = steps
+        let results: Vec<PipelineStepResult> = steps
             .iter()
             .map(|step| PipelineStepResult {
                 id: step.id.clone(),
@@ -261,10 +276,12 @@ pub fn run(
                 error: None,
             })
             .collect();
+        let summary = build_summary(&results, &PipelineRunStatus::Skipped);
         return Ok(PipelineRunResult {
             steps: results,
             status: PipelineRunStatus::Skipped,
             warnings: Vec::new(),
+            summary: Some(summary),
         });
     }
 
@@ -319,11 +336,13 @@ pub fn run(
     }
 
     let final_status = derive_overall_status(&results, overall_status);
+    let summary = build_summary(&results, &final_status);
 
     Ok(PipelineRunResult {
         steps: results,
         status: final_status,
         warnings: plan.warnings,
+        summary: Some(summary),
     })
 }
 
@@ -350,7 +369,7 @@ fn split_ready_steps(
 
         for need in &step.needs {
             match status_map.get(need) {
-                Some(PipelineRunStatus::Success) => {}
+                Some(PipelineRunStatus::Success) | Some(PipelineRunStatus::PartialSuccess) => {}
                 Some(PipelineRunStatus::Failed)
                 | Some(PipelineRunStatus::Missing)
                 | Some(PipelineRunStatus::Skipped) => {
@@ -393,22 +412,73 @@ fn derive_overall_status(
     results: &[PipelineStepResult],
     current: PipelineRunStatus,
 ) -> PipelineRunStatus {
-    if results
+    let has_success = results
         .iter()
-        .any(|result| matches!(result.status, PipelineRunStatus::Failed))
-    {
+        .any(|result| matches!(result.status, PipelineRunStatus::Success));
+    let has_failed = results
+        .iter()
+        .any(|result| matches!(result.status, PipelineRunStatus::Failed));
+    let has_missing = results
+        .iter()
+        .any(|result| matches!(result.status, PipelineRunStatus::Missing));
+
+    if has_failed && has_success {
+        return PipelineRunStatus::PartialSuccess;
+    }
+    if has_failed {
         return PipelineRunStatus::Failed;
     }
-    if results
-        .iter()
-        .any(|result| matches!(result.status, PipelineRunStatus::Missing))
-    {
+    if has_missing && has_success {
+        return PipelineRunStatus::PartialSuccess;
+    }
+    if has_missing {
         return PipelineRunStatus::Missing;
     }
     if matches!(current, PipelineRunStatus::Skipped) {
         return PipelineRunStatus::Skipped;
     }
     PipelineRunStatus::Success
+}
+
+fn build_summary(results: &[PipelineStepResult], status: &PipelineRunStatus) -> PipelineRunSummary {
+    let succeeded = results
+        .iter()
+        .filter(|r| matches!(r.status, PipelineRunStatus::Success))
+        .count();
+    let failed = results
+        .iter()
+        .filter(|r| matches!(r.status, PipelineRunStatus::Failed))
+        .count();
+    let skipped = results
+        .iter()
+        .filter(|r| matches!(r.status, PipelineRunStatus::Skipped))
+        .count();
+    let missing = results
+        .iter()
+        .filter(|r| matches!(r.status, PipelineRunStatus::Missing))
+        .count();
+
+    let next_actions = match status {
+        PipelineRunStatus::PartialSuccess | PipelineRunStatus::Failed => {
+            vec![
+                "Fix the issue and re-run (idempotent - completed steps will succeed again)"
+                    .to_string(),
+            ]
+        }
+        PipelineRunStatus::Missing => {
+            vec!["Install missing modules or actions to resolve missing steps".to_string()]
+        }
+        _ => Vec::new(),
+    };
+
+    PipelineRunSummary {
+        total_steps: results.len(),
+        succeeded,
+        failed,
+        skipped,
+        missing,
+        next_actions,
+    }
 }
 
 fn execute_batch(

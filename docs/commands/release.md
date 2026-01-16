@@ -8,7 +8,20 @@ homeboy release <COMMAND>
 
 ## Description
 
-`homeboy release` plans and runs component-scoped release pipelines using the `release` configuration. It is designed to replace the need for GitHub Actions by coordinating versioning, tagging, packaging, and module-backed publishing steps locally.
+`homeboy release` plans and runs component-scoped release pipelines using the `release` configuration. It replaces GitHub Actions by coordinating versioning, committing, tagging, packaging, and module-backed publishing steps locally.
+
+## Recommended Workflow
+
+```sh
+# 1. Review changes since last release
+homeboy changes <component_id>
+
+# 2. Plan the release (validates configuration, shows auto-inserted steps)
+homeboy release plan <component_id>
+
+# 3. Execute the release pipeline
+homeboy release run <component_id>
+```
 
 ## Subcommands
 
@@ -46,8 +59,35 @@ Notes:
 
 Release pipelines support two step types:
 
-- **Core steps**: `build`, `changes`, `version`, `git.tag`, `git.push`
+- **Core steps**: `build`, `changes`, `version`, `git.commit`, `git.tag`, `git.push`
 - **Module-backed steps**: any custom step type implemented as a module action named `release.<step_type>`
+
+### Core step: `git.commit`
+
+Commits release changes (version bumps, changelog updates) before tagging.
+
+**Auto-insert behavior**: If your pipeline has a `git.tag` step but no `git.commit` step, a `git.commit` step is automatically inserted before `git.tag`. This ensures version changes are committed before tagging.
+
+**Default commit message**: `release: v{version}`
+
+**Custom message**:
+```json
+{
+  "id": "git.commit",
+  "type": "git.commit",
+  "config": {
+    "message": "chore: release v1.2.3"
+  }
+}
+```
+
+### Pre-flight validation
+
+Before executing the pipeline, `release run` validates:
+
+1. **Working tree status**: If uncommitted changes exist and no `git.commit` step is present, the command fails early with actionable guidance.
+
+This prevents `cargo publish --locked` and similar commands from failing mid-pipeline due to dirty working trees.
 
 ### Pipeline step: `module.run`
 
@@ -132,6 +172,14 @@ When a step provides additional config, it is included as `payload.config` along
     "result": {
       "status": "success",
       "warnings": [],
+      "summary": {
+        "total_steps": 5,
+        "succeeded": 5,
+        "failed": 0,
+        "skipped": 0,
+        "missing": 0,
+        "next_actions": []
+      },
       "steps": [
         {
           "id": "build",
@@ -165,6 +213,24 @@ When a step provides additional config, it is included as `payload.config` along
     }
   }
 }
+```
+
+### Pipeline status values
+
+- `success` - All steps completed successfully
+- `partial_success` - Some steps succeeded, others failed (idempotent retry is safe)
+- `failed` - All executed steps failed
+- `skipped` - Pipeline disabled or all steps skipped due to failed dependencies
+- `missing` - Required module actions not found
+
+### Idempotent retry
+
+Publish steps are designed to be idempotent:
+
+- **GitHub releases**: If tag exists, assets are updated via `--clobber`
+- **crates.io**: If version already published, step skips gracefully
+
+This allows safe retry after `partial_success` without manual cleanup.
 ```
 
 ## Related

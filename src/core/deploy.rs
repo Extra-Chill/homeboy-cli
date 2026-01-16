@@ -319,6 +319,7 @@ pub struct DeployConfig {
     pub all: bool,
     pub outdated: bool,
     pub dry_run: bool,
+    pub check: bool,
 }
 
 /// Reason why a component was selected for deployment.
@@ -337,6 +338,20 @@ pub enum DeployReason {
     UnknownRemoteVersion,
 }
 
+/// Status indicator for component version comparison.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComponentStatus {
+    /// Local and remote versions match
+    UpToDate,
+    /// Local version ahead of remote (needs deploy)
+    NeedsUpdate,
+    /// Remote version ahead of local (local behind)
+    BehindRemote,
+    /// Cannot determine status
+    Unknown,
+}
+
 /// Result for a single component deployment.
 #[derive(Debug, Clone, Serialize)]
 
@@ -345,6 +360,8 @@ pub struct ComponentDeployResult {
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deploy_reason: Option<DeployReason>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub component_status: Option<ComponentStatus>,
     pub local_version: Option<String>,
     pub remote_version: Option<String>,
     pub error: Option<String>,
@@ -361,6 +378,7 @@ impl ComponentDeployResult {
             id: component.id.clone(),
             status: String::new(),
             deploy_reason: None,
+            component_status: None,
             local_version: None,
             remote_version: None,
             error: None,
@@ -395,6 +413,11 @@ impl ComponentDeployResult {
 
     fn with_deploy_exit_code(mut self, code: Option<i32>) -> Self {
         self.deploy_exit_code = code;
+        self
+    }
+
+    fn with_component_status(mut self, status: ComponentStatus) -> Self {
+        self.component_status = Some(status);
         self
     }
 
@@ -467,12 +490,39 @@ pub fn deploy_components(
         .filter_map(|c| version::get_component_version(c).map(|v| (c.id.clone(), v)))
         .collect();
 
-    // Gather remote versions if needed (for --outdated or --dry-run)
-    let remote_versions = if config.outdated || config.dry_run {
+    // Gather remote versions if needed (for --outdated, --dry-run, or --check)
+    let remote_versions = if config.outdated || config.dry_run || config.check {
         fetch_remote_versions(&components_to_deploy, base_path, &ctx.client)
     } else {
         HashMap::new()
     };
+
+    // Check mode: return status results without building or deploying
+    if config.check {
+        let results: Vec<ComponentDeployResult> = components_to_deploy
+            .iter()
+            .map(|c| {
+                let local_version = local_versions.get(&c.id).cloned();
+                let remote_version = remote_versions.get(&c.id).cloned();
+                let status = calculate_component_status(c, &remote_versions);
+                ComponentDeployResult::new(c, base_path)
+                    .with_status("checked")
+                    .with_versions(local_version, remote_version)
+                    .with_component_status(status)
+            })
+            .collect();
+
+        let total = results.len() as u32;
+        return Ok(DeployOrchestrationResult {
+            results,
+            summary: DeploySummary {
+                total,
+                succeeded: 0,
+                failed: 0,
+                skipped: 0,
+            },
+        });
+    }
 
     // Dry-run mode: return planned results without building or deploying
     if config.dry_run {
@@ -481,9 +531,18 @@ pub fn deploy_components(
             .map(|c| {
                 let local_version = local_versions.get(&c.id).cloned();
                 let remote_version = remote_versions.get(&c.id).cloned();
-                ComponentDeployResult::new(c, base_path)
+                let status = if config.check {
+                    calculate_component_status(c, &remote_versions)
+                } else {
+                    ComponentStatus::Unknown
+                };
+                let mut result = ComponentDeployResult::new(c, base_path)
                     .with_status("planned")
-                    .with_versions(local_version, remote_version)
+                    .with_versions(local_version, remote_version);
+                if config.check {
+                    result = result.with_component_status(status);
+                }
+                result
             })
             .collect();
 
@@ -649,10 +708,6 @@ fn plan_components(
     base_path: &str,
     client: &SshClient,
 ) -> Result<Vec<Component>> {
-    if config.all {
-        return Ok(all_components.to_vec());
-    }
-
     if !config.component_ids.is_empty() {
         let selected: Vec<Component> = all_components
             .iter()
@@ -688,6 +743,14 @@ fn plan_components(
         return Ok(selected);
     }
 
+    if config.check {
+        return Ok(all_components.to_vec());
+    }
+
+    if config.all {
+        return Ok(all_components.to_vec());
+    }
+
     if config.outdated {
         let remote_versions = fetch_remote_versions(all_components, base_path, client);
 
@@ -720,8 +783,30 @@ fn plan_components(
     }
 
     Err(Error::other(
-        "No components specified. Use component IDs, --all, or --outdated".to_string(),
+        "No components specified. Use component IDs, --all, --outdated, or --check".to_string(),
     ))
+}
+
+/// Calculate component status based on local and remote versions.
+fn calculate_component_status(
+    component: &Component,
+    remote_versions: &HashMap<String, String>,
+) -> ComponentStatus {
+    let local_version = version::get_component_version(component);
+    let remote_version = remote_versions.get(&component.id);
+
+    match (local_version, remote_version) {
+        (None, None) => ComponentStatus::Unknown,
+        (None, Some(_)) => ComponentStatus::NeedsUpdate,
+        (Some(_), None) => ComponentStatus::NeedsUpdate,
+        (Some(local), Some(remote)) => {
+            if local == *remote {
+                ComponentStatus::UpToDate
+            } else {
+                ComponentStatus::NeedsUpdate
+            }
+        }
+    }
 }
 
 /// Load components by ID and normalize artifact paths.

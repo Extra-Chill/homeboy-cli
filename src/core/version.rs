@@ -708,7 +708,8 @@ pub fn bump_version(component_id: Option<&str>, bump_type: &str) -> Result<BumpR
             "Missing componentId",
             None,
             Some(vec![
-                "Provide a component ID: homeboy version bump <component-id> <bump-type>".to_string(),
+                "Provide a component ID: homeboy version bump <component-id> <bump-type>"
+                    .to_string(),
                 "List available components: homeboy component list".to_string(),
             ]),
         )

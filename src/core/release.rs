@@ -380,10 +380,11 @@ impl ReleaseStepExecutor {
 
             if output.stderr.contains("already exists") {
                 let component = component::load(&self.component_id)?;
-                let local_exists =
-                    crate::git::tag_exists_locally(&component.local_path, &tag_name).unwrap_or(false);
+                let local_exists = crate::git::tag_exists_locally(&component.local_path, &tag_name)
+                    .unwrap_or(false);
                 let remote_exists =
-                    crate::git::tag_exists_on_remote(&component.local_path, &tag_name).unwrap_or(false);
+                    crate::git::tag_exists_on_remote(&component.local_path, &tag_name)
+                        .unwrap_or(false);
 
                 if local_exists && !remote_exists {
                     hints.push(crate::error::Hint {

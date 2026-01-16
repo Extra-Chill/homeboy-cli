@@ -3,8 +3,8 @@
 ## Synopsis
 
 ```sh
-homeboy deploy <project_id> [<component_ids...>] [-c|--component <id>]... [--all] [--outdated] [--dry-run] [--json '<spec>']
-# If no component IDs are provided, you must use --all or --outdated.
+homeboy deploy <project_id> [<component_ids...>] [-c|--component <id>]... [--all] [--outdated] [--check] [--dry-run] [--json '<spec>']
+# If no component IDs are provided, you must use --all, --outdated, or --check.
 ```
 
 ## Arguments and flags
@@ -18,6 +18,9 @@ Options:
 - `--all`: deploy all configured components
 - `--outdated`: deploy only outdated components
   - Determined from the first version target for each component.
+- `--check`: check component status without building or deploying
+  - Shows all components for the project with version comparison status.
+  - Combines with `--outdated` or component IDs to filter results.
 - `--dry-run`: preview what would be deployed without executing (no build, no upload)
 - `--json`: JSON input spec for bulk operations (`{"component_ids": ["component-id", ...]}`)
 
@@ -41,13 +44,15 @@ If no component IDs are provided and neither `--all` nor `--outdated` is set, Ho
   "project_id": "<project_id>",
   "all": false,
   "outdated": false,
+  "check": false,
   "dry_run": false,
   "results": [
     {
       "id": "<component_id>",
       "name": "<name>",
-      "status": "deployed|failed|skipped|planned",
+      "status": "deployed|failed|skipped|planned|checked",
       "deploy_reason": "explicitly_selected|all_selected|version_mismatch|unknown_local_version|unknown_remote_version",
+      "component_status": "up_to_date|needs_update|behind_remote|unknown",
       "local_version": "<v>|null",
       "remote_version": "<v>|null",
       "error": "<string>|null",
@@ -65,9 +70,19 @@ If no component IDs are provided and neither `--all` nor `--outdated` is set, Ho
 Notes:
 
 - `deploy_reason` is omitted when not applicable.
+- `component_status` is only present when using `--check` or `--check --dry-run`.
 - `artifact_path` is the component build artifact path as configured; it may be relative but must include a filename.
 
 Note: `build_exit_code`/`deploy_exit_code` are numbers when present (not strings).
+
+### Component status values
+
+When using `--check`, each component result includes a `component_status` field:
+
+- `up_to_date`: local and remote versions match
+- `needs_update`: local version ahead of remote (needs deployment)
+- `behind_remote`: remote version ahead of local (local is behind)
+- `unknown`: cannot determine status (missing version information)
 
 Exit code is `0` when `summary.failed == 0`, otherwise `1`.
 
@@ -82,6 +97,21 @@ Use `--dry-run` to see what would be deployed without executing:
 
 ```sh
 homeboy deploy myproject --outdated --dry-run
+```
+
+## Check Component Status
+
+Use `--check` to view version status for all components without building or deploying:
+
+```sh
+# Check all components for a project
+homeboy deploy myproject --check
+
+# Check only outdated components
+homeboy deploy myproject --check --outdated
+
+# Check specific components
+homeboy deploy myproject --check component-a component-b
 ```
 
 To see detailed git changes (commits, diffs) before deploying, use the `changes` command:

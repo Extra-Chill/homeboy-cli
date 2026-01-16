@@ -240,7 +240,8 @@ pub fn run(args: GitArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<Gi
                             "Missing componentId",
                             None,
                             Some(vec![
-                                "Provide a component ID: homeboy git tag <component-id>".to_string(),
+                                "Provide a component ID: homeboy git tag <component-id>"
+                                    .to_string(),
                                 "Or specify a tag name: homeboy git tag <component-id> <tag-name>"
                                     .to_string(),
                             ]),

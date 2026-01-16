@@ -96,7 +96,11 @@ pub fn show_pinned(project_id: &str, lines: u32) -> Result<PinnedLogsContent> {
 
     let mut logs = Vec::new();
     for pinned_log in &project.remote_logs.pinned_logs {
-        let log_lines = if lines > 0 { lines } else { pinned_log.tail_lines };
+        let log_lines = if lines > 0 {
+            lines
+        } else {
+            pinned_log.tail_lines
+        };
         let full_path = base_path::join_remote_path(Some(&base_path), &pinned_log.path)?;
 
         let command = format!("tail -n {} {}", log_lines, shell::quote_path(&full_path));

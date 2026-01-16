@@ -32,6 +32,10 @@ pub struct DeployArgs {
     /// Preview what would be deployed without executing
     #[arg(long)]
     pub dry_run: bool,
+
+    /// Check component status without building or deploying
+    #[arg(long)]
+    pub check: bool,
 }
 
 #[derive(Serialize)]
@@ -42,6 +46,7 @@ pub struct DeployOutput {
     pub all: bool,
     pub outdated: bool,
     pub dry_run: bool,
+    pub check: bool,
     pub results: Vec<ComponentDeployResult>,
     pub summary: DeploySummary,
 }
@@ -73,7 +78,9 @@ pub fn run(mut args: DeployArgs, _global: &crate::commands::GlobalArgs) -> CmdRe
                 args.project_id, args.project_id
             ),
             None,
-            Some(vec!["Argument order: homeboy deploy <project_id> [component_ids...]".to_string()]),
+            Some(vec![
+                "Argument order: homeboy deploy <project_id> [component_ids...]".to_string(),
+            ]),
         ));
     }
 
@@ -92,6 +99,7 @@ pub fn run(mut args: DeployArgs, _global: &crate::commands::GlobalArgs) -> CmdRe
         all: args.all,
         outdated: args.outdated,
         dry_run: args.dry_run,
+        check: args.check,
     };
 
     let result = deploy::run(&args.project_id, &config)?;
@@ -104,6 +112,7 @@ pub fn run(mut args: DeployArgs, _global: &crate::commands::GlobalArgs) -> CmdRe
             all: args.all,
             outdated: args.outdated,
             dry_run: args.dry_run,
+            check: args.check,
             results: result.results,
             summary: result.summary,
         },

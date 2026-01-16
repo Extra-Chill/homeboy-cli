@@ -2,7 +2,9 @@ use clap::{Args, Subcommand, ValueEnum};
 use serde::Serialize;
 
 use homeboy::git::{commit, CommitOptions};
-use homeboy::version::{bump_version, increment_version, read_version, set_version, VersionTargetInfo};
+use homeboy::version::{
+    bump_version, increment_version, read_version, set_version, VersionTargetInfo,
+};
 
 use super::CmdResult;
 
@@ -185,11 +187,8 @@ pub fn run(args: VersionArgs, _global: &crate::commands::GlobalArgs) -> CmdResul
                 None
             } else {
                 // Collect files to stage: version targets + changelog
-                let mut files_to_stage: Vec<String> = result
-                    .targets
-                    .iter()
-                    .map(|t| t.full_path.clone())
-                    .collect();
+                let mut files_to_stage: Vec<String> =
+                    result.targets.iter().map(|t| t.full_path.clone()).collect();
 
                 if !result.changelog_path.is_empty() {
                     files_to_stage.push(result.changelog_path.clone());

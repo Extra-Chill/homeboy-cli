@@ -565,7 +565,6 @@ fn parse_ahead_behind(counts: &str) -> (Option<u32>, Option<u32>) {
     (ahead, behind)
 }
 
-
 fn build_untracked_hint(path: &str, untracked_count: usize) -> Option<String> {
     if untracked_count < VERBOSE_UNTRACKED_THRESHOLD {
         return None;
@@ -1212,8 +1211,16 @@ fn is_git_repo(path: &str) -> bool {
 
 /// Check if a tag exists on the remote.
 pub fn tag_exists_on_remote(path: &str, tag_name: &str) -> Result<bool> {
-    let output = execute_git(path, &["ls-remote", "--tags", "origin", &format!("refs/tags/{}", tag_name)])
-        .map_err(|e| Error::other(e.to_string()))?;
+    let output = execute_git(
+        path,
+        &[
+            "ls-remote",
+            "--tags",
+            "origin",
+            &format!("refs/tags/{}", tag_name),
+        ],
+    )
+    .map_err(|e| Error::other(e.to_string()))?;
 
     if !output.status.success() {
         return Ok(false);
@@ -1225,8 +1232,8 @@ pub fn tag_exists_on_remote(path: &str, tag_name: &str) -> Result<bool> {
 
 /// Check if a tag exists locally.
 pub fn tag_exists_locally(path: &str, tag_name: &str) -> Result<bool> {
-    let output = execute_git(path, &["tag", "-l", tag_name])
-        .map_err(|e| Error::other(e.to_string()))?;
+    let output =
+        execute_git(path, &["tag", "-l", tag_name]).map_err(|e| Error::other(e.to_string()))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     Ok(!stdout.trim().is_empty())

@@ -111,7 +111,7 @@ fn run_for_project_with_executor(
 
     let project = project_loader(project_id)?;
 
-    let (target_domain, command) = build_project_command(&project, cli_config, args)?;
+    let (target_domain, command) = build_project_command(&project, cli_config, &module.id, args)?;
 
     let output = if project.server_id.as_ref().is_none_or(|s| s.is_empty()) {
         local_executor(&command)
@@ -135,6 +135,7 @@ fn run_for_project_with_executor(
 fn build_project_command(
     project: &Project,
     cli_config: &CliConfig,
+    module_id: &str,
     args: &[String],
 ) -> Result<(String, String)> {
     let base_path = project
@@ -166,10 +167,28 @@ fn build_project_command(
     variables.insert(TemplateVars::SITE_PATH.to_string(), base_path);
     variables.insert(TemplateVars::CLI_PATH.to_string(), cli_path);
 
-    Ok((
-        target_domain,
-        render_map(&cli_config.command_template, &variables),
-    ))
+    let mut rendered = render_map(&cli_config.command_template, &variables);
+
+    // Append settings-based flags from module config
+    if !cli_config.settings_flags.is_empty() {
+        if let Some(modules) = &project.modules {
+            if let Some(module_config) = modules.get(module_id) {
+                for (setting_key, flag_template) in &cli_config.settings_flags {
+                    if let Some(value) = module_config.settings.get(setting_key) {
+                        if let Some(value_str) = value.as_str() {
+                            if !value_str.is_empty() {
+                                let flag = flag_template.replace("{{value}}", &shell::quote_arg(value_str));
+                                rendered.push(' ');
+                                rendered.push_str(&flag);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok((target_domain, rendered))
 }
 
 fn resolve_subtarget(project: &Project, args: &[String]) -> Result<(String, Vec<String>)> {

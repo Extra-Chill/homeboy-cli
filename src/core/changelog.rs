@@ -21,7 +21,14 @@ const KEEP_A_CHANGELOG_SUBSECTIONS: &[&str] = &[
     "### Security",
 ];
 
-const VALID_ENTRY_TYPES: &[&str] = &["added", "changed", "deprecated", "removed", "fixed", "security"];
+const VALID_ENTRY_TYPES: &[&str] = &[
+    "added",
+    "changed",
+    "deprecated",
+    "removed",
+    "fixed",
+    "security",
+];
 
 fn validate_entry_type(entry_type: &str) -> Result<String> {
     let normalized = entry_type.to_lowercase();
@@ -739,9 +746,17 @@ fn append_item_to_subsection(
     if let Some(target_idx) = target_subsection_idx {
         // Find the next subsection or section end
         target_subsection_end = Some(section_end);
-        for (i, line) in lines.iter().enumerate().take(section_end).skip(target_idx + 1) {
+        for (i, line) in lines
+            .iter()
+            .enumerate()
+            .take(section_end)
+            .skip(target_idx + 1)
+        {
             let trimmed = line.trim();
-            if KEEP_A_CHANGELOG_SUBSECTIONS.iter().any(|h| trimmed.starts_with(h)) {
+            if KEEP_A_CHANGELOG_SUBSECTIONS
+                .iter()
+                .any(|h| trimmed.starts_with(h))
+            {
                 target_subsection_end = Some(i);
                 break;
             }
@@ -897,7 +912,11 @@ pub fn add_items_bulk(json_spec: &str) -> Result<AddItemsOutput> {
 
 /// Add changelog items to a component. Auto-detects JSON in component_id.
 /// If entry_type is provided, items are placed under the corresponding Keep a Changelog subsection.
-pub fn add_items(component_id: Option<&str>, messages: &[String], entry_type: Option<&str>) -> Result<AddItemsOutput> {
+pub fn add_items(
+    component_id: Option<&str>,
+    messages: &[String],
+    entry_type: Option<&str>,
+) -> Result<AddItemsOutput> {
     // Auto-detect JSON in component_id
     if let Some(input) = component_id {
         if crate::config::is_json_input(input) {
@@ -911,7 +930,8 @@ pub fn add_items(component_id: Option<&str>, messages: &[String], entry_type: Op
             "Missing componentId",
             None,
             Some(vec![
-                "Provide a component ID: homeboy changelog add <component-id> -m \"message\"".to_string(),
+                "Provide a component ID: homeboy changelog add <component-id> -m \"message\""
+                    .to_string(),
                 "List available components: homeboy component list".to_string(),
             ]),
         )
@@ -1334,8 +1354,7 @@ mod tests {
     #[test]
     fn append_item_to_subsection_maintains_canonical_order() {
         // Fixed comes after Added in canonical order
-        let content =
-            "# Changelog\n\n## Unreleased\n\n### Fixed\n\n- Bug fix\n\n## 0.1.0\n";
+        let content = "# Changelog\n\n## Unreleased\n\n### Fixed\n\n- Bug fix\n\n## 0.1.0\n";
         let aliases = vec!["Unreleased".to_string()];
         let (out, changed) =
             append_item_to_subsection(content, &aliases, "New feature", "added").unwrap();

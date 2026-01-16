@@ -22,6 +22,7 @@ pub struct InitArgs {
 pub struct InitOutput {
     pub command: &'static str,
     pub context: ContextOutput,
+    pub next_steps: Vec<String>,
     pub servers: Vec<Server>,
     pub projects: Vec<ProjectListItem>,
     pub components: Vec<Component>,
@@ -152,10 +153,38 @@ pub fn run_json(args: InitArgs) -> CmdResult<InitOutput> {
             .collect()
     };
 
+    let mut next_steps = vec![
+        "Read CLAUDE.md and README.md for repo-specific guidance.".to_string(),
+        "Run `homeboy docs documentation/index` for Homeboy documentation.".to_string(),
+        "Run `homeboy docs commands/commands-index` to browse available commands.".to_string(),
+    ];
+
+    if context_output.managed {
+        next_steps.push("Run `homeboy context` to inspect local config state.".to_string());
+        if !components.is_empty() {
+            next_steps
+                .push("Run `homeboy component show <id>` to inspect a component.".to_string());
+        }
+    } else if !context_output.contained_components.is_empty() {
+        next_steps.push("Run `homeboy component show <id>` for a contained component.".to_string());
+    } else {
+        next_steps.push(
+            "Create a project with `homeboy project create <name> <domain> --server <server_id> --module <module_id>`.".to_string(),
+        );
+        next_steps.push(
+            "Create a component with `homeboy component create <name> --local-path . --remote-path <path> --project <project_id>`.".to_string(),
+        );
+    }
+
+    if let Some(suggestion) = context_output.suggestion.as_ref() {
+        next_steps.push(format!("Suggestion: {}", suggestion));
+    }
+
     Ok((
         InitOutput {
             command: "init",
             context: context_output,
+            next_steps,
             servers,
             projects,
             components,

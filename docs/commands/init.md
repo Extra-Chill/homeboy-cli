@@ -33,6 +33,11 @@ Then read workspace docs (CLAUDE.md, README.md) for project context.
       "components": [{ "id": "...", "build_artifact": "...", "gaps": [...] }],
       "suggestion": "Run homeboy deploy..."
     },
+    "next_steps": [
+      "Read CLAUDE.md and README.md for repo-specific guidance.",
+      "Run `homeboy docs documentation/index` for Homeboy documentation.",
+      "Run `homeboy docs commands/commands-index` to browse available commands."
+    ],
     "servers": [
       { "id": "server-id", "host": "...", "user": "...", "port": 22 }
     ],
@@ -64,6 +69,7 @@ Then read workspace docs (CLAUDE.md, README.md) for project context.
 | `context.matched_components` | Components matching current path |
 | `context.contained_components` | Components in subdirectories (monorepo) |
 | `context.components[].gaps` | Missing config with remediation commands |
+| `next_steps` | Actionable guidance for agents and onboarding |
 | `servers`, `projects`, `components` | Available resources for reference |
 | `modules` | Available Homeboy modules |
 

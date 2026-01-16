@@ -6,6 +6,10 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+## [0.20.6] - 2026-01-15
+
+- add init next_steps guidance for agents
+
 ## [0.20.5] - 2026-01-15
 
 - Add git.commit as core release step (auto-inserted before git.tag)

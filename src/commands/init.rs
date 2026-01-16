@@ -5,9 +5,14 @@ use serde::Serialize;
 
 use homeboy::component::{self, Component};
 use homeboy::context::{self, ContextOutput};
-use homeboy::module::{is_module_compatible, is_module_linked, is_module_ready, load_all_modules};
+use homeboy::module::{
+    is_module_compatible, is_module_linked, load_all_modules, module_ready_status,
+};
 use homeboy::project::{self, Project};
 use homeboy::server::{self, Server};
+use homeboy::{changelog, git, version};
+use std::fs;
+use std::path::PathBuf;
 
 use super::CmdResult;
 
@@ -27,6 +32,14 @@ pub struct InitOutput {
     pub projects: Vec<ProjectListItem>,
     pub components: Vec<Component>,
     pub modules: Vec<ModuleEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<VersionSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git: Option<GitSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_release: Option<ReleaseSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub changelog: Option<ChangelogSnapshot>,
 }
 
 #[derive(Debug, Serialize)]
@@ -54,7 +67,45 @@ pub struct ModuleEntry {
     pub runtime: String,
     pub compatible: bool,
     pub ready: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ready_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ready_detail: Option<String>,
     pub linked: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VersionSnapshot {
+    pub component_id: String,
+    pub version: String,
+    pub targets: Vec<version::VersionTargetInfo>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitSnapshot {
+    pub branch: String,
+    pub clean: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ahead: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub behind: Option<u32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReleaseSnapshot {
+    pub tag: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ChangelogSnapshot {
+    pub path: String,
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub items: Option<Vec<String>>,
 }
 
 pub fn run_json(args: InitArgs) -> CmdResult<InitOutput> {
@@ -99,25 +150,30 @@ pub fn run_json(args: InitArgs) -> CmdResult<InitOutput> {
     let modules: Vec<ModuleEntry> = all_modules
         .iter()
         .filter(|m| show_all || linked_module_ids.contains(&m.id) || m.runtime.is_none())
-        .map(|m| ModuleEntry {
-            id: m.id.clone(),
-            name: m.name.clone(),
-            version: m.version.clone(),
-            description: m
-                .description
-                .as_ref()
-                .and_then(|d| d.lines().next())
-                .unwrap_or("")
+        .map(|m| {
+            let ready_status = module_ready_status(m);
+            ModuleEntry {
+                id: m.id.clone(),
+                name: m.name.clone(),
+                version: m.version.clone(),
+                description: m
+                    .description
+                    .as_ref()
+                    .and_then(|d| d.lines().next())
+                    .unwrap_or("")
+                    .to_string(),
+                runtime: if m.runtime.is_some() {
+                    "executable"
+                } else {
+                    "platform"
+                }
                 .to_string(),
-            runtime: if m.runtime.is_some() {
-                "executable"
-            } else {
-                "platform"
+                compatible: is_module_compatible(m, None),
+                ready: ready_status.ready,
+                ready_reason: ready_status.reason,
+                ready_detail: ready_status.detail,
+                linked: is_module_linked(&m.id),
             }
-            .to_string(),
-            compatible: is_module_compatible(m, None),
-            ready: is_module_ready(m),
-            linked: is_module_linked(&m.id),
         })
         .collect();
 
@@ -155,7 +211,7 @@ pub fn run_json(args: InitArgs) -> CmdResult<InitOutput> {
 
     let mut next_steps = vec![
         "Read CLAUDE.md and README.md for repo-specific guidance.".to_string(),
-        "Run `homeboy docs documentation/index` for Homeboy documentation.".to_string(),
+        "Run `homeboy docs documentation/index` for Homeboy documentation. Documentation workflows are self-directed—explore before asking.".to_string(),
         "Run `homeboy docs commands/commands-index` to browse available commands.".to_string(),
     ];
 
@@ -176,9 +232,20 @@ pub fn run_json(args: InitArgs) -> CmdResult<InitOutput> {
         );
     }
 
+    // If agent context file exists, add documentation guidance
+    if std::path::Path::new("CLAUDE.md").exists() || std::path::Path::new("AGENTS.md").exists() {
+        next_steps.push(
+            "For documentation tasks: Run `homeboy changes --cwd` first, then follow `homeboy docs documentation/alignment`. No clarification needed.".to_string(),
+        );
+    }
+
     if let Some(suggestion) = context_output.suggestion.as_ref() {
         next_steps.push(format!("Suggestion: {}", suggestion));
     }
+
+    let version_snapshot = resolve_version_snapshot(&components);
+    let git_snapshot = resolve_git_snapshot(context_output.git_root.as_ref());
+    let (last_release, changelog_snapshot) = resolve_changelog_snapshots(&components);
 
     Ok((
         InitOutput {
@@ -189,7 +256,172 @@ pub fn run_json(args: InitArgs) -> CmdResult<InitOutput> {
             projects,
             components,
             modules,
+            version: version_snapshot,
+            git: git_snapshot,
+            last_release,
+            changelog: changelog_snapshot,
         },
         0,
     ))
+}
+
+fn resolve_version_snapshot(components: &[Component]) -> Option<VersionSnapshot> {
+    let component = components.first()?;
+    let info = version::read_component_version(component).ok()?;
+    Some(VersionSnapshot {
+        component_id: component.id.clone(),
+        version: info.version,
+        targets: info.targets,
+    })
+}
+
+fn resolve_git_snapshot(git_root: Option<&String>) -> Option<GitSnapshot> {
+    let root = git_root?;
+    let snapshot = git::get_repo_snapshot(root).ok()?;
+    Some(GitSnapshot {
+        branch: snapshot.branch,
+        clean: snapshot.clean,
+        ahead: snapshot.ahead,
+        behind: snapshot.behind,
+    })
+}
+
+fn resolve_changelog_snapshots(
+    components: &[Component],
+) -> (Option<ReleaseSnapshot>, Option<ChangelogSnapshot>) {
+    let component = match components.first() {
+        Some(c) => c,
+        None => return (None, None),
+    };
+
+    let changelog_path = match changelog::resolve_changelog_path(component) {
+        Ok(path) => path,
+        Err(_) => return (None, None),
+    };
+    let content = match fs::read_to_string(&changelog_path) {
+        Ok(content) => content,
+        Err(_) => return (None, None),
+    };
+    let settings = changelog::resolve_effective_settings(Some(component));
+
+    let changelog_snapshot = build_changelog_snapshot(&content, &changelog_path, &settings);
+    let last_release = build_last_release_snapshot(&content);
+
+    (last_release, changelog_snapshot)
+}
+
+fn build_changelog_snapshot(
+    content: &str,
+    changelog_path: &PathBuf,
+    settings: &changelog::EffectiveChangelogSettings,
+) -> Option<ChangelogSnapshot> {
+    let items = extract_section_items(content, &settings.next_section_aliases);
+    Some(ChangelogSnapshot {
+        path: changelog_path.to_string_lossy().to_string(),
+        label: settings.next_section_label.clone(),
+        items: if items.is_empty() { None } else { Some(items) },
+    })
+}
+
+fn build_last_release_snapshot(content: &str) -> Option<ReleaseSnapshot> {
+    let lines: Vec<&str> = content.lines().collect();
+    for (index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("## ") {
+            continue;
+        }
+
+        let label = trimmed.trim_start_matches("## ").trim();
+        if label.eq_ignore_ascii_case("unreleased")
+            || label.starts_with("[Unreleased")
+            || label.starts_with("[unreleased")
+        {
+            continue;
+        }
+
+        let Some(tag) = parse_version_label(label) else {
+            continue;
+        };
+
+        let date = parse_date_label(label);
+        let summary = extract_first_bullet(&lines, index + 1);
+
+        return Some(ReleaseSnapshot {
+            tag: format!("v{}", tag),
+            date,
+            summary,
+        });
+    }
+
+    None
+}
+
+fn extract_section_items(content: &str, aliases: &[String]) -> Vec<String> {
+    let lines: Vec<&str> = content.lines().collect();
+    let start = find_section_start(&lines, aliases);
+    let Some(start_index) = start else {
+        return Vec::new();
+    };
+    let end_index = find_section_end(&lines, start_index);
+    let mut items = Vec::new();
+
+    for line in &lines[start_index + 1..end_index] {
+        let trimmed = line.trim();
+        if trimmed.starts_with('-') {
+            items.push(trimmed.trim_start_matches('-').trim().to_string());
+        }
+    }
+
+    items
+}
+
+fn find_section_start(lines: &[&str], aliases: &[String]) -> Option<usize> {
+    lines.iter().position(|line| {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("## ") {
+            return false;
+        }
+        let label = trimmed.trim_start_matches("## ").trim();
+        aliases.iter().any(|alias| {
+            let alias_trim = alias.trim().trim_matches(['[', ']']);
+            let label_trim = label.trim().trim_matches(['[', ']']);
+            alias_trim == label_trim
+        })
+    })
+}
+
+fn find_section_end(lines: &[&str], start: usize) -> usize {
+    let mut index = start + 1;
+    while index < lines.len() {
+        if lines[index].trim().starts_with("## ") {
+            break;
+        }
+        index += 1;
+    }
+    index
+}
+
+fn extract_first_bullet(lines: &[&str], start: usize) -> Option<String> {
+    for line in &lines[start..] {
+        let trimmed = line.trim();
+        if trimmed.starts_with("## ") {
+            break;
+        }
+        if trimmed.starts_with('-') {
+            return Some(trimmed.trim_start_matches('-').trim().to_string());
+        }
+    }
+    None
+}
+
+fn parse_version_label(label: &str) -> Option<String> {
+    let re = regex::Regex::new(r"\[?(\d+\.\d+\.\d+)\]?").ok()?;
+    re.captures(label)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().to_string())
+}
+
+fn parse_date_label(label: &str) -> Option<String> {
+    let re = regex::Regex::new(r"\d{4}-\d{2}-\d{2}").ok()?;
+    re.find(label).map(|m| m.as_str().to_string())
 }

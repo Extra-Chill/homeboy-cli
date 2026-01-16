@@ -2,7 +2,7 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 
 use homeboy::module::{
-    self, is_module_compatible, is_module_linked, is_module_ready, load_all_modules, run_setup,
+    self, is_module_compatible, is_module_linked, load_all_modules, module_ready_status, run_setup,
 };
 use homeboy::project::{self, Project};
 
@@ -187,6 +187,10 @@ pub struct ModuleEntry {
     pub runtime: String,
     pub compatible: bool,
     pub ready: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ready_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ready_detail: Option<String>,
     pub configured: bool,
     pub linked: bool,
     pub path: String,
@@ -200,7 +204,7 @@ fn list(project: Option<String>) -> CmdResult<ModuleOutput> {
     let entries: Vec<ModuleEntry> = modules
         .iter()
         .map(|module| {
-            let ready = is_module_ready(module);
+            let ready_status = module_ready_status(module);
             let compatible = is_module_compatible(module, project_config.as_ref());
             let linked = is_module_linked(&module.id);
 
@@ -220,7 +224,9 @@ fn list(project: Option<String>) -> CmdResult<ModuleOutput> {
                     "platform".to_string()
                 },
                 compatible,
-                ready,
+                ready: ready_status.ready,
+                ready_reason: ready_status.reason,
+                ready_detail: ready_status.detail,
                 configured: true,
                 linked,
                 path: module.module_path.clone().unwrap_or_default(),

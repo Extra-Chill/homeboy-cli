@@ -337,6 +337,16 @@ pub struct GitOutput {
     pub stderr: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct RepoSnapshot {
+    pub branch: String,
+    pub clean: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ahead: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub behind: Option<u32>,
+}
+
 impl GitOutput {
     fn from_output(id: String, path: String, action: &str, output: std::process::Output) -> Self {
         Self {
@@ -490,6 +500,63 @@ fn get_component_path(component_id: &str) -> Result<String> {
 
 fn execute_git(path: &str, args: &[&str]) -> std::io::Result<std::process::Output> {
     Command::new("git").args(args).current_dir(path).output()
+}
+
+pub fn get_repo_snapshot(path: &str) -> Result<RepoSnapshot> {
+    if !is_git_repo(path) {
+        return Err(Error::git_command_failed("Not a git repository"));
+    }
+
+    let branch_output = execute_git(path, &["rev-parse", "--abbrev-ref", "HEAD"])
+        .map_err(|e| Error::other(e.to_string()))?;
+    if !branch_output.status.success() {
+        let stderr = String::from_utf8_lossy(&branch_output.stderr);
+        return Err(Error::other(format!(
+            "git branch lookup failed: {}",
+            stderr
+        )));
+    }
+    let branch = String::from_utf8_lossy(&branch_output.stdout)
+        .trim()
+        .to_string();
+
+    let status_output = execute_git(path, &["status", "--porcelain=v1"])
+        .map_err(|e| Error::other(e.to_string()))?;
+    let clean = status_output.status.success() && status_output.stdout.is_empty();
+
+    let upstream_output = execute_git(path, &["rev-parse", "--abbrev-ref", "@{upstream}"])
+        .map_err(|e| Error::other(e.to_string()))?;
+
+    let (ahead, behind) = if upstream_output.status.success() {
+        let counts_output = execute_git(
+            path,
+            &["rev-list", "--left-right", "--count", "@{upstream}...HEAD"],
+        )
+        .map_err(|e| Error::other(e.to_string()))?;
+        if counts_output.status.success() {
+            let counts = String::from_utf8_lossy(&counts_output.stdout);
+            parse_ahead_behind(&counts)
+        } else {
+            (None, None)
+        }
+    } else {
+        (None, None)
+    };
+
+    Ok(RepoSnapshot {
+        branch,
+        clean,
+        ahead,
+        behind,
+    })
+}
+
+fn parse_ahead_behind(counts: &str) -> (Option<u32>, Option<u32>) {
+    let trimmed = counts.trim();
+    let mut parts = trimmed.split_whitespace();
+    let ahead = parts.next().and_then(|v| v.parse::<u32>().ok());
+    let behind = parts.next().and_then(|v| v.parse::<u32>().ok());
+    (ahead, behind)
 }
 
 fn get_cwd_path() -> Result<String> {

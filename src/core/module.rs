@@ -951,27 +951,84 @@ pub fn build_exec_env(
     env
 }
 
-/// Check if a module is ready (setup complete).
-pub fn is_module_ready(module: &ModuleManifest) -> bool {
+#[derive(Debug, Clone, Serialize)]
+pub struct ModuleReadyStatus {
+    pub ready: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+pub fn module_ready_status(module: &ModuleManifest) -> ModuleReadyStatus {
     let Some(runtime) = module.runtime.as_ref() else {
-        return true;
+        return ModuleReadyStatus {
+            ready: true,
+            reason: None,
+            detail: None,
+        };
     };
 
-    if let Some(ref ready_check) = runtime.ready_check {
-        if let Some(ref module_path) = module.module_path {
-            let entrypoint = runtime.entrypoint.clone().unwrap_or_default();
-            let vars: Vec<(&str, &str)> = vec![
-                ("module_path", module_path.as_str()),
-                ("entrypoint", entrypoint.as_str()),
-            ];
-            let command = template::render(ready_check, &vars);
-            let exit_code = execute_local_command_interactive(&command, Some(module_path), None);
-            return exit_code == 0;
-        }
-        return false;
+    let Some(ready_check) = runtime.ready_check.as_ref() else {
+        return ModuleReadyStatus {
+            ready: true,
+            reason: None,
+            detail: None,
+        };
+    };
+
+    let Some(module_path) = module.module_path.as_ref() else {
+        return ModuleReadyStatus {
+            ready: false,
+            reason: Some("missing_module_path".to_string()),
+            detail: Some("ready_check configured but module_path is missing".to_string()),
+        };
+    };
+
+    let entrypoint = runtime.entrypoint.clone().unwrap_or_default();
+    let vars: Vec<(&str, &str)> = vec![
+        ("module_path", module_path.as_str()),
+        ("entrypoint", entrypoint.as_str()),
+    ];
+    let command = template::render(ready_check, &vars);
+    let output = execute_local_command_in_dir(&command, Some(module_path), None);
+
+    if output.success {
+        return ModuleReadyStatus {
+            ready: true,
+            reason: None,
+            detail: None,
+        };
     }
 
-    true
+    let detail_output = if output.stderr.trim().is_empty() {
+        output.stdout
+    } else {
+        output.stderr
+    };
+    let detail = detail_output.trim();
+    let detail = if detail.is_empty() {
+        format!(
+            "ready_check '{}' failed with exit code {}",
+            command, output.exit_code
+        )
+    } else {
+        format!(
+            "ready_check '{}' failed with exit code {}: {}",
+            command, output.exit_code, detail
+        )
+    };
+
+    ModuleReadyStatus {
+        ready: false,
+        reason: Some("ready_check_failed".to_string()),
+        detail: Some(detail),
+    }
+}
+
+/// Check if a module is ready (setup complete).
+pub fn is_module_ready(module: &ModuleManifest) -> bool {
+    module_ready_status(module).ready
 }
 
 /// Check if a module is compatible with a project.

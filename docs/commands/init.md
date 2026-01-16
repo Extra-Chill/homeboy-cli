@@ -55,8 +55,37 @@ Then read workspace docs (CLAUDE.md, README.md) for project context.
       }
     ],
     "modules": [
-      { "id": "module-id", "name": "...", "version": "...", "ready": true, "compatible": true }
-    ]
+      {
+        "id": "module-id",
+        "name": "...",
+        "version": "...",
+        "ready": true,
+        "ready_reason": null,
+        "ready_detail": null,
+        "compatible": true
+      }
+    ],
+    "version": {
+      "component_id": "component-id",
+      "version": "0.20.7",
+      "targets": [{ "file": "Cargo.toml", "pattern": "...", "full_path": "...", "match_count": 1 }]
+    },
+    "git": {
+      "branch": "main",
+      "clean": true,
+      "ahead": 0,
+      "behind": 0
+    },
+    "last_release": {
+      "tag": "v0.20.7",
+      "date": "2026-01-15",
+      "summary": "Add -m flag for changelog add command"
+    },
+    "changelog": {
+      "path": "docs/changelog.md",
+      "label": "Unreleased",
+      "items": ["Queued change"]
+    }
   }
 }
 ```
@@ -72,6 +101,10 @@ Then read workspace docs (CLAUDE.md, README.md) for project context.
 | `next_steps` | Actionable guidance for agents and onboarding |
 | `servers`, `projects`, `components` | Available resources for reference |
 | `modules` | Available Homeboy modules |
+| `version` | Current component version snapshot (first matched component) |
+| `git` | Branch + clean state + ahead/behind snapshot |
+| `last_release` | Latest changelog release summary |
+| `changelog` | Unreleased preview from component changelog |
 
 ## Decision Tree
 

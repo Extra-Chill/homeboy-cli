@@ -6,6 +6,9 @@ All notable changes to Homeboy CLI are documented in this file.
 
 ## Unreleased
 
+- Add init snapshots for version, git status, last release, and changelog preview
+- Surface module readiness details with failure reason and output
+
 ## [0.20.7] - 2026-01-15
 
 - Add -m flag for changelog add command (consistent with git commit/tag)

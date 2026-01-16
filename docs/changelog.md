@@ -4,7 +4,7 @@ All notable changes to Homeboy CLI are documented in this file.
 
 (This file is embedded into the CLI binary and is also viewable via `homeboy changelog`.)
 
-## Unreleased
+## [0.22.8] - 2026-01-16
 
 - fix: release pipeline pushes commits with tags and skips duplicate commits
 

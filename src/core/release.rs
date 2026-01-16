@@ -435,6 +435,23 @@ impl ReleaseStepExecutor {
     }
 
     fn run_git_commit(&self, step: &PipelineStep) -> Result<PipelineStepResult> {
+        let status_output = crate::git::status(Some(&self.component_id))?;
+        let is_clean = status_output.stdout.trim().is_empty();
+
+        if is_clean {
+            let data = serde_json::json!({
+                "skipped": true,
+                "reason": "working tree is clean, nothing to commit"
+            });
+            return Ok(self.step_result(
+                step,
+                PipelineRunStatus::Success,
+                Some(data),
+                None,
+                Vec::new(),
+            ));
+        }
+
         let message = step
             .config
             .get("message")

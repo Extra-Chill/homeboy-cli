@@ -892,7 +892,7 @@ pub fn commit_from_json(id: Option<&str>, json_spec: &str) -> Result<CommitJsonO
 pub fn push(component_id: Option<&str>, tags: bool) -> Result<GitOutput> {
     let (id, path) = resolve_target(component_id)?;
     let args: Vec<&str> = if tags {
-        vec!["push", "--tags"]
+        vec!["push", "--follow-tags"]
     } else {
         vec!["push"]
     };

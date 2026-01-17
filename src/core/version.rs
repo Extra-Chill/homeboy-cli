@@ -371,18 +371,20 @@ pub fn read_component_version(component: &Component) -> Result<ComponentVersionI
 }
 
 /// Read version by component ID.
+/// If component_id is None, returns homeboy binary's own version.
 pub fn read_version(component_id: Option<&str>) -> Result<ComponentVersionInfo> {
-    let id = component_id.ok_or_else(|| {
-        Error::validation_invalid_argument(
-            "componentId",
-            "Missing componentId",
-            None,
-            Some(vec![
-                "Provide a component ID: homeboy version show <component-id>".to_string(),
-                "List available components: homeboy component list".to_string(),
-            ]),
-        )
-    })?;
+    // If no component_id, return homeboy binary's own version
+    let id = match component_id {
+        None => {
+            let version = crate::upgrade::current_version().to_string();
+            return Ok(ComponentVersionInfo {
+                version,
+                targets: vec![],
+            });
+        }
+        Some(id) => id,
+    };
+
     let component = component::load(id)?;
     read_component_version(&component)
 }

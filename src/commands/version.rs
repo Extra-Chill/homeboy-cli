@@ -35,9 +35,9 @@ pub struct VersionArgs {
 
 #[derive(Subcommand)]
 enum VersionCommand {
-    /// Show current version of a component
+    /// Show current version (default: homeboy binary)
     Show {
-        /// Component ID
+        /// Component ID (optional - shows homeboy binary version when omitted)
         component_id: Option<String>,
     },
     /// Bump version of a component and finalize changelog

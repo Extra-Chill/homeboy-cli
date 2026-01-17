@@ -979,7 +979,7 @@ pub fn run(component_id: &str, module_id: Option<&str>) -> Result<ReleaseRun> {
 
     let (release_steps, _commit_auto_inserted) = auto_insert_commit_step(release.steps);
 
-    validate_preflight(&component.local_path, &release_steps)?;
+    validate_preflight(&component, &release_steps)?;
 
     let executor = ReleaseStepExecutor::new(component_id.to_string(), modules.clone());
 
@@ -1001,8 +1001,8 @@ pub fn run(component_id: &str, module_id: Option<&str>) -> Result<ReleaseRun> {
     })
 }
 
-fn validate_preflight(local_path: &str, steps: &[ReleaseStep]) -> Result<()> {
-    let uncommitted = crate::git::get_uncommitted_changes(local_path)?;
+fn validate_preflight(component: &Component, steps: &[ReleaseStep]) -> Result<()> {
+    let uncommitted = crate::git::get_uncommitted_changes(&component.local_path)?;
     let has_commit_step = steps.iter().any(|s| s.step_type == "git.commit");
 
     if uncommitted.has_changes && !has_commit_step {
@@ -1016,6 +1016,36 @@ fn validate_preflight(local_path: &str, steps: &[ReleaseStep]) -> Result<()> {
             "Commit your changes first with `git commit` or ensure a `git.commit` step \
              is in your release pipeline (auto-inserted when git.tag is present).",
         ));
+    }
+
+    // Validate changelog has no unreleased section with content
+    if let Ok(changelog_path) = crate::changelog::resolve_changelog_path(component) {
+        let changelog_content = crate::core::local_files::local().read(&changelog_path);
+        if let Ok(content) = changelog_content {
+            let settings = crate::changelog::resolve_effective_settings(Some(component));
+            if let Some(status) = crate::changelog::check_next_section_content(
+                &content,
+                &settings.next_section_aliases,
+            )? {
+                match status.as_str() {
+                    "empty" => {
+                        // Empty unreleased section is fine - no content to release
+                    }
+                    "subsection_headers_only" | _ => {
+                        // Has unreleased content - should be finalized before release
+                        return Err(Error::validation_invalid_argument(
+                            "changelog",
+                            "Changelog has unreleased section with content. Finalize changelog before releasing.",
+                            None,
+                            Some(vec![
+                                "Run `homeboy version bump <component>` to finalize and increment version".to_string(),
+                                "Or run `homeboy changelog add <component> -m \"...\"` to add more items".to_string(),
+                            ]),
+                        ));
+                    }
+                }
+            }
+        }
     }
 
     Ok(())

@@ -615,7 +615,7 @@ pub(crate) fn list_ids<T: ConfigEntity>() -> Result<Vec<String>> {
 
 /// Unified merge that auto-detects single vs bulk operations.
 /// Array input triggers batch merge, object input triggers single merge.
-pub fn merge<T: ConfigEntity>(
+pub(crate) fn merge<T: ConfigEntity>(
     id: Option<&str>,
     json_spec: &str,
     replace_fields: &[String],

@@ -4,12 +4,11 @@ All notable changes to Homeboy CLI are documented in this file.
 
 (This file is embedded into the CLI binary and is also viewable via `homeboy changelog`.)
 
-## Unreleased
+## [0.25.1] - 2026-01-17
 
-### Added
-- Add direct execution for CLI tools to bypass shell escaping issues
+- Enforce changelog hygiene: version set/bump require clean changelog, release rejects unreleased content
 
-## [0.24.4] - 2026-01-17
+## [0.25.0] - 2026-01-17
 
 ### Fixed
 - Require explicit subtarget when project has subtargets configured, preventing unintended main site operations in multisite networks

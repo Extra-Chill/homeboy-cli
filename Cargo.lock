@@ -710,7 +710,7 @@ dependencies = [
 
 [[package]]
 name = "homeboy"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "anyhow",
  "arboard",
@@ -722,6 +722,7 @@ dependencies = [
  "keyring",
  "regex",
  "reqwest",
+ "semver",
  "serde",
  "serde_json",
  "shellexpand",
@@ -1775,6 +1776,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "semver"
+version = "1.0.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
 
 [[package]]
 name = "serde"

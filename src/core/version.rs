@@ -281,6 +281,78 @@ fn resolve_target_pattern(target: &VersionTarget) -> Result<String> {
         })
 }
 
+/// Result of validating and finalizing changelog for a version operation.
+#[derive(Debug, Clone, Serialize)]
+pub struct ChangelogValidationResult {
+    pub changelog_path: String,
+    pub changelog_finalized: bool,
+    pub changelog_changed: bool,
+}
+
+/// Validate and finalize changelog for a version operation.
+/// Ensures changelog is in sync with current version and has valid unreleased content.
+/// Finalizes the next section to the new version.
+pub fn validate_and_finalize_changelog(
+    component: &Component,
+    current_version: &str,
+    new_version: &str,
+) -> Result<ChangelogValidationResult> {
+    let settings = changelog::resolve_effective_settings(Some(component));
+    let changelog_path = changelog::resolve_changelog_path(component)?;
+
+    let changelog_content = local_files::local().read(&changelog_path)?;
+
+    let latest_changelog_version = changelog::get_latest_finalized_version(&changelog_content)
+        .ok_or_else(|| {
+            Error::validation_invalid_argument(
+                "changelog",
+                "Changelog has no finalized versions".to_string(),
+                None,
+                Some(vec![
+                    "Add at least one finalized version section like '## [0.1.0] - YYYY-MM-DD'"
+                        .to_string(),
+                ]),
+            )
+        })?;
+
+    // Reject if changelog is ahead of files (version gap)
+    let changelog_ver = semver::Version::parse(&latest_changelog_version);
+    let file_ver = semver::Version::parse(current_version);
+    match (changelog_ver, file_ver) {
+        (Ok(clv), Ok(fv)) if clv > fv => {
+            return Err(Error::validation_invalid_argument(
+                "version",
+                format!(
+                    "Version mismatch: changelog is at {} but files are at {}. Setting version would create a version gap.",
+                    latest_changelog_version, current_version
+                ),
+                None,
+                Some(vec![
+                    "Ensure changelog and version files are in sync before updating version.".to_string(),
+                ]),
+            ));
+        }
+        _ => {}
+    }
+
+    let (finalized_changelog, changelog_changed) = changelog::finalize_next_section(
+        &changelog_content,
+        &settings.next_section_aliases,
+        new_version,
+        false,
+    )?;
+
+    if changelog_changed {
+        local_files::local().write(&changelog_path, &finalized_changelog)?;
+    }
+
+    Ok(ChangelogValidationResult {
+        changelog_path: changelog_path.to_string_lossy().to_string(),
+        changelog_finalized: true,
+        changelog_changed,
+    })
+}
+
 /// Build a detailed error for version parsing failures
 fn build_version_parse_error(file: &str, pattern: &str, content: &str) -> Error {
     let preview: String = content.chars().take(500).collect();
@@ -396,6 +468,9 @@ pub struct SetResult {
     pub old_version: String,
     pub new_version: String,
     pub targets: Vec<VersionTargetInfo>,
+    pub changelog_path: String,
+    pub changelog_finalized: bool,
+    pub changelog_changed: bool,
 }
 
 /// Set a component's version directly (without incrementing).
@@ -446,6 +521,10 @@ pub fn set_component_version(component: &Component, new_version: &str) -> Result
     }
 
     let old_version = primary_versions[0].clone();
+
+    // Validate and finalize changelog
+    let changelog_validation =
+        validate_and_finalize_changelog(component, &old_version, new_version)?;
 
     // Update all version targets
     let mut target_infos = Vec::new();
@@ -513,6 +592,9 @@ pub fn set_component_version(component: &Component, new_version: &str) -> Result
         old_version,
         new_version: new_version.to_string(),
         targets: target_infos,
+        changelog_path: changelog_validation.changelog_path,
+        changelog_finalized: changelog_validation.changelog_finalized,
+        changelog_changed: changelog_validation.changelog_changed,
     })
 }
 
@@ -583,50 +665,8 @@ pub fn bump_component_version(component: &Component, bump_type: &str) -> Result<
         )
     })?;
 
-    // Validate changelog is in sync
-    let settings = changelog::resolve_effective_settings(Some(component));
-    let changelog_path = changelog::resolve_changelog_path(component)?;
-
-    let changelog_content = local_files::local().read(&changelog_path)?;
-
-    let latest_changelog_version = changelog::get_latest_finalized_version(&changelog_content)
-        .ok_or_else(|| {
-            Error::validation_invalid_argument(
-                "changelog",
-                "Changelog has no finalized versions".to_string(),
-                None,
-                Some(vec![
-                    "Add at least one finalized version section like '## [0.1.0] - YYYY-MM-DD'"
-                        .to_string(),
-                ]),
-            )
-        })?;
-
-    if latest_changelog_version != old_version {
-        return Err(Error::validation_invalid_argument(
-            "version",
-            format!(
-                "Version mismatch: changelog is at {} but files are at {}. Bumping would create a version gap.",
-                latest_changelog_version, old_version
-            ),
-            None,
-            Some(vec![
-                "Ensure changelog and version files are in sync before bumping.".to_string(),
-            ]),
-        ));
-    }
-
-    // Finalize changelog
-    let (finalized_changelog, changelog_changed) = changelog::finalize_next_section(
-        &changelog_content,
-        &settings.next_section_aliases,
-        &new_version,
-        false,
-    )?;
-
-    if changelog_changed {
-        local_files::local().write(&changelog_path, &finalized_changelog)?;
-    }
+    let changelog_validation =
+        validate_and_finalize_changelog(component, &old_version, &new_version)?;
 
     // Update all version targets
     let mut target_infos = Vec::new();
@@ -696,9 +736,9 @@ pub fn bump_component_version(component: &Component, bump_type: &str) -> Result<
         old_version,
         new_version,
         targets: target_infos,
-        changelog_path: changelog_path.to_string_lossy().to_string(),
-        changelog_finalized: true,
-        changelog_changed,
+        changelog_path: changelog_validation.changelog_path,
+        changelog_finalized: changelog_validation.changelog_finalized,
+        changelog_changed: changelog_validation.changelog_changed,
     })
 }
 

@@ -122,6 +122,11 @@ pub struct VersionSetOutput {
     old_version: String,
     new_version: String,
     targets: Vec<VersionTargetInfo>,
+    changelog_path: String,
+    changelog_finalized: bool,
+    changelog_changed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    git_commit: Option<GitCommitInfo>,
 }
 
 pub fn run(args: VersionArgs, _global: &crate::commands::GlobalArgs) -> CmdResult<VersionOutput> {
@@ -260,6 +265,56 @@ pub fn run(args: VersionArgs, _global: &crate::commands::GlobalArgs) -> CmdResul
             // Core validates componentId
             let result = set_version(component_id.as_deref(), &new_version)?;
 
+            // Auto-commit version and changelog changes
+            let mut files_to_stage: Vec<String> =
+                result.targets.iter().map(|t| t.full_path.clone()).collect();
+
+            if !result.changelog_path.is_empty() {
+                files_to_stage.push(result.changelog_path.clone());
+            }
+
+            let commit_message = format!("release: v{}", result.new_version);
+
+            let options = CommitOptions {
+                staged_only: false,
+                files: Some(files_to_stage.clone()),
+                exclude: None,
+                amend: false,
+            };
+
+            // Attempt commit - graceful failure (version files already updated)
+            let git_commit = match commit(component_id.as_deref(), Some(&commit_message), options) {
+                Ok(output) => {
+                    let stdout = if output.stdout.is_empty() {
+                        None
+                    } else {
+                        Some(output.stdout)
+                    };
+                    let stderr = if output.stderr.is_empty() {
+                        None
+                    } else {
+                        Some(output.stderr)
+                    };
+                    Some(GitCommitInfo {
+                        success: output.success,
+                        message: commit_message,
+                        files_staged: files_to_stage,
+                        stdout,
+                        stderr,
+                    })
+                }
+                Err(e) => {
+                    // Report failure but don't rollback version changes
+                    Some(GitCommitInfo {
+                        success: false,
+                        message: commit_message,
+                        files_staged: files_to_stage,
+                        stdout: None,
+                        stderr: Some(e.to_string()),
+                    })
+                }
+            };
+
             Ok((
                 VersionOutput::Set(VersionSetOutput {
                     command: "version.set".to_string(),
@@ -267,6 +322,10 @@ pub fn run(args: VersionArgs, _global: &crate::commands::GlobalArgs) -> CmdResul
                     old_version: result.old_version,
                     new_version: result.new_version,
                     targets: result.targets,
+                    changelog_path: result.changelog_path,
+                    changelog_finalized: result.changelog_finalized,
+                    changelog_changed: result.changelog_changed,
+                    git_commit,
                 }),
                 0,
             ))

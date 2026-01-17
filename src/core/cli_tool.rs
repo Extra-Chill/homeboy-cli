@@ -135,7 +135,8 @@ fn run_for_project_with_executor(
             ),
             Err(_) => {
                 // Fallback to shell execution if direct fails
-                let (_, rendered_cmd) = build_project_command(&project, cli_config, &module.id, args)?;
+                let (_, rendered_cmd) =
+                    build_project_command(&project, cli_config, &module.id, args)?;
                 (local_executor(&rendered_cmd), rendered_cmd)
             }
         }

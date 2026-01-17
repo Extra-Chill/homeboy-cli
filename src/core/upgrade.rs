@@ -347,8 +347,7 @@ pub fn restart_with_new_binary() -> ! {
 
     let binary = std::env::current_exe().expect("Failed to get current executable path");
 
-    // Show the new version after restart
-    let err = Command::new(&binary).args(["version", "show"]).exec();
+    let err = Command::new(&binary).arg("--version").exec();
 
     // exec() only returns on error
     panic!("Failed to exec into new binary: {}", err);
